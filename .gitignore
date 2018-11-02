@@ -1,3 +1,25 @@
+.settings/*
+*/.settings/*
+*/.settings
+/.settings
+/.settings/
+.mk
+*.mk
+.cproject
+/.project
+*/.project
+.project
+/.cproject
+*.cproject
+*/Debug
+Debug/
+/Debug/
+/Debug/*
+*.log
+S-AFAlog.log
+/S-AFA/S-AFAlog.log
+S-AFA/S-AFAlog.log
+
 # Prerequisites
 *.d
 
@@ -50,3 +72,4 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
