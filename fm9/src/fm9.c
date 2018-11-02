@@ -1,5 +1,4 @@
-#include "sockets.h"
-
+#include "../../Bibliotecas/sockets.h"
 
 char *MODO, *IP_FM9;
 int PUERTO_FM9, TAMANIO, MAX_LINEA, TAM_PAGINA, socketElDiego;
@@ -15,7 +14,7 @@ void crearLogger() {
 }
 
 void obtenerValoresArchivoConfiguracion() {
-	t_config* arch = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/fm9/FM9.config");
+	t_config* arch = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/fm9/src/FM9.config");
 
 	IP_FM9 = string_duplicate(config_get_string_value(arch, "IP_FM9"));
 	PUERTO_FM9 = config_get_int_value(arch, "PUERTO_FM9");
@@ -41,7 +40,7 @@ void imprimirArchivoConfiguracion() {
 void EnviarHandshakeELDIEGO(int socketFD) {
 	Paquete* paquete = malloc(TAMANIOHEADER);
 	Header header;
-	void *datos = MAX_LINEA;
+	void *datos = &MAX_LINEA;
 	header.TipoMensaje = ESHANDSHAKE;
 	header.tamPayload = sizeof(MAX_LINEA);
 	header.emisor = FM9;
@@ -151,7 +150,7 @@ void consola() {
 	}
 }
 
-int main() {
+int main(int argc, char **argv) {
 	crearLogger();
 	log_info(logger, "Probando FM9.log");
 	obtenerValoresArchivoConfiguracion();

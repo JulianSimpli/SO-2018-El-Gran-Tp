@@ -36,7 +36,6 @@
 
 #define true 1
 #define false 0
-#define NULL ((void *) 0)
 
 //para guardar funciones y estructuras que se necesiten
 

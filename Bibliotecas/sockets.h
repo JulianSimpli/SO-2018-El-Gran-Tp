@@ -71,10 +71,11 @@ bool EnviarDatos(int socketFD, Emisor emisor, void* datos, int tamDatos);
 bool EnviarDatosTipo(int socketFD, Emisor emisor, void* datos, int tamDatos, Tipo TipoMensaje);
 bool EnviarMensaje(int socketFD, char* msg, Emisor emisor);
 bool EnviarPaquete(int socketCliente, Paquete* paquete);
+void EnviarHandshake(int socketFD, Emisor emisor);
 void RecibirHandshake(int socketFD, Emisor emisor);
 int RecibirPaqueteServidor(int socketFD, Emisor receptor, Paquete* paquete); //Responde al recibir un Handshake
 int RecibirPaqueteCliente(int socketFD, Emisor receptor, Paquete* paquete); //No responde los Handshakes
 int RecibirPaqueteServidorSafa(int socketFD, Emisor receptor, Paquete* paquete);
-
+int RecibirDatos(void* paquete, int socketFD, uint32_t cantARecibir);
 
 #endif //SOCKETS_H_
