@@ -1,0 +1,73 @@
+{
+  "session_name": "SO",
+  "windows": [
+    {
+      "options": {
+        "automatic-rename": "off"
+      },
+      "window_name": "MDJ",
+      "layout": "bf2f,201x19,0,0{100x19,0,0,0,100x19,101,0,2}",
+      "panes": [
+        {
+          "shell_command": [
+            "cd /home/utnso/workspace/tp-2018-2c-Nene-Malloc/mdj/src",
+            "make",
+            "./mdj $(pwd)"
+          ],
+          "focus": "true"
+        },
+        {
+          "shell_command": [
+            "cd /home/utnso/workspace/tp-2018-2c-Nene-Malloc/mdj/tests/unit-tests",
+            "bash"
+          ]
+        }
+      ],
+      "focus": "true"
+    },
+    {
+      "options": {
+        "automatic-rename": "off"
+      },
+      "window_name": "DAM",
+      "layout": "c920,201x19,0,0,3",
+      "panes": [
+        {
+          "shell_command": [
+            "make",
+            "sleep 2",
+            "./dam $(pwd)"
+          ],
+          "focus": "true"
+        }
+      ],
+      "start_directory": "/home/utnso/workspace/tp-2018-2c-Nene-Malloc/dam/src"
+    },
+    {
+      "options": {
+        "automatic-rename": "off"
+      },
+      "window_name": "CPUS",
+      "layout": "9ff1,201x19,0,0{100x19,0,0,4,100x19,101,0,13}",
+      "panes": [
+        {
+          "shell_command": [
+            "make",
+            "sleep 4",
+            "./cpu $(pwd)"
+          ],
+          "focus": "true"
+        },
+        {
+          "shell_command": [
+            "make",
+            "sleep 3",
+            "./cpu $(pwd)"
+          ],
+          "focus": "true"
+        }
+      ],
+      "start_directory": "/home/utnso/workspace/tp-2018-2c-Nene-Malloc/cpu/src"
+    }
+  ]
+}
