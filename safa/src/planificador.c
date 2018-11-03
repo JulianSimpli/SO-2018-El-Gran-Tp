@@ -80,19 +80,20 @@ int notificar_al_PLP(t_list* lista, int* pid) {
     return list_add(lista_PLP, DTB_a_mover);
 }
 
-bool coincide_pid(int* pid, void* DTB) {
-	return ((DTB*)DTB)->gdtPID == *pid;
+bool coincide_pid(int* pid, void* DTB_comparar) {
+	return ((DTB*)DTB_comparar)->gdtPID == *pid;
 }
+
 DTB* devuelve_DTB_asociado_a_pid_de_lista(t_list* lista, int* pid) {
     bool compara_con_DTB(void* DTB) {
         return coincide_pid(pid, DTB);
     }
-    return list_remove(lista, compara_con_DTB);
+    return list_remove_by_condition(lista, compara_con_DTB);
 }
 // va sin parentesis coincide_pid porque tiene que llamar al puntero a la funcion despues de que hacer list_find
 
-bool coincide_socket(int* socket, void* cpu) {
-	return ((t_cpu*)cpu)->socket == *socket;
+bool coincide_socket(int* socketFD, void* cpu) {
+	return ((t_cpu*)cpu)->socket == *socketFD;
 }
 
 t_cpu* devuelve_cpu_asociada_a_socket_de_lista(t_list* lista, int* socket) {
@@ -135,7 +136,7 @@ void mostrarProcesos(t_list* listaProcesos){
 }
 
 void mostrarUnProceso(void* process){
-	DTB* proceso = (DTB*) process;
+	 DTB* proceso = (DTB*) process;
 	 printf("\ngdtPID: %i\n", proceso->gdtPID);
      printf("flagInicializacion: %i\n", proceso->flagInicializacion);
      //printf("\nfileDir: %s", proceso->????);
@@ -150,7 +151,7 @@ void ejecutar(char* path) {
     desbloquear_dtb_dummy(DTBNuevo);
 }
 
-void status()     { ////NO Repitas! LLama a una list_iterate
+void status() { ////NO Repitas! LLama a una list_iterate
 
 printf("\nCola de Nuevos- cant. de procesos: %d", list_size(lista_nuevos));
 desplegar_lista(lista_nuevos);
@@ -192,5 +193,7 @@ void finalizar(int PID){
 
     }
 }
+
+void metricas()
+
 */
-//void metricas()

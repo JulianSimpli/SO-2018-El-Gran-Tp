@@ -44,6 +44,7 @@ void imprimirArchivoConfiguracion() {
 			"RETARDO_PLANIF=%d\n",
 			IP, PUERTO, ALGORITMO_PLANIFICACION, QUANTUM, MULTIPROGRAMACION, RETARDO_PLANIF);
 }
+
 void consola() {
 	char * linea;
 	while (true) {
@@ -101,6 +102,7 @@ void accion(void* socket) {
 					case ESHANDSHAKE: {
                     	pthread_mutex_unlock(&mutex_handshake_diego);
 						log_info(logger, "llegada de el diego");
+						EnviarHandshake(socketFD, SAFA);
 						break;
 					}
 				}
@@ -125,13 +127,14 @@ void manejar_paquetes_CPU(Paquete* paquete, int* socketFD) {
 			list_add(lista_cpu, cpu_nuevo);
 			log_info(logger, "llegada cpu nuevo en socket: %i", cpu_nuevo->socket);
             pthread_mutex_unlock(&mutex_handshake_cpu);
+			enviar_handshake_cpu(*socketFD);
 			break;
 		}
 
     	case DUMMY_SUCCES: {
             u_int32_t pid;
             memcpy(&pid, paquete->Payload, sizeof(u_int32_t));
-            DTB = list_remove_by_condition(lista_bloqueados, (void*)coincide_pid(&pid));
+            DTB* dtb_desbloqueado = devuelve_DTB_asociado_a_pid_de_lista(lista_bloqueados, &pid);
 			notificar_al_PLP(lista_nuevos, &pid);
             t_cpu* cpu_actual = devuelve_cpu_asociada_a_socket_de_lista(lista_cpu, socketFD);
             pthread_mutex_unlock(&cpu_actual->mutex_estado);
@@ -163,19 +166,53 @@ void manejar_paquetes_CPU(Paquete* paquete, int* socketFD) {
 	}
 }
 
+void* handshake_cpu_serializar(int* tamanio_payload) {
+	void* payload = malloc(sizeof(RETARDO_PLANIF) + sizeof(QUANTUM));
+	int desplazamiento = 0;
+	int tamanio = sizeof(u_int32_t);
+	memcpy(payload, &RETARDO_PLANIF, tamanio);
+	desplazamiento += tamanio;
+	memcpy(payload, &QUANTUM, tamanio);
+	desplazamiento += tamanio;
+
+	u_int32_t len_algoritmo = strlen(ALGORITMO_PLANIFICACION);
+	payload = realloc(payload, desplazamiento + tamanio);
+	memcpy(payload + desplazamiento, &len_algoritmo, tamanio);
+	desplazamiento += tamanio;
+
+	payload = realloc(payload, desplazamiento + len_algoritmo);
+	memcpy(payload + desplazamiento, &ALGORITMO_PLANIFICACION, len_algoritmo);
+	desplazamiento += len_algoritmo;
+
+	*tamanio_payload = desplazamiento;
+	return payload;
+}
+
+void enviar_handshake_cpu(int socketFD) {
+
+	int tamanio_payload = 0;
+	Paquete* paquete = malloc(sizeof(Paquete));
+	paquete->Payload = handshake_cpu_serializar(&tamanio_payload);
+	paquete->header.tamPayload = tamanio_payload;
+	paquete->header.tipoMensaje = ESHANDSHAKE;
+	paquete->header.emisor = SAFA;
+
+	EnviarPaquete(socketFD, paquete);
+}
+
 int main(void) {
 	crearLogger();
 	inicializarVariables();
 	obtenerValoresArchivoConfiguracion();
 	imprimirArchivoConfiguracion();
 	log_info(logger, "Probando SAFA.log");
-	//defino a safa como servidor concurrente para que diego y cpu se puedan conectar a él
-	//a los clientes conectados a safa se los atiende con un hilo y mediante la funcion accion a c/u
-    ServidorConcurrente(IP, PUERTO, SAFA, &lista_hilos, &end, accion);
-    
-    pthread_mutex_lock(&mutex_handshake_diego);
+	
+	printf("Esperando que conecte el diego y al menos 1 CPU\n");
+	log_info(logger, "Esperando a Diego y al menos 1 CPU");
+	pthread_mutex_lock(&mutex_handshake_diego);
     pthread_mutex_lock(&mutex_handshake_cpu);
-    pthread_t hiloConsola; //un hilo para la consola
+
+	pthread_t hiloConsola; //un hilo para la consola
     pthread_create(&hiloConsola, NULL, (void*) consola, NULL);
 
     pthread_t hilo_PLP;
@@ -183,6 +220,10 @@ int main(void) {
 
     pthread_t hilo_PCP;
     pthread_create(&hilo_PCP, NULL, (void*) planificador_corto_plazo, NULL);
+
+	//defino a safa como servidor concurrente para que diego y cpu se puedan conectar a él
+	//a los clientes conectados a safa se los atiende con un hilo y mediante la funcion accion a c/u
+    ServidorConcurrente(IP, PUERTO, SAFA, &lista_hilos, &end, accion);
 
 	pthread_join(hiloConsola, NULL);
     pthread_join(hilo_PCP, NULL);

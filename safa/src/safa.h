@@ -10,8 +10,8 @@
 #define METRICAS "metricas"
 
 //Declaracion de variables globales
-char *IP;
-int PUERTO;
+char *IP, *ALGORITMO_PLANIFICACION;
+int PUERTO, RETARDO_PLANIF, QUANTUM;
 
 t_list* lista_hilos;
 t_list* lista_cpu;
@@ -32,5 +32,7 @@ void consola();
 void parseoConsola(char* operacion, char* primerParametro);
 void accion(void* socket);
 void manejar_paquetes_CPU(Paquete* paquete, int* socketFD);
+void* handshake_cpu_serializar(int* tamanio_payload);
+void enviar_handshake_cpu(int socketFD);
 
 #endif /* SAFA_H_ */

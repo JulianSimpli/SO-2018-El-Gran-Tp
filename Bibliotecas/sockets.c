@@ -240,73 +240,38 @@ int RecibirPaqueteServidor(int socketFD, Emisor receptor, Paquete* paquete) {
 }
 
 //funcion de fm9
-int RecibirPaqueteServidorFm9(int socketFD, Emisor receptor, Paquete* paquete) {
-	paquete->Payload = NULL;
-	int resul = RecibirDatos(&(paquete->header), socketFD, TAMANIOHEADER);
-	char* n = Emisores[paquete->header.emisor];
-	if (resul > 0) { //si no hubo error
-		if ((paquete->header.tipoMensaje == ESHANDSHAKE) && (paquete->header.emisor == ELDIEGO)) { //vemos si es un handshake
-			printf("Se establecio conexion con %s\n", n);
-			EnviarHandshakeELDIEGO(socketFD); // paquete->header.emisor
-		} else if ((paquete->header.tipoMensaje == ESHANDSHAKE) && (paquete->header.emisor == CPU)) {
-			printf("Se establecio conexion con %s\n", n);
-			EnviarHandshake(socketFD, receptor); // paquete->header.emisor
-		} else if (paquete->header.tamPayload > 0){ //recibimos un payload y lo procesamos (por ej, puede mostrarlo)
-			paquete->Payload = malloc(paquete->header.tamPayload);
-			resul = RecibirDatos(paquete->Payload, socketFD, paquete->header.tamPayload);
-		}
-	}
-	return resul;
-}
+// int RecibirPaqueteServidorFm9(int socketFD, Emisor receptor, Paquete* paquete) {
+// 	paquete->Payload = NULL;
+// 	int resul = RecibirDatos(&(paquete->header), socketFD, TAMANIOHEADER);
+// 	char* n = Emisores[paquete->header.emisor];
+// 	if (resul > 0) { //si no hubo error
+// 		if ((paquete->header.tipoMensaje == ESHANDSHAKE) && (paquete->header.emisor == ELDIEGO)) { //vemos si es un handshake
+// 			printf("Se establecio conexion con %s\n", n);
+// 			EnviarHandshakeELDIEGO(socketFD); // paquete->header.emisor
+// 		} else if ((paquete->header.tipoMensaje == ESHANDSHAKE) && (paquete->header.emisor == CPU)) {
+// 			printf("Se establecio conexion con %s\n", n);
+// 			EnviarHandshake(socketFD, receptor); // paquete->header.emisor
+// 		} else if (paquete->header.tamPayload > 0){ //recibimos un payload y lo procesamos (por ej, puede mostrarlo)
+// 			paquete->Payload = malloc(paquete->header.tamPayload);
+// 			resul = RecibirDatos(paquete->Payload, socketFD, paquete->header.tamPayload);
+// 		}
+// 	}
+// 	return resul;
+// }
 
 
 //funcion de fm9
-void EnviarHandshakeELDIEGO(int socketFD) {
-	Paquete* paquete = malloc(TAMANIOHEADER + sizeof(MAX_LINEA));
-	Header header;
-	header.tipoMensaje = ESHANDSHAKE;
-	header.tamPayload = sizeof(MAX_LINEA);
-	header.emisor = FM9;
-	paquete->header = header;
-	memcpy(paquete->Payload, &MAX_LINEA, sizeof(u_int32_t));
-	bool valor_retorno=EnviarPaquete(socketFD, paquete);
-	free(paquete);
-}
-
-void handshake_cpu_serializar(int* tamanio_payload) {
-	void* payload = malloc(sizeof(RETARDO_PLANIF) + sizeof(QUANTUM));
-	int desplazamiento = 0;
-	int tamanio = sizeof(u_int32_t);
-	memcpy(payload, &RETARDO_PLANIF, tamanio);
-	desplazamiento += tamanio;
-	memcpy(payload, &QUANTUM, tamanio);
-	desplazamiento += tamanio;
-
-	u_int32_t len_algoritmo = strlen(ALGORITMO_PLANIFICACION);
-	payload = realloc(payload, desplazamiento + tamanio);
-	memcpy(payload + desplazamiento, &len_algoritmo, tamanio);
-	desplazamiento += tamanio;
-
-	payload = realloc(payload, desplazamiento + len_algoritmo);
-	memcpy(payload + desplazamiento, ALGORITMO_PLANIFICACION, len_algoritmo);
-	desplazamiento += len_algoritmo;
-
-	*tamanio__payload = desplazamiento;
-	return payload;
-
-}
-
-void enviar_handshake_cpu(int socketFD) {
-
-	int tamanio_payload = 0;
-	Paquete* paquete = malloc(sizeof(Paquete));
-	paquete->Payload = handshake_cpu_serializar(&tamanio__payload);
-	paquete->header.tamPayload = tamanio_payload;
-	paquete->header.tipoMensaje = ESHANDSHAKE;
-	paquete->header.emisor = SAFA;
-
-	EnviarPaquete(socketFD, paquete);
-}
+// void EnviarHandshakeELDIEGO(int socketFD) {
+// 	Paquete* paquete = malloc(TAMANIOHEADER + sizeof(MAX_LINEA));
+// 	Header header;
+// 	header.tipoMensaje = ESHANDSHAKE;
+// 	header.tamPayload = sizeof(MAX_LINEA);
+// 	header.emisor = FM9;
+// 	paquete->header = header;
+// 	memcpy(paquete->Payload, &MAX_LINEA, sizeof(u_int32_t));
+// 	bool valor_retorno=EnviarPaquete(socketFD, paquete);
+// 	free(paquete);
+// }
 
 int RecibirPaqueteServidorSafa(int socketFD, Emisor receptor, Paquete* paquete) {
 	paquete->Payload = NULL;
@@ -314,16 +279,6 @@ int RecibirPaqueteServidorSafa(int socketFD, Emisor receptor, Paquete* paquete) 
 	if (resul > 0) { //si no hubo error
 		paquete->Payload = malloc(paquete->header.tamPayload);
 		resul = RecibirDatos(paquete->Payload, socketFD, paquete->header.tamPayload);
-
-		switch(paquete->header.emisor) {
-			case ELDIEGO: {
-				EnviarHandshake(socketFD, SAFA);
-			}
-
-			case CPU: {
-				enviar_handshake_cpu(socketFD);
-			}
-		}
 	}
 	return resul;
 }
