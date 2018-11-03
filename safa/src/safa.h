@@ -1,7 +1,6 @@
 #ifndef SAFA_H_
 #define SAFA_H_
 
-#include "../../Bibliotecas/sockets.h"
 #include "planificador.h"
 
 //Declaracion de constantes
@@ -12,9 +11,9 @@
 
 //Declaracion de variables globales
 char *IP, *ALGORITMO_PLANIFICACION;
-int PUERTO, QUANTUM, MULTIPROGRAMACION, RETARDO_PLANIF;
+int PUERTO, QUANTUM, RETARDO_PLANIF;
 
-t_list* listaHilos;
+t_list* lista_hilos;
 t_list* lista_cpu;
 
 bool end;
@@ -32,5 +31,6 @@ void imprimirArchivoConfiguracion();
 void consola();
 void parseoConsola(char* operacion, char* primerParametro);
 void accion(void* socket);
+void manejar_paquetes_CPU(Paquete* paquete, int* socketFD);
 
 #endif /* SAFA_H_ */

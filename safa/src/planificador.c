@@ -1,6 +1,9 @@
 #include "planificador.h"
 #include <commons/string.h>
 
+u_int32_t numero_pid = 1;
+u_int32_t procesos_en_memoria = 0;
+
 //Hilo planificador largo plazo
 void planificador_largo_plazo() {
     while(1) {
@@ -19,30 +22,30 @@ void mover_primero_de_lista1_a_lista2(t_list* lista1, t_list* lista2) {
 //Hilo planificador corto plazo
 void planificador_corto_plazo() {
     while(1) {
-        t_unCpuSafa* cpu_libre = list_find(lista_cpu, (void*)esta_libre_cpu);
-        if(cpu_libre != NULL && !listaVacia(lista_listos)) {
-            pthread_mutex_lock(cpu_libre->mutex_estado);
+        t_cpu* cpu_libre = list_find(lista_cpu, (void*)esta_libre_cpu);
+        if(cpu_libre != NULL && !lista_vacia(lista_listos)) {
+            pthread_mutex_lock(&cpu_libre->mutex_estado);
             DTB* DTB_ejecutar = list_remove(lista_listos, 0);
             list_add(lista_ejecutando, DTB_ejecutar);
-            ejecutar_primer_DTB_listo(DTB_ejecutar, cpu_libre);
+            ejecutar_primer_dtb_listo(DTB_ejecutar, cpu_libre);
         }
     }
 }
 //Funciones planificador corto plazo
-void ejecutar_primer_dtb_listo(DTB* DTB_ejecutar, t_unCpuSafa* cpu_libre) {
+void ejecutar_primer_dtb_listo(DTB* DTB_ejecutar, t_cpu* cpu_libre) {
     Paquete* paquete = malloc(sizeof(Paquete));
-    int tamanio_DTB = 0;
-    paquete->Payload = DTB_serializar(DTB_ejecutar, &tamanio_DTB);
-    paquete->header.tamPayload = tamanio_DTB;
+    int* tamanio_DTB;
+    paquete->Payload = DTB_serializar(DTB_ejecutar, tamanio_DTB);
+    paquete->header.tamPayload = *tamanio_DTB;
     paquete->header.emisor = SAFA;
 
     int socket_cpu_libre = cpu_libre->socket;
 
-    if(DTB->flagInicializacion = 0) {
-        paquete->header.TipoMensaje = ESDTBDUMMY;
+    if(DTB_ejecutar->flagInicializacion == 0) {
+        paquete->header.tipoMensaje = ESDTBDUMMY;
         EnviarPaquete(socket_cpu_libre, paquete);
     } else {
-        paquete->header.TipoMensaje = ESDTB;
+        paquete->header.tipoMensaje = ESDTB;
         EnviarPaquete(socket_cpu_libre, paquete);
     }
 }
@@ -55,14 +58,14 @@ DTB* crearDTB(char* path) {
 	DTBNuevo->estado = ESTADO_NUEVO;
 	DTBNuevo->flagInicializacion = 1;
 	DTBNuevo->pathEscriptorio = string_duplicate(path); //pathEscriptorio es un char*
-	DTBNuevo->gdtPID = numeroPID;
-	numeroPID++;
+	DTBNuevo->gdtPID = numero_pid;
+	numero_pid++;
 
 	return DTBNuevo;
 }
 
 int desbloquear_dtb_dummy(DTB* DTBNuevo) {
-    DTB* DTBDummy = malloc (sizeof(DTB));
+    DTB* dtb_dummy = malloc (sizeof(DTB));
     dtb_dummy->gdtPID = DTBNuevo->gdtPID;
     dtb_dummy->flagInicializacion = 0;
     dtb_dummy->pathEscriptorio = DTBNuevo->pathEscriptorio;
@@ -70,50 +73,54 @@ int desbloquear_dtb_dummy(DTB* DTBNuevo) {
     return list_add(lista_PLP, dtb_dummy);
 }
 
-int notificar_al_PLP(int PID) {
-    DTB* DTB_a_mover = devuelve_DTB_asociado_a_pid(&PID);
+int notificar_al_PLP(t_list* lista, int* pid) {
+    DTB* DTB_a_mover = devuelve_DTB_asociado_a_pid_de_lista(lista, pid);
     return list_add(lista_PLP, DTB_a_mover);
 }
 
-DTB* devuelve_DTB_asociado_a_pid(int* PID, t_list* lista) {
-    return list_find(lista, (void*) coincideElPID(PID));
+DTB* devuelve_DTB_asociado_a_pid_de_lista(t_list* lista, int* pid) {
+    bool coincide_pid(DTB* DTB) {
+        return (DTB->gdtPID == *pid);
+    }
+    return list_find(lista, (void*) coincide_pid);
+}
+// va sin parentesis coincide_pid porque tiene que llamar al puntero a la funcion despues de que hacer list_find
+
+t_cpu* devuelve_cpu_asociada_a_socket_de_lista(t_list* lista, int* socket) {
+    bool coincide_socket(t_cpu* cpu) {
+        return cpu->socket == *socket;
+    }
+    return list_find(lista, (void*) coincide_socket);
 }
 
 //Funciones booleanas
-bool coincidePID(DTB* DTB, int* PID) {
-    return (DTB->gdtPID == *PID);
-}
-
-bool coincide_socket(t_unCpuSafa* cpu, int* socketFD) {
-    return cpu->socket == *socketFD;
-}
 
 bool permite_multiprogramacion() {
     return procesos_en_memoria < MULTIPROGRAMACION;
 }
 
-bool lista_vacia(*t_list lista) {
+bool lista_vacia(t_list* lista) {
     return list_size(lista) == 0;
 }
 
-bool esta_libre_cpu(void *cpu) {
-    return ((t_unCpuSafa*)cpu) -> mutex_estado != 0;
+bool esta_libre_cpu(t_cpu* cpu) {
+    return (int)(cpu->mutex_estado.__align) != 0;
 }
 
 bool hay_cpu_libre() {
-    return list_any_satisfy(lista_cpu, (void*)esta_libre_la_cpu);
+    return list_any_satisfy(lista_cpu, (void*)esta_libre_cpu);
 }
 
 //
 
-void desplegarCola(DTB* listaProcesos){ //Modificar y usar con list_iterate y printf
+void desplegar_lista(t_list *listaProcesos){ //Modificar y usar con list_iterate y printf
 
 	mostrarProcesos(listaProcesos);
 }
 
 
 void mostrarProcesos(t_list* listaProcesos){
-	list_iterate(lista, mostrarProceso);
+	list_iterate(listaProcesos, mostrarUnProceso);
 	printf("\n\n");
 }
 
@@ -129,26 +136,26 @@ void mostrarUnProceso(void* process){
 //Funciones de Consola
 void ejecutar(char* path) {
 	DTB* DTBNuevo = crearDTB(path);
-	list_add(listaNuevos, DTBNuevo);
+	list_add(lista_nuevos, DTBNuevo);
     desbloquear_dtb_dummy(DTBNuevo);
 }
 
 void status()     { ////NO Repitas! LLama a una list_iterate
 
 printf("\nCola de Nuevos- cant. de procesos: %d", list_size(lista_nuevos));
-desplegarCola(listaNuevos);
+desplegar_lista(lista_nuevos);
 
 printf("\nCola de Listos- cant. de procesos: %d\nInfo. procesos en esta cola:\n", list_size(lista_listos));
-desplegarCola(listaListos);
+desplegar_lista(lista_listos);
 
 printf("\nCola de Ejecutados- cant. de procesos: %d\nInfo. procesos en esta cola:\n", list_size(lista_ejecutando));
-desplegarCola(listaEjecutando);
+desplegar_lista(lista_ejecutando);
 
 printf("\nCola de Bloqueados- cant. de procesos: %d\nInfo. procesos en esta cola:\n", list_size(lista_bloqueados));
-desplegarCola(listaBloqueados);
+desplegar_lista(lista_bloqueados);
 
 printf("\nCola de Finalizados- cant. de procesos: %d\nInfo. procesos en esta cola:\n", list_size(lista_finalizados));
-desplegarCola(listaFinalizados);
+desplegar_lista(lista_finalizados);
 
 }
 /*

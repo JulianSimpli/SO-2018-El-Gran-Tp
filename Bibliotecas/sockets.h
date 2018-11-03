@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <sys/sendfile.h>
+#include <string.h>
 #include <errno.h>
 #include <netinet/in.h>
 #include <sys/wait.h>
@@ -25,9 +26,12 @@ typedef enum { CPU, FM9, ELDIEGO, MDJ, SAFA } Emisor;
 //#define SAFA "SAFA   "
 
 //typedef enum { ESHANDSHAKE, ESSTRING, ESDATOS } Tipo;
-typedef enum { ESHANDSHAKE, ESSTRING, ESDATOS, SUCCESS, ERROR,
-	VALIDAR_ARCHIVO, CREAR_ARCHIVO, OBTENER_DATOS, GUARDAR_DATOS, BORRAR_ARCHIVO,
-	DUMMY_SUCCES, DUMMY_FAIL, DTB_SUCCES, DTB_FAIL, DTB_BLOQUEAR, PROCCES_TIMEOUT} Tipo;
+typedef enum {
+	ESHANDSHAKE, ESSTRING, ESDATOS, SUCCESS, ERROR,									// Mensajes generales
+	VALIDAR_ARCHIVO, CREAR_ARCHIVO, OBTENER_DATOS, GUARDAR_DATOS, BORRAR_ARCHIVO, 	// Mensajes MDJ
+	DUMMY_SUCCES, DUMMY_FAIL, DTB_SUCCES, DTB_FAIL, DTB_BLOQUEAR, PROCESS_TIMEOUT,  // Mensajes Emisor: CPU, Receptor: SAFA
+	ESDTBDUMMY, ESDTB																// Mensajes Emisor: SAFA, Receptor: CPU
+	} Tipo;													
 
 typedef struct {
 	Tipo tipoMensaje;

@@ -45,8 +45,6 @@ void imprimirArchivoConfiguracion() {
 			IP, PUERTO, ALGORITMO_PLANIFICACION, QUANTUM, MULTIPROGRAMACION, RETARDO_PLANIF);
 }
 void consola() {
-    printf("Esperando 1 CPU y a El Diego");
-    while(estado);
 	char * linea;
 	while (true) {
 		linea = readline(">> ");
@@ -96,65 +94,72 @@ void accion(void* socket) {
 	//while que recibe paquetes que envian a safa, de qué socket y el paquete mismo
 	//el socket del cliente conectado lo obtiene con la funcion servidorConcurrente en el main
 	while (RecibirPaqueteServidorSafa(socketFD, SAFA, &paquete) > 0) {
-		//SWITCH
-		if (!strcmp(paquete.header.emisor, ELDIEGO)) {
-			switch (paquete.header.tipoMensaje) {
-				case ESHANDSHAKE: { //tipo de mensaje y la acción que debe realizar segun el mensaje enviado
-                    pthread_mutex_unlock(&mutex_handshake_diego);
+		switch(paquete.header.emisor) {
+			case ELDIEGO: {
+
+				switch (paquete.header.tipoMensaje) {
+					case ESHANDSHAKE: {
+                    	pthread_mutex_unlock(&mutex_handshake_diego);
+						log_info(logger, "llegada de el diego");
+						break;
+					}
 				}
-				break;
 			}
-		}
-		if (!strcmp(paquete.header.emisor, CPU)) {
-			switch (paquete.header.tipoMensaje) {
-				//recibio un mensaje de tipo "handshake" de un cpu, el cual a su vez le pasa el id de cpu conectado
-				case ESHANDSHAKE: {
-					t_unCpuSafa *cpuNuevo = malloc(sizeof(t_unCpuSafa));
-					cpuNuevo->id = malloc(paquete.header.tamPayload);
-					strcpy(cpuNuevo->id, paquete.Payload);
-					cpuNuevo->socket = socketFD;
-                    pthread_mutex_init(&(cpuNuevo->mutex_estado));
-					list_add(lista_cpu, cpuNuevo);
-					log_info(logger, "llegada cpu nuevo con id: %s", cpuNuevo->id);
-                    pthread_mutex_unlock(&mutex_handshake_cpu);
-				}
 
-                case DUMMY_SUCCES: {
-                    int pid = (int*) paquete.Payload;
-                    list_remove_by_condition(lista_bloqueados, (void*)coincidePID(&pid));
-                    notificar_al_PLP(pid, lista_nuevos);
-                    t_unCpuSafa* cpu_actual= list_find(lista_cpu, (void*)coincide_socket(&SocketFD));
-                    pthread_muted_unlock(cpu_actual->mutex_estado);
-                }
-
-                case DUMMY_FAIL: {
-
-                }
-
-                case BLOQUEAR_GDT: {
-
-                }
-
-                case PROCESS_TIMEOUT: {
-                    // falta quantum. Chequeo si finaliza o vuelve a listo aca y en succes
-                }
-
-                case DTB_SUCCES: {
-                    DTB* DTB_succes = deserializar(paquete.Payload);
-                    int pid = DTB_succes->gdtPID;
-                    list_remove_by_condition(lista_bloqueados, (void*)coincidePID(&pid));
-                    // chequear si va a ready o a exit
-                    t_unCpuSafa* cpu_actual= list_find(lista_cpu, (void*)coincide_socket(&SocketFD));
-                    pthread_muted_unlock(cpu_actual->mutex_estado);
-                }
-
-                    
+			case CPU: {
+			manejar_paquetes_CPU(&paquete, &socketFD);  
+			break;             
 			}
-				break;
 		}
 	}
 	if (paquete.Payload != NULL) free(paquete.Payload);
 	close(socketFD);
+}
+
+void manejar_paquetes_CPU(Paquete* paquete, int* socketFD) {
+	switch (paquete->header.tipoMensaje) {
+		case ESHANDSHAKE: {
+			t_cpu *cpu_nuevo = malloc(sizeof(t_cpu));
+			cpu_nuevo->socket = *socketFD;
+            pthread_mutex_init(&cpu_nuevo->mutex_estado, NULL);
+			list_add(lista_cpu, cpu_nuevo);
+			log_info(logger, "llegada cpu nuevo en socket: %i", cpu_nuevo->socket);
+            pthread_mutex_unlock(&mutex_handshake_cpu);
+			break;
+		}
+
+    	case DUMMY_SUCCES: {
+            int pid = (int) paquete->Payload;
+            // list_remove_by_condition(lista_bloqueados, (void*)coincide_pid(&pid));
+			notificar_al_PLP(lista_nuevos, &pid);
+            t_cpu* cpu_actual = devuelve_cpu_asociada_a_socket_de_lista(lista_cpu, socketFD);
+            pthread_mutex_unlock(&cpu_actual->mutex_estado);
+			break;
+		}
+
+        case DUMMY_FAIL: {
+			break;
+        }
+
+        case DTB_BLOQUEAR: {
+			break;
+    	}
+
+        case PROCESS_TIMEOUT: {
+        	// falta quantum. Chequeo si finaliza o vuelve a listo aca y en succes
+			break;
+        }
+
+        case DTB_SUCCES: {
+            DTB* DTB_succes = DTB_deserializar(paquete->Payload);
+            int pid = DTB_succes->gdtPID;
+            // list_remove_by_condition(lista_bloqueados, (void*)coincide_pid(&pid));
+			// chequear si va a ready o a exit
+            t_cpu* cpu_actual = devuelve_cpu_asociada_a_socket_de_lista(lista_cpu, socketFD);
+			pthread_mutex_unlock(&cpu_actual->mutex_estado);
+			break;
+        }
+	}
 }
 
 int main(void) {
@@ -165,7 +170,7 @@ int main(void) {
 	log_info(logger, "Probando safaLog.log");
 	//defino a safa como servidor concurrente para que diego y cpu se puedan conectar a él
 	//a los clientes conectados a safa se los atiende con un hilo y mediante la funcion accion a c/u
-    ServidorConcurrente(IP, PUERTO, SAFA, &listaHilos, &end, accion);
+    ServidorConcurrente(IP, PUERTO, SAFA, &lista_hilos, &end, accion);
     
     pthread_mutex_lock(&mutex_handshake_diego);
     pthread_mutex_lock(&mutex_handshake_cpu);
