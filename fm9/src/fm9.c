@@ -1,4 +1,4 @@
-#include "sockets.h"
+#include "../../Bibliotecas/sockets.h"
 
 
 char *MODO, *IP_FM9;
@@ -15,7 +15,7 @@ void crearLogger() {
 }
 
 void obtenerValoresArchivoConfiguracion() {
-	t_config* arch = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/fm9/FM9.cfg");
+	t_config* arch = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/fm9/src/FM9.config");
 
 	IP_FM9 = string_duplicate(config_get_string_value(arch, "IP_FM9"));
 	PUERTO_FM9 = config_get_int_value(arch, "PUERTO_FM9");
@@ -123,7 +123,7 @@ void consola() {
 		linea = readline(">> ");
 		if (linea) add_history(linea);
 		char** dump = string_split(linea, " ");
-		if (string_starts_with(linea, dump[0])) {
+		if (!strcmp(dump[0], "dump")) {
 			int idDump = atoi(dump[1]);
 			printf ("id para Dump: %d", idDump);
 			//mostrar toda la info del id que pertenece a un proceso, y la info del storage
@@ -139,9 +139,9 @@ int main() {
 	obtenerValoresArchivoConfiguracion();
 	imprimirArchivoConfiguracion();
 	//ptrStorage = malloc(TAMANIO);
+	ServidorConcurrente(IP_FM9, PUERTO_FM9, FM9, &listaHilos, &end, accion);
 	pthread_t hiloConsola; //un hilo para la consola
 	pthread_create(&hiloConsola, NULL, (void*) consola, NULL);
-	ServidorConcurrente(IP_FM9, PUERTO_FM9, FM9, &listaHilos, &end, accion);
 	pthread_join(hiloConsola, NULL);
 	return EXIT_SUCCESS;
 }

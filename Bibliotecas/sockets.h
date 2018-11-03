@@ -16,10 +16,8 @@
 #define TAMANIOHEADER sizeof(Header)
 #define STRHANDSHAKE "10"
 
-const char* Emisores[];
+char* Emisores[5];
 extern int MAX_LINEA;
-typedef enum { CPU, FM9, ELDIEGO, MDJ, SAFA } Emisor;
-
 typedef enum { CPU, FM9, ELDIEGO, MDJ, SAFA } Emisor;
 
 typedef enum {
