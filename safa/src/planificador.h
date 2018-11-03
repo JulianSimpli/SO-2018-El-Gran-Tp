@@ -3,7 +3,6 @@
 
 #include "../../Bibliotecas/dtb.h"
 #include <stdio.h>
-#include <commons/string.h>
 
 typedef enum {
 	ESTADO_NUEVO,

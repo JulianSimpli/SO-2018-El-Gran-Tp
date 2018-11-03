@@ -1,4 +1,5 @@
 #include "planificador.h"
+#include <commons/string.h>
 
 //Hilo planificador largo plazo
 void planificador_largo_plazo() {
@@ -69,7 +70,7 @@ int desbloquear_dtb_dummy(DTB* DTBNuevo) {
     return list_add(lista_PLP, dtb_dummy);
 }
 
-int notificar_al_PLP(PID) {
+int notificar_al_PLP(int PID) {
     DTB* DTB_a_mover = devuelve_DTB_asociado_a_pid(&PID);
     return list_add(lista_PLP, DTB_a_mover);
 }
