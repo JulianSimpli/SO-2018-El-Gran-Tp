@@ -1,5 +1,5 @@
 #include "cpu.h"
-#includ <commons/string.h>
+#include <commons/string.h>
 
 int main(int argc, char **argv)
 {
@@ -23,7 +23,7 @@ int main(int argc, char **argv)
 
   int diego = connect_to_server(ip_diego, puerto_diego);
 
-	handshake(diego, CPU);
+  handshake(diego, CPU);
 
   return 0;
 }
@@ -96,7 +96,7 @@ int connect_to_server(char *ip, char *port)
 
   if (server_socket < 0)
   {
-    perror("Error:");
+    perror("socket: ");
     _exit_with_error(-1, "No se pudo crear el socket", NULL);
   }
 
@@ -106,6 +106,7 @@ int connect_to_server(char *ip, char *port)
 
   if (retorno < 0)
   {
+    perror("connect: ");
     _exit_with_error(server_socket, "No me pude conectar al servidor", NULL);
   }
 

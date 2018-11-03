@@ -29,7 +29,7 @@ typedef enum { ESHANDSHAKE, ESSTRING, ESDATOS, SUCCESS, ERROR,
 	VALIDAR_ARCHIVO, CREAR_ARCHIVO, OBTENER_DATOS, GUARDAR_DATOS, BORRAR_ARCHIVO} Tipo;
 
 typedef struct {
-	Tipo TipoMensaje;
+	Tipo tipoMensaje;
 	uint32_t tamPayload;
 	Emisor emisor;
 }__attribute__((packed)) Header;
@@ -68,7 +68,7 @@ int ConectarAServidorCpu(int puertoAConectar, char* ipAConectar, Emisor servidor
 		void RecibirElHandshake(int socketFD, Emisor emisor), void EnviarElHandshake(int socketFD, Emisor emisor));
 
 bool EnviarDatos(int socketFD, Emisor emisor, void* datos, int tamDatos);
-bool EnviarDatosTipo(int socketFD, Emisor emisor, void* datos, int tamDatos, Tipo TipoMensaje);
+bool EnviarDatosTipo(int socketFD, Emisor emisor, void* datos, int tamDatos, Tipo tipoMensaje);
 bool EnviarMensaje(int socketFD, char* msg, Emisor emisor);
 bool EnviarPaquete(int socketCliente, Paquete* paquete);
 void EnviarHandshake(int socketFD, Emisor emisor);

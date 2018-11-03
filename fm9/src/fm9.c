@@ -41,7 +41,7 @@ void EnviarHandshakeELDIEGO(int socketFD) {
 	Paquete* paquete = malloc(TAMANIOHEADER);
 	Header header;
 	void *datos = &MAX_LINEA;
-	header.TipoMensaje = ESHANDSHAKE;
+	header.tipoMensaje = ESHANDSHAKE;
 	header.tamPayload = sizeof(MAX_LINEA);
 	header.emisor = FM9;
 	paquete->header = header;
@@ -57,7 +57,7 @@ void accion(void* socket) {
 	while (RecibirPaqueteServidor(socketFD, FM9, &paquete) > 0) {
 		int emisor = paquete.header.emisor;
 		if (paquete.header.emisor = ELDIEGO) {
-			switch (paquete.header.TipoMensaje) {
+			switch (paquete.header.tipoMensaje) {
 				case ESHANDSHAKE: {
 					socketElDiego = socketFD;
 					//otra opcion mas sencilla, usar directamente:

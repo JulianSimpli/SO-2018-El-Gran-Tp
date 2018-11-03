@@ -21,7 +21,7 @@ t_config *config;
 
 //Use this for simple validation of the mdj config file keys
 int keys = 3;
-const int retardo;
+int retardo;
 
 /* The names of functions that actually do the manipulation. */
 
@@ -37,5 +37,8 @@ int interpretar(char *linea);
 
 void exit_gracefully(int return_nr);
 void _exit_with_error(int socket, char *error_msg, void *buffer);
+void enviar_mensaje(Mensaje mensaje);
+Mensaje *recibir_mensaje(int conexion);
+int crear_socket_safa();
 
 #endif

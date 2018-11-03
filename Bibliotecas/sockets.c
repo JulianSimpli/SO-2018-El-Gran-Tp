@@ -138,10 +138,10 @@ bool EnviarPaquete(int socketCliente, Paquete* paquete) {
 }
 
 //como la funcion anterior pero especificando de quién y qué tipo de mensaje (establecido en enum)
-bool EnviarDatosTipo(int socketFD, Emisor emisor, void* datos, int tamDatos, Tipo TipoMensaje){
+bool EnviarDatosTipo(int socketFD, Emisor emisor, void* datos, int tamDatos, Tipo tipoMensaje){
 	Paquete* paquete = malloc(sizeof(Paquete));
 	//paquete->Payload=malloc(tamDatos);
-	paquete->header.TipoMensaje = TipoMensaje;
+	paquete->header.tipoMensaje = tipoMensaje;
 	paquete->header.emisor = emisor;
 	uint32_t r = 0;
 	bool valor_retorno;
@@ -162,7 +162,7 @@ bool EnviarDatosTipo(int socketFD, Emisor emisor, void* datos, int tamDatos, Tip
 bool EnviarMensaje(int socketFD, char* msg, Emisor emisor) {
 	Paquete paquete;
 	paquete.header.emisor = emisor;
-	paquete.header.TipoMensaje = ESSTRING;
+	paquete.header.tipoMensaje = ESSTRING;
 	paquete.header.tamPayload = string_length(msg) + 1;
 	paquete.Payload = msg;
 	return EnviarPaquete(socketFD, &paquete);
@@ -171,7 +171,7 @@ bool EnviarMensaje(int socketFD, char* msg, Emisor emisor) {
 void EnviarHandshake(int socketFD, Emisor emisor) {
 	Paquete* paquete = malloc(TAMANIOHEADER);
 	Header header;
-	header.TipoMensaje = ESHANDSHAKE;
+	header.tipoMensaje = ESHANDSHAKE;
 	header.tamPayload = 0;
 	header.emisor = emisor;
 	paquete->header = header;
@@ -189,7 +189,7 @@ void RecibirHandshake(int socketFD, Emisor emisor) {
 	int resul = RecibirDatos(&header, socketFD, TAMANIOHEADER);
 	if (resul > 0) { // si no hubo error en la recepcion
 		if (header.emisor = emisor) {
-			if (header.TipoMensaje == ESHANDSHAKE)
+			if (header.tipoMensaje == ESHANDSHAKE)
 				printf("\nConectado con el servidor\n");
 			else
 				perror("Error de Conexion, no se recibio un handshake\n");
@@ -225,7 +225,7 @@ int RecibirPaqueteServidor(int socketFD, Emisor receptor, Paquete* paquete) {
 	paquete->Payload = NULL;
 	int resul = RecibirDatos(&(paquete->header), socketFD, TAMANIOHEADER);
 	if (resul > 0) { //si no hubo error
-		if (paquete->header.TipoMensaje == ESHANDSHAKE) { //vemos si es un handshake
+		if (paquete->header.tipoMensaje == ESHANDSHAKE) { //vemos si es un handshake
 			printf("Se establecio conexion con\n");
 			EnviarHandshake(socketFD, receptor); // paquete->header.emisor
 		} else if (paquete->header.tamPayload > 0){ //recibimos un payload y lo procesamos (por ej, puede mostrarlo)
@@ -240,7 +240,7 @@ int RecibirPaqueteServidorSafa(int socketFD, Emisor receptor, Paquete* paquete) 
 	paquete->Payload = NULL;
 	int resul = RecibirDatos(&(paquete->header), socketFD, TAMANIOHEADER);
 	if (resul > 0) { //si no hubo error
-		if (paquete->header.TipoMensaje == ESHANDSHAKE) { //vemos si es un handshake
+		if (paquete->header.tipoMensaje == ESHANDSHAKE) { //vemos si es un handshake
 			printf("Se establecio conexion con\n");
 			if((paquete->header.emisor = ELDIEGO) || (paquete->header.emisor = CPU)){
 					paquete->Payload = malloc(paquete->header.tamPayload);
@@ -258,7 +258,7 @@ int RecibirPaqueteServidorSafa(int socketFD, Emisor receptor, Paquete* paquete) 
 int RecibirPaqueteCliente(int socketFD, Emisor receptor, Paquete* paquete) {
 	paquete->Payload = NULL;
 	int resul = RecibirDatos(&(paquete->header), socketFD, TAMANIOHEADER);
-	if (resul > 0 && paquete->header.TipoMensaje != ESHANDSHAKE && paquete->header.tamPayload > 0) { //si no hubo error ni es un handshake
+	if (resul > 0 && paquete->header.tipoMensaje != ESHANDSHAKE && paquete->header.tamPayload > 0) { //si no hubo error ni es un handshake
 		paquete->Payload = malloc(paquete->header.tamPayload);
 		resul = RecibirDatos(paquete->Payload, socketFD, paquete->header.tamPayload);
 	}
