@@ -38,11 +38,11 @@
 #define false 0
 
 //para guardar funciones y estructuras que se necesiten
-
 typedef struct {
-	char* id;
 	int socket;
+    pthread_mutex_t mutex_estado;
 }__attribute__((packed)) t_unCpuSafa;
+// t_unCpuSafa se va a planificador.h
 
 char* integer_to_string(char*string,int x);
 size_t getFileSize(const char* filename);
