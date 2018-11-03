@@ -6,12 +6,18 @@ void crearLogger() {
 }
 
 void inicializarVariables() {
+
 	lista_cpu = list_create();
     lista_nuevos = list_create();
     lista_listos = list_create();
     lista_ejecutando = list_create();
     lista_bloqueados = list_create();
     lista_finalizados = list_create();
+	stateArray[0] = lista_nuevos;
+	stateArray[1] = lista_listos;
+	stateArray[2] = lista_ejecutando;
+	stateArray[3] = lista_bloqueados;
+	stateArray[4] = lista_finalizados;
     lista_PLP = list_create();
     pthread_mutex_init(&mutex_handshake_diego, NULL);
     pthread_mutex_init(&mutex_handshake_cpu, NULL);
@@ -177,5 +183,3 @@ int main(void) {
     pthread_join(hilo_PLP, NULL);
 	return EXIT_SUCCESS;
 }
-
-

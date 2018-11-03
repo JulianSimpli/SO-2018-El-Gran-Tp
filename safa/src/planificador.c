@@ -134,37 +134,37 @@ void ejecutar(char* path) {
 
 void status()     { ////NO Repitas! LLama a una list_iterate
 
-printf("\nCola de Nuevos- cant. de procesos: %d", list_size(listaNuevos));
+printf("\nCola de Nuevos- cant. de procesos: %d", list_size(lista_nuevos));
 desplegarCola(listaNuevos);
 
-printf("\nCola de Listos- cant. de procesos: %d\nInfo. procesos en esta cola:\n", list_size(listaListos));
+printf("\nCola de Listos- cant. de procesos: %d\nInfo. procesos en esta cola:\n", list_size(lista_listos));
 desplegarCola(listaListos);
 
-printf("\nCola de Ejecutados- cant. de procesos: %d\nInfo. procesos en esta cola:\n", list_size(listaEjecutando));
+printf("\nCola de Ejecutados- cant. de procesos: %d\nInfo. procesos en esta cola:\n", list_size(lista_ejecutando));
 desplegarCola(listaEjecutando);
 
-printf("\nCola de Bloqueados- cant. de procesos: %d\nInfo. procesos en esta cola:\n", list_size(listaBloqueados));
+printf("\nCola de Bloqueados- cant. de procesos: %d\nInfo. procesos en esta cola:\n", list_size(lista_bloqueados));
 desplegarCola(listaBloqueados);
 
-printf("\nCola de Finalizados- cant. de procesos: %d\nInfo. procesos en esta cola:\n", list_size(listaFinalizados));
+printf("\nCola de Finalizados- cant. de procesos: %d\nInfo. procesos en esta cola:\n", list_size(lista_finalizados));
 desplegarCola(listaFinalizados);
 
 }
-
+/*
 void finalizar(int PID){
     ptr3=NULL;
 
     for(i=0; i<5; i++){
         ptr3 = list_find(stateArray[i], PID);   //Busco a una PCB que tenga ese PID
         if(ptr3 != NULL){
-                if(stateArray[i]==Ejecutando){
+                if(stateArray[i]== ESTADO_EJECUTANDO){
                     printf("\n El proceso de PID = %d se encuentra en Ejecucion\n", PID);
                     //Esperar que termine de ejecutar
                     //queue_push(Finalizar, ptr3);  //Cuando termine la ejecucion
                     //list_remove_and_destroy_by_condition(, ,); //eliminarlo de la cola
                     printf("\n El proceso de PID %d se ha movido a la cola de Finalizados\n", PID);
                 }else{
-                    queue_push(Finalizar, ptr3);
+                    queue_push(ptr3, (void*)ESTADO_FINALIZADO);
                     //list_remove_and_destroy_by_condition(, ,); //eliminarlo de la cola en que se encuentre
                     printf("\n El proceso de PID %d se ha movido a la cola de Finalizados\n", PID);
                 }
@@ -174,5 +174,5 @@ void finalizar(int PID){
 
     }
 }
-
+*/
 //void metricas()

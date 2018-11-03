@@ -2,7 +2,8 @@
 #define PLANIFICADOR_H_
 
 #include "../../Bibliotecas/dtb.h"
-#include "../../Bibliotecas/helper.h"
+#include <stdio.h>
+#include <commons/string.h>
 
 typedef enum {
 	ESTADO_NUEVO,
@@ -10,18 +11,20 @@ typedef enum {
 	ESTADO_EJECUTANDO,
 	ESTADO_BLOQUEADO,
 	ESTADO_FINALIZADO
-};
+} Estados;
 
 typedef struct {
 	int socket;
     pthread_mutex_t mutex_estado;
 }__attribute__((packed)) t_unCpuSafa;
 
-t_list* listaNuevos;
-t_list* listaListos;
-t_list* listaEjecutando;
-t_list* listaBloqueados;
-t_list* listaFinalizados;
+t_list *lista_cpu;
+t_list *lista_nuevos;
+t_list *lista_listos;
+t_list *lista_ejecutando;
+t_list *lista_bloqueados;
+t_list *lista_finalizados;
+t_list *lista_PLP;
 
 t_list* ptr2;
 t_list* ptr3;
@@ -29,7 +32,7 @@ t_list* ptr3;
 u_int32_t i=0, numeroPID = 1, procesosEnMemoria = 0;
 
 //Vector de estructuras para buscar un PID y finalizarlo
-DTB* stateArray[5] = {listaNuevos, listaListos, listaEjecutando, listaBloqueados, listaFinalizados};
+t_list *stateArray[5];
 
 //Funciones
 //Hilo planificador largo plazo
@@ -47,14 +50,14 @@ void ejecutar_primer_dtb_listo(DTB* DTB_ejecutar, t_unCpuSafa* cpu_libre);
 //Funciones asociadas a DTB
 DTB* crearDTB(char* path);
 int desbloquear_dtb_dummy(DTB* DTBNuevo);
-int notificar_al_PLP(PID);
+int notificar_al_PLP(int *PID);
 DTB* devuelve_DTB_asociado_a_pid(int* PID, t_list* lista);
 
 //Funciones booleanas
 bool coincidePID(DTB* DTB, int* PID);
 bool coincide_socket(t_unCpuSafa* cpu, int* socketFD);
 bool permite_multiprogramacion();
-bool lista_vacia(*t_list lista);
+bool lista_vacia(t_list *lista);
 bool esta_libre_cpu(void *cpu);
 bool hay_cpu_libre();
 
@@ -67,6 +70,6 @@ void mostrarUnProceso(void* process);
 void ejecutar(char* path);
 void status();
 void finalizar(int PID);
-void metricas()
+void metricas();
 
 #endif /* PLANIFICADOR_H_ */
