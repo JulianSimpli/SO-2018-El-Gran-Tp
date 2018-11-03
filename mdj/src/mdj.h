@@ -41,9 +41,10 @@ void *atender_peticion(void *);
 Mensaje *interpretar_mensaje(Mensaje *);
 void handshake(int, int);
 void enviar_mensaje(Mensaje);
-void *validar_archivo(Mensaje *, char *);
-t_config *crearArchivo(char *path);
 void marcarBitarray(t_config *metadata);
+int create_block(int index, int cantidad_bytes);
+t_list *get_space(int size);
+char *convertir_bloques_a_string(Archivo_metadata *fm);
 char *mnt_path;
 char *file_path;
 char *blocks_path;
@@ -53,6 +54,10 @@ int tamanio_bloques;
 
 void _exit_with_error(int socket, char *error_msg, void *buffer);
 void exit_gracefully(int return_nr);
+int validar_archivo(Mensaje *mensaje, char *);
+void crear_archivo(Mensaje *mensaje);
+void obtener_datos(Mensaje *mensaje);
+void guardar_datos(Mensaje *mensaje);
 
 //Estas son las funciones que ejecuta cada comando respectivamente
 //Todas tienen que tener la misma firma o se podria ampliar recibiendo void*
@@ -66,9 +71,7 @@ void enviar_mensaje(Mensaje mensaje)
   int mensaje_enviado = send(mensaje.socket, buffer, sizeof(Paquete), 0);
 
   if (mensaje_enviado < 0)
-  {
     log_error(logger, "No pudo enviar el mensaje");
-  }
 }
 
 void handshake(int socket, int emisor)
@@ -168,8 +171,8 @@ int crear_bloques(t_list *lista_bloques, int *cantidad_bytes)
 {
   for (int i = 0; i < list_size(lista_bloques); i++)
   {
-    create_block(list_get(lista_bloques, i), cantidad_bytes);
-    cantidad_bytes -= tamanio_bloques;
+    create_block((__intptr_t)list_get(lista_bloques, i), *cantidad_bytes);
+    *cantidad_bytes -= tamanio_bloques;
   }
 }
 
@@ -194,10 +197,7 @@ int create_block(int index, int cantidad_bytes)
 
   bitarray_set_bit(bitarray, index);
 
-  if (create_block_file(block_path, cantidad_bytes) != 0)
-    return 1;
-
-  return 0;
+  return create_block_file(block_path, cantidad_bytes) != 0;
 }
 
 int guardar_metadata(Archivo_metadata *fm)
@@ -217,7 +217,7 @@ int guardar_metadata(Archivo_metadata *fm)
   return 0;
 }
 
-char convertir_bloques_a_string(Archivo_metadata *fm)
+char *convertir_bloques_a_string(Archivo_metadata *fm)
 {
   char *bloques = malloc(256);
   int i;

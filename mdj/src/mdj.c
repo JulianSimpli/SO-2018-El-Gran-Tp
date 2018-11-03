@@ -14,9 +14,9 @@ int main(int argc, char **argv)
 	misLadrillos->paquete.Payload = malloc(strlen("/torneo/equipos/Racing.txt") + 1);
 	strcpy(misLadrillos->paquete.Payload, "/torneo/equipos/Racing.txt");
 	validar_archivo(misLadrillos, file_path);
-	//t_config *metadata = crearArchivo("/home/daniel/FileSystemMock/Archivos/alumnos/alumno.bin");
-	//marcarBitmap(metadata);
-	log_info(logger, "Marco el bitmap");
+	//t_config *metadata = crear_archivo("/home/daniel/FileSystemMock/Archivos/alumnos/alumno.bin");
+	//marcarbitarray(metadata);
+	log_info(logger, "Marco el bitarray");
 
 	char *linea;
 	while (1)
@@ -79,13 +79,13 @@ void inicializar_log(char *program)
 
 void crear_bitarray()
 {
-	t_config *bitmap_metadata = config_create("/home/daniel/FileSystemMock/Metadata/Metadata.bin");
-	int cantidad_bloques = config_get_int_value(bitmap_metadata, "CANTIDAD_BLOQUES");
-	config_destroy(bitmap_metadata);
-	bitmap = bitarray_create_with_mode("/home/daniel/FileSystemMock/Metadata/Bitmap.bin", cantidad_bloques / 8, LSB_FIRST);
-	bitarray_set_bit(bitmap, 1);
-	size_t n = bitarray_get_max_bit(bitmap);
-	log_info(logger, "El bitmap tiene %d bits", n);
+	t_config *bitarray_metadata = config_create("/home/daniel/FileSystemMock/Metadata/Metadata.bin");
+	int cantidad_bloques = config_get_int_value(bitarray_metadata, "CANTIDAD_BLOQUES");
+	config_destroy(bitarray_metadata);
+	bitarray = bitarray_create_with_mode("/home/daniel/FileSystemMock/Metadata/bitarray.bin", cantidad_bloques / 8, LSB_FIRST);
+	bitarray_set_bit(bitarray, 1);
+	size_t n = bitarray_get_max_bit(bitarray);
+	log_info(logger, "El bitarray tiene %d bits", n);
 }
 
 void inicializar(char **argv)
@@ -95,7 +95,7 @@ void inicializar(char **argv)
 	leer_config(argv[1]);
 	log_info(logger, "Config cargada exitosamente");
 	// crear_bitarray();
-	// log_info(logger, "Bitmap creado exitosamente");
+	// log_info(logger, "bitarray creado exitosamente");
 }
 
 void retardo()
@@ -208,207 +208,20 @@ Mensaje *interpretar_mensaje(Mensaje *mensaje)
 	case VALIDAR_ARCHIVO:
 		log_info(logger, "Validar archivo");
 		//TODO: Preguntar si mdj es el unico que llama a este proceso
-		respuesta->paquete.Payload = validar_archivo(mensaje, file_path);
+		respuesta->paquete.Payload = (void*)(__intptr_t)(mensaje, file_path);
 		//TODO: Cambiar firma de validar_archivo
 		break;
 	case CREAR_ARCHIVO:
 		log_info(logger, "Crear archivo");
-
-		char **parametros = string_split(mensaje->paquete.Payload, " ");
-		char *ruta = parametros[1];
-		int bytes_a_crear = atoi(parametros[2]);
-		//Primero verifica que el archivo todavia no exista
-		int existe = validar_archivo(ruta, file_path);
-
-		if (existe)
-		{
-			respuesta->paquete.header.tamPayload = sizeof(uint32_t);
-			respuesta->paquete.Payload = (void *)50001;
-			break;
-		}
-
-		//TODO: Calcular size segun tamanio de linea que paso fm9
-		t_list *bloques_libres = get_space(bytes_a_crear);
-		//Valida que tenga espacio suficiente
-		//TODO: Devuelve lista de bloques libres o lista empty
-
-		if (list_size(bloques_libres) == 0)
-		{
-			respuesta->paquete.header.tipoMensaje = ERROR;
-			respuesta->paquete.Payload = (void *)50002;
-		}
-		int retorno = crear_bloques(bloques_libres, &bytes_a_crear);
-
-		Archivo_metadata *nuevo_archivo = malloc(sizeof(Archivo_metadata));
-		nuevo_archivo->nombre = malloc(strlen(ruta + 1));
-		strcpy(nuevo_archivo->nombre, ruta);
-		nuevo_archivo->bloques = bloques_libres;
-		nuevo_archivo->tamanio = parametros[2];
-
-		int resultado = guardar_metadata(nuevo_archivo);
-
-		//for que recorrra la lista de bloques libres, llame a la funcion create_block y marque el bitmap
-		//Va decrementando la cantidad de lineas que le resten escribir con \n necesarios en c/u
-
-		//Crea el archivo metadata con la informacion de donde estan los bloques
-
-		//Responde a dam un ok
-		if (resultado == 0)
-		{
-			respuesta->paquete.header.tamPayload = 0;
-			respuesta->paquete.header.tipoMensaje = SUCCESS;
-		}
+		crear_archivo(mensaje);
 		break;
 	case OBTENER_DATOS:
 		log_info(logger, "Obtener datos");
-
-		char **parametros = string_split(mensaje->paquete.Payload, " ");
-		char *ruta = parametros[1];
-		int bytes_offset = atoi(parametros[2]);
-		int bytes_a_devolver = atoi(parametros[3]);
-		//Primero verifica que el archivo todavia no exista
-		int existe = validar_archivo(ruta, file_path);
-
-		if (existe)
-		{
-			respuesta->paquete.header.tamPayload = sizeof(uint32_t);
-			respuesta->paquete.Payload = (void *)10001;
-			break;
-		}
-		//TODO: Validar archivo y reponder error si no existe
-		//TODO: Lee metadata del archivo pasado por el path
-		//TODO: Calcular en que bloque cae segun el offset y cuantos bloques va leer segun el size
-		//TODO: Crear mensaje de payload del tamanio leido y cargar el contenido de los bloques con un for
-		t_config *metadata = config_create(ruta);
-		char **bloques_ocupados = config_get_array_value(metadata, "BLOQUES");
-
-		int bloque_inicial = bytes_offset / tamanio_bloques;
-		int offset_interno = bytes_offset % tamanio_bloques;
-
-		char *buffer = malloc(bytes_a_devolver);
-
-		for (int i = bloque_inicial; bytes_a_devolver > 0; i++)
-		{
-			int bloque_actual = bloques_ocupados[i];
-			char *ubicacion = get_block_full_path(bloque_actual);
-			FILE *bloque_abierto = fopen(ubicacion, "r");
-			fseek(bloque_abierto, offset_interno, SEEK_SET);
-			offset_interno = 0;
-			int leer = tamanio_bloques - offset_interno;
-			//bytes_a_devolver < tamanio_bloques - offset_interno, leo la cantidad de bytes_a_devolver
-			//sino, lee la resta y pasa al siguiente archivo
-
-			if (bytes_a_devolver < leer)
-				leer = bytes_a_devolver;
-			for (int j = 0; j < leer; j++)
-			{
-				fread(buffer, 1, leer, bloque_abierto);
-			}
-			fclose(bloque_abierto);
-		}
-
-		if (buffer != NULL)
-		{
-			respuesta->paquete.header.tamPayload = strlen(buffer + 1);
-			respuesta->paquete.Payload = buffer;
-			respuesta->paquete.header.tipoMensaje = SUCCESS;
-		}
-
+		obtener_datos(mensaje);
 		break;
 	case GUARDAR_DATOS:
 		log_info(logger, "Guardar datos");
-
-		char **parametros = string_split(mensaje->paquete.Payload, " ");
-		char *ruta = parametros[1];
-		int bytes_offset = atoi(parametros[2]);
-		int buffer_size = atoi(parametros[3]);
-		char *datos_a_guardar = parametros[4];
-		//Primero verifica que el archivo todavia no exista
-		int existe = validar_archivo(ruta, file_path);
-
-		if (existe)
-		{
-			respuesta->paquete.header.tamPayload = sizeof(uint32_t);
-			respuesta->paquete.Payload = (void *)10001;
-			break;
-		}
-		t_config *metadata = config_create(ruta);
-		char **bloques_ocupados = config_get_array_value(metadata, "BLOQUES");
-
-		int bloque_inicial = bytes_offset / tamanio_bloques;
-		int offset_interno = bytes_offset % tamanio_bloques;
-
-		int cantidad_bloques_del_path = config_get_int_value(metadata, "TAMANIO") / tamanio_bloques;
-
-		for (int i = bloque_inicial; buffer_size > 0 && i < cantidad_bloques_del_path; i++)
-		{
-			int bloque_actual = bloques_ocupados[i];
-			char *ubicacion = get_block_full_path(bloque_actual);
-			FILE *bloque_abierto = fopen(ubicacion, "r+");
-			fseek(bloque_abierto, offset_interno, SEEK_SET);
-			int escribir = tamanio_bloques - offset_interno;
-			offset_interno = 0;
-
-			if (buffer_size < escribir)
-				escribir = buffer_size;
-			for (int j = 0; j < escribir; j++)
-			{
-				fwrite(datos_a_guardar, 1, escribir, bloque_abierto);
-				datos_a_guardar = string_substring_from(datos_a_guardar, escribir);
-				buffer_size -= escribir;
-			}
-			fclose(bloque_abierto);
-		}
-
-		if (buffer_size > 0)
-		{
-			t_list *nuevos_bloques = get_space(buffer_size);
-			//por cada bloque nuevo, tengo que actualizar el tamanio de la metadata
-			//actualizar el array de bloques
-			config_set_value(metadata, "TAMANIO", config_get_int_value(metadata, "TAMANIO") + buffer_size);
-
-			t_list *bloques_viejos = list_create();
-			for (int i = 0; i < cantidad_bloques_del_path; i++)
-			{
-				list_add(bloques_viejos, bloques_ocupados[i]);
-			}
-
-			list_add_all(bloques_viejos, nuevos_bloques);
-			config_set_value(metadata, "BLOQUES", convertir_bloques_a_string(bloques_viejos));
-			config_save(metadata);
-
-			crear_bloques(nuevos_bloques, buffer_size); //marco el bitmap
-
-			for (int i = 0; buffer_size > 0; i++)
-			{
-				int bloque_actual = list_get(nuevos_bloques, i);
-				char *ubicacion = get_block_full_path(bloque_actual);
-				FILE *bloque_abierto = fopen(ubicacion, "r+");
-				fseek(bloque_abierto, 0, SEEK_SET);
-				int escribir = tamanio_bloques;
-
-				if (buffer_size < escribir)
-					escribir = buffer_size;
-				for (int j = 0; j < escribir; j++)
-				{
-					fwrite(datos_a_guardar, 1, escribir, bloque_abierto);
-					datos_a_guardar = string_substring_from(datos_a_guardar, escribir);
-					buffer_size -= escribir;
-				}
-				fclose(bloque_abierto);
-			}
-
-			//escribir hasta terminar
-		}
-		//datos_a_guardar
-
-		respuesta->paquete.header.tipoMensaje = SUCCESS;
-
-		//TODO: Validar archivo y reponder error si no existe
-		//TODO: Lee metadata del archivo pasado por el path
-		//TODO: Calcular en que bloque cae segun el offset y cuantos bloques va escribir segun el size
-		//TODO: Ir consumiendo el buffer segun tamanio de bloque
-		//TODO: Crear mensaje OK
+		guardar_datos(mensaje);
 		break;
 	case BORRAR_ARCHIVO:
 		log_info(logger, "Borrar archivos");
@@ -417,7 +230,7 @@ Mensaje *interpretar_mensaje(Mensaje *mensaje)
 		char *ruta = parametros[1];
 
 		//Primero verifica que el archivo todavia no exista
-		int existe = validar_archivo(ruta, file_path);
+		int existe = validar_archivo(mensaje, file_path);
 
 		if (existe)
 		{
@@ -435,7 +248,7 @@ Mensaje *interpretar_mensaje(Mensaje *mensaje)
 		}
 		//TODO: Validar archivo y tirar error si no existe
 		//TODO: Lee metadata del archivo y devuelve los bloques
-		//TODO: Modifica el bitmap
+		//TODO: Modifica el bitarray
 		//TODO: Borra los .bin
 		//TODO: Borra los metadata
 		//TODO: Crear mensaje OK
@@ -478,10 +291,10 @@ t_list *get_space(int size)
 {
 	int blocks = calcular_bloques(size);
 	log_debug(logger, "Necesita %d bloques", blocks);
-	return get_available_blocks(blocks);
+	return conseguir_lista_de_bloques(blocks);
 }
 
-void *validar_archivo(Mensaje *mensaje, char *current_path)
+int validar_archivo(Mensaje *mensaje, char *current_path)
 {
 	DIR *dir;
 	struct dirent *ent;
@@ -505,14 +318,14 @@ void *validar_archivo(Mensaje *mensaje, char *current_path)
 				mensaje->paquete.Payload = route;
 				if (validar_archivo(mensaje, current_path))
 				{
-					return (void *)1;
+					return 1;
 				}
 			}
 			else
 			{
 				log_info(logger, "Encontré el archivo %s", ent->d_name);
 
-				return (void *)1;
+				return 1;
 			}
 		}
 		//Agarra el path del mensaje
@@ -521,39 +334,218 @@ void *validar_archivo(Mensaje *mensaje, char *current_path)
 	}
 	closedir(dir);
 	log_info(logger, "No encontré el archivo %s", search_file);
-	return (void *)0;
+	return 0;
 }
 
-/**
- * La funcion debe recibir el path de donde tiene que guardarlo y que tamanio tiene
- * Segun el tamanio calcula cuantos bloques le corresponde
- * Escribe en su metadata luego cuales le fueron asignados
- * Y devuelve el t_config que resulta de poder leer el archivo que acaba de crear *
- */
-t_config *crearArchivo(char *path)
-{
-	/*
-	FILE* f = fopen(path, "w+");
-	*/
-
-	//Hago de cuenta que ya lo cree
-	t_config *metadata = config_create(path);
-	log_info(logger, "Logro cargar la metadata de alumno");
-	int tamanio = config_get_int_value(metadata, "TAMANIO");
-	log_info(logger, "tamanio: %d", tamanio);
-	return metadata;
-}
-
-void marcarBitmap(t_config *metadata)
+void marcarbitarray(t_config *metadata)
 {
 	char **bloques = config_get_array_value(metadata, "BLOQUES");
 	log_info(logger, "Ocupa el bloque %d", atoi(bloques[0]));
 	log_info(logger, "Ocupa el bloque %d", atoi(bloques[1]));
-	bitarray_set_bit(bitmap, 1);
+	bitarray_set_bit(bitarray, 1);
 	log_info(logger, "Ocupa el bloque %d", atoi(bloques[2]));
-	bitarray_set_bit(bitmap, atoi(bloques[0]));
-	bitarray_set_bit(bitmap, atoi(bloques[1]));
+	bitarray_set_bit(bitarray, atoi(bloques[0]));
+	bitarray_set_bit(bitarray, atoi(bloques[1]));
 	log_info(logger, "Ocupa el bloque %d", atoi(bloques[3]));
-	bitarray_set_bit(bitmap, atoi(bloques[2]));
-	bitarray_set_bit(bitmap, atoi(bloques[3]));
+	bitarray_set_bit(bitarray, atoi(bloques[2]));
+	bitarray_set_bit(bitarray, atoi(bloques[3]));
+}
+
+void crear_archivo(Mensaje *mensaje)
+{
+	Mensaje *respuesta = malloc(sizeof(Mensaje));
+	char **parametros = string_split(mensaje->paquete.Payload, " ");
+	char *ruta = parametros[1];
+	int bytes_a_crear = atoi(parametros[2]);
+	//Primero verifica que el archivo todavia no exista
+	int existe = validar_archivo(mensaje, file_path);
+
+	if (existe)
+	{
+		respuesta->paquete.header.tamPayload = sizeof(uint32_t);
+		respuesta->paquete.Payload = (void *)50001;
+	}
+
+	//TODO: Calcular size segun tamanio de linea que paso fm9
+	t_list *bloques_libres = get_space(bytes_a_crear);
+	//Valida que tenga espacio suficiente
+	//TODO: Devuelve lista de bloques libres o lista empty
+
+	if (list_size(bloques_libres) == 0)
+	{
+		respuesta->paquete.header.tipoMensaje = ERROR;
+		respuesta->paquete.Payload = (void *)50002;
+	}
+	int retorno = crear_bloques(bloques_libres, &bytes_a_crear);
+
+	Archivo_metadata *nuevo_archivo = malloc(sizeof(Archivo_metadata));
+	nuevo_archivo->nombre = malloc(strlen(ruta + 1));
+	strcpy(nuevo_archivo->nombre, ruta);
+	nuevo_archivo->bloques = bloques_libres;
+	nuevo_archivo->tamanio = (__intptr_t)parametros[2];
+
+	int resultado = guardar_metadata(nuevo_archivo);
+
+	//for que recorrra la lista de bloques libres, llame a la funcion create_block y marque el bitarray
+	//Va decrementando la cantidad de lineas que le resten escribir con \n necesarios en c/u
+
+	//Crea el archivo metadata con la informacion de donde estan los bloques
+
+	//Responde a dam un ok
+	if (resultado == 0)
+	{
+		respuesta->paquete.header.tamPayload = 0;
+		respuesta->paquete.header.tipoMensaje = SUCCESS;
+	}
+}
+
+void obtener_datos(Mensaje *mensaje)
+{
+	Mensaje *respuesta = malloc(sizeof(Mensaje));
+	char **parametros = string_split(mensaje->paquete.Payload, " ");
+	char *ruta = parametros[1];
+	int bytes_offset = atoi(parametros[2]);
+	int bytes_a_devolver = atoi(parametros[3]);
+	//Primero verifica que el archivo todavia no exista
+	int existe = validar_archivo(mensaje, file_path);
+
+	if (existe)
+	{
+		respuesta->paquete.header.tamPayload = sizeof(uint32_t);
+		respuesta->paquete.Payload = (void *)10001;
+	}
+	//TODO: Validar archivo y reponder error si no existe
+	//TODO: Lee metadata del archivo pasado por el path
+	//TODO: Calcular en que bloque cae segun el offset y cuantos bloques va leer segun el size
+	//TODO: Crear mensaje de payload del tamanio leido y cargar el contenido de los bloques con un for
+	t_config *metadata = config_create(ruta);
+	char **bloques_ocupados = config_get_array_value(metadata, "BLOQUES");
+
+	int bloque_inicial = bytes_offset / tamanio_bloques;
+	int offset_interno = bytes_offset % tamanio_bloques;
+
+	char *buffer = malloc(bytes_a_devolver);
+
+	for (int i = bloque_inicial; bytes_a_devolver > 0; i++)
+	{
+		int bloque_actual = atoi(bloques_ocupados[i]);
+		char *ubicacion = get_block_full_path(bloque_actual);
+		FILE *bloque_abierto = fopen(ubicacion, "r");
+		fseek(bloque_abierto, offset_interno, SEEK_SET);
+		offset_interno = 0;
+		int leer = tamanio_bloques - offset_interno;
+		//bytes_a_devolver < tamanio_bloques - offset_interno, leo la cantidad de bytes_a_devolver
+		//sino, lee la resta y pasa al siguiente archivo
+
+		if (bytes_a_devolver < leer)
+			leer = bytes_a_devolver;
+		fread(buffer, 1, leer, bloque_abierto);
+		fclose(bloque_abierto);
+	}
+
+	if (buffer != NULL)
+	{
+		respuesta->paquete.header.tamPayload = strlen(buffer + 1);
+		respuesta->paquete.Payload = buffer;
+		respuesta->paquete.header.tipoMensaje = SUCCESS;
+	}
+}
+
+void guardar_datos(Mensaje *mensaje)
+{
+	Mensaje *respuesta = malloc(sizeof(Mensaje));
+	char **parametros = string_split(mensaje->paquete.Payload, " ");
+	char *ruta = parametros[1];
+	int bytes_offset = atoi(parametros[2]);
+	int buffer_size = atoi(parametros[3]);
+	char *datos_a_guardar = parametros[4];
+	//Primero verifica que el archivo todavia no exista
+	int existe = validar_archivo(mensaje, file_path);
+
+	if (existe)
+	{
+		respuesta->paquete.header.tamPayload = sizeof(uint32_t);
+		respuesta->paquete.Payload = (void *)10001;
+	}
+	t_config *metadata = config_create(ruta);
+	char **bloques_ocupados = config_get_array_value(metadata, "BLOQUES");
+
+	int bloque_inicial = bytes_offset / tamanio_bloques;
+	int offset_interno = bytes_offset % tamanio_bloques;
+
+	int cantidad_bloques_del_path = config_get_int_value(metadata, "TAMANIO") / tamanio_bloques;
+
+	for (int i = bloque_inicial; buffer_size > 0 && i < cantidad_bloques_del_path; i++)
+	{
+		int bloque_actual = atoi(bloques_ocupados[i]);
+		char *ubicacion = get_block_full_path(bloque_actual);
+		FILE *bloque_abierto = fopen(ubicacion, "r+");
+		fseek(bloque_abierto, offset_interno, SEEK_SET);
+		int escribir = tamanio_bloques - offset_interno;
+		offset_interno = 0;
+
+		if (buffer_size < escribir)
+			escribir = buffer_size;
+		for (int j = 0; j < escribir; j++)
+		{
+			fwrite(datos_a_guardar, 1, escribir, bloque_abierto);
+			datos_a_guardar = string_substring_from(datos_a_guardar, escribir);
+			buffer_size -= escribir;
+		}
+		fclose(bloque_abierto);
+	}
+
+	if (buffer_size > 0)
+	{
+		t_list *nuevos_bloques = get_space(buffer_size);
+		//por cada bloque nuevo, tengo que actualizar el tamanio de la metadata
+		//actualizar el array de bloques
+		int size = config_get_int_value(metadata, "TAMANIO") + buffer_size;
+		char *tam = malloc(10);
+		sprintf(tam, "%d", size);
+		config_set_value(metadata, "TAMANIO", tam);
+
+		t_list *bloques_viejos = list_create();
+		for (int i = 0; i < cantidad_bloques_del_path; i++)
+		{
+			list_add(bloques_viejos, bloques_ocupados[i]);
+		}
+
+		list_add_all(bloques_viejos, nuevos_bloques);
+		Archivo_metadata *archivo = list_get(bloques_viejos, 1);
+		config_set_value(metadata, "BLOQUES", convertir_bloques_a_string(archivo));
+		config_save(metadata);
+
+		crear_bloques(nuevos_bloques, &buffer_size); //marco el bitarray
+
+		for (int i = 0; buffer_size > 0; i++)
+		{
+			int bloque_actual = atoi(list_get(nuevos_bloques, i));
+			char *ubicacion = get_block_full_path(bloque_actual);
+			FILE *bloque_abierto = fopen(ubicacion, "r+");
+			fseek(bloque_abierto, 0, SEEK_SET);
+			int escribir = tamanio_bloques;
+
+			if (buffer_size < escribir)
+				escribir = buffer_size;
+			for (int j = 0; j < escribir; j++)
+			{
+				fwrite(datos_a_guardar, 1, escribir, bloque_abierto);
+				datos_a_guardar = string_substring_from(datos_a_guardar, escribir);
+				buffer_size -= escribir;
+			}
+			fclose(bloque_abierto);
+		}
+
+		//escribir hasta terminar
+	}
+	//datos_a_guardar
+
+	respuesta->paquete.header.tipoMensaje = SUCCESS;
+
+	//TODO: Validar archivo y reponder error si no existe
+	//TODO: Lee metadata del archivo pasado por el path
+	//TODO: Calcular en que bloque cae segun el offset y cuantos bloques va escribir segun el size
+	//TODO: Ir consumiendo el buffer segun tamanio de bloque
+	//TODO: Crear mensaje OK
 }

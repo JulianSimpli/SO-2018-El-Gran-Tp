@@ -1,7 +1,8 @@
-TARGET = test_crear_archivos
 LIBS = -lcommons -lcspecs
-program:
-	gcc -I/home/daniel/tp-2018-2c-Nene-Malloc/mdj/tests/unit-tests -o $(TARGET) test_crear_archivos.c $(LIBS)
+
+obtener_datos:
+	gcc -I/home/utnso/workspace/tp-2018-2c-Nene-Malloc/mdj/tests -o obtener_datos test_obtener_datos.c $(LIBS)
+
 clean:
 	-rm -f *.o
-	-rm -f $(TARGET)
+	-rm -f obtener_datos
