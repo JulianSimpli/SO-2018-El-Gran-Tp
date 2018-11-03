@@ -211,6 +211,7 @@ int RecibirDatos(void* paquete, int socketFD, uint32_t cantARecibir) {
 	free(datos);
 	if (recibido < 0) {
 		printf("Cliente Desconectado\n");
+		//TODO: Preguntar que socket se desconecto, si no es CPU o si es el ultimo CPU tiene que morir todo.
 		close(socketFD); // ¡Hasta luego!
 		//exit(1);
 	} else if (recibido == 0) {

@@ -20,6 +20,13 @@ S-AFAlog.log
 /S-AFA/S-AFAlog.log
 S-AFA/S-AFAlog.log
 
+# Procesos
+dam
+mdj
+safa
+fm9
+cpu
+
 # Prerequisites
 *.d
 

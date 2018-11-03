@@ -1,7 +1,7 @@
 #include "../../Bibliotecas/sockets.h"
 
-char *MODO, *IP_FM9;
-int PUERTO_FM9, TAMANIO, MAX_LINEA, TAM_PAGINA, socketElDiego;
+char *MODO, *IP;
+int PUERTO, TAMANIO, MAX_LINEA, TAM_PAGINA, socketElDiego;
 void *ptrStorage;
 
 t_list* listaHilos;
@@ -15,9 +15,8 @@ void crearLogger() {
 
 void obtenerValoresArchivoConfiguracion() {
 	t_config* arch = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/fm9/src/FM9.config");
-
-	IP_FM9 = string_duplicate(config_get_string_value(arch, "IP_FM9"));
-	PUERTO_FM9 = config_get_int_value(arch, "PUERTO_FM9");
+	IP = "127.0.0.1";
+	PUERTO = config_get_int_value(arch, "PUERTO");
 	MODO = string_duplicate(config_get_string_value(arch, "MODO"));
 	TAMANIO = config_get_int_value(arch, "TAMANIO");
 	MAX_LINEA = config_get_int_value(arch, "MAX_LINEA");
@@ -28,13 +27,13 @@ void obtenerValoresArchivoConfiguracion() {
 
 void imprimirArchivoConfiguracion() {
 	printf("Configuracion:\n"
-			"IP_FM9=%s\n"
-			"PUERTO_FM9=%d\n"
+			"IP=%s\n"
+			"PUERTO=%d\n"
 			"MODO=%s\n"
 			"TAMANIO=%d\n"
 			"MAX_LINEA=%d\n"
 			"TAMANIO_PAGINA=%d\n",
-			IP_FM9, PUERTO_FM9, MODO, TAMANIO, MAX_LINEA, TAM_PAGINA);
+			IP, PUERTO, MODO, TAMANIO, MAX_LINEA, TAM_PAGINA);
 }
 
 void EnviarHandshakeELDIEGO(int socketFD) {
@@ -135,17 +134,18 @@ while (RecibirPaqueteServidor(socketFD, FM9, &paquete) > 0) {
 */
 
 void consola() {
-	char * linea;
+	char *linea;
 	while (true) {
 		linea = readline(">> ");
 		if (linea) add_history(linea);
-		char** dump = string_split(linea, " ");
-		if (string_starts_with(linea, dump[0])) {
+		char **dump = string_split(linea, " ");
+		if (!strcmp(dump[0], "dump")) {
 			int idDump = atoi(dump[1]);
 			printf ("id para Dump: %d", idDump);
 			//mostrar toda la info del id que pertenece a un proceso, y la info del storage
+		} else {
+			printf("No se conoce el comando\n");
 		}
-		else printf("No se conoce el comando\n");
 		free(linea);
 	}
 }
@@ -156,9 +156,9 @@ int main(int argc, char **argv) {
 	obtenerValoresArchivoConfiguracion();
 	imprimirArchivoConfiguracion();
 	//ptrStorage = malloc(TAMANIO);
+	ServidorConcurrente(IP, PUERTO, FM9, &listaHilos, &end, accion);
 	pthread_t hiloConsola; //un hilo para la consola
 	pthread_create(&hiloConsola, NULL, (void*) consola, NULL);
-	ServidorConcurrente(IP_FM9, PUERTO_FM9, FM9, &listaHilos, &end, accion);
 	pthread_join(hiloConsola, NULL);
 	return EXIT_SUCCESS;
 }

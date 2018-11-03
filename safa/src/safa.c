@@ -2,7 +2,7 @@
 
 /*Creación de Logger*/
 void crearLogger() {
-	logger = log_create("safaLog.log", "safa", true, LOG_LEVEL_INFO);
+	logger = log_create("SAFA.log", "safa", true, LOG_LEVEL_INFO);
 }
 
 void inicializarVariables() {
@@ -24,8 +24,8 @@ void inicializarVariables() {
 }
 
 void obtenerValoresArchivoConfiguracion() {
-	t_config* arch = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/safa.cfg");
-	IP = string_duplicate(config_get_string_value(arch, "IP")); //agregado
+	t_config* arch = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src/SAFA.config");
+	IP = "127.0.0.1"; //agregado
 	PUERTO = config_get_int_value(arch, "PUERTO");
 	ALGORITMO_PLANIFICACION = string_duplicate(config_get_string_value(arch, "ALGORITMO"));
 	QUANTUM = config_get_int_value(arch, "QUANTUM");
@@ -129,7 +129,8 @@ void manejar_paquetes_CPU(Paquete* paquete, int* socketFD) {
 		}
 
     	case DUMMY_SUCCES: {
-            int pid = (int) paquete->Payload;
+            int pid;
+            memcpy(&pid, paquete->Payload, sizeof(u_int32_t));
             // list_remove_by_condition(lista_bloqueados, (void*)coincide_pid(&pid));
 			notificar_al_PLP(lista_nuevos, &pid);
             t_cpu* cpu_actual = devuelve_cpu_asociada_a_socket_de_lista(lista_cpu, socketFD);
@@ -167,7 +168,7 @@ int main(void) {
 	inicializarVariables();
 	obtenerValoresArchivoConfiguracion();
 	imprimirArchivoConfiguracion();
-	log_info(logger, "Probando safaLog.log");
+	log_info(logger, "Probando SAFA.log");
 	//defino a safa como servidor concurrente para que diego y cpu se puedan conectar a él
 	//a los clientes conectados a safa se los atiende con un hilo y mediante la funcion accion a c/u
     ServidorConcurrente(IP, PUERTO, SAFA, &lista_hilos, &end, accion);

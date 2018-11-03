@@ -9,11 +9,12 @@ int main(int argc, char **argv)
 
 	pthread_t p_thread;
 	pthread_create(&p_thread, NULL, atender_dam, NULL);
-
+	/*
 	Mensaje *misLadrillos = malloc(sizeof(Mensaje));
 	misLadrillos->paquete.Payload = malloc(strlen("/torneo/equipos/Racing.txt") + 1);
 	strcpy(misLadrillos->paquete.Payload, "/torneo/equipos/Racing.txt");
 	validar_archivo(misLadrillos, file_path);
+	*/
 	//t_config *metadata = crear_archivo("/home/daniel/FileSystemMock/Archivos/alumnos/alumno.bin");
 	//marcarbitarray(metadata);
 	log_info(logger, "Marco el bitarray");

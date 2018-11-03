@@ -20,9 +20,9 @@ int main(int argc,char ** argv ) {
 
 	//Crea por unica vez los sockets con los que tiene conexiones permanentes
 	//Primero hago el handshake con fm9 para poder tener el tamanio de linea
-	//int fm9 = handshake_fm9();
+	int safa = handshake_safa();
 	int mdj = handshake_mdj();
-	//int safa = handshake_safa();
+	int fm9 = handshake_fm9();
 
 	//Abre su socket
 	int socket_ligado = ligar_socket();
@@ -33,11 +33,11 @@ int main(int argc,char ** argv ) {
 	FD_SET(socket_ligado, &master);
 	
 	for(;;) {
-		//FD_SET(fm9, &lecturas);
-		FD_SET(mdj, &lecturas);
-		//FD_SET(safa, &lecturas);
-		FD_SET(socket_ligado, &lecturas);
 		lecturas = master;
+
+		FD_SET(mdj, &lecturas);
+		FD_SET(fm9, &lecturas);
+        FD_SET(safa, &lecturas);
 
 		sret = select(nfds+1, &lecturas, NULL, NULL, NULL);
 		log_info(logger, "sret: %d ", sret);
@@ -125,12 +125,33 @@ int handshake_fm9()
 		_exit_with_error(fm9, "No se logro el primer paso de datos", NULL);
 	}
 	//Guardo en la global tamanio de linea que tiene fm9
-	tamanio_linea = (intptr_t) mensaje->paquete.Payload;
+	memcpy(&tamanio_linea, mensaje->paquete.Payload, sizeof(u_int32_t));
 	log_info(logger, "Se concreto el handshake con FM9, me pasa el tamanio de linea %d", tamanio_linea);
-	free(mensaje);
+	free(mensaje->paquete.Payload);
 	free(mensaje);
 	return fm9;
 }
+
+/**
+ * Se encarga de crear el socket, mandar el primer mensaje
+ * Devuelve el socket 
+ */
+int handshake_safa()
+{
+	int safa = crear_socket_safa();
+	handshake(safa, ELDIEGO);
+	Mensaje *mensaje = recibir_mensaje(safa);
+	if (mensaje->paquete.header.tipoMensaje != ESHANDSHAKE) {
+		_exit_with_error(safa, "No se logro el primer paso de datos", NULL);
+	}
+	//Guardo en la global tamanio de linea que tiene safa
+	memcpy(&tamanio_linea, mensaje->paquete.Payload, sizeof(u_int32_t));
+	log_info(logger, "Se concreto el handshake con safa, me pasa el tamanio de linea %d", tamanio_linea);
+	free(mensaje->paquete.Payload);
+	free(mensaje);
+	return safa;
+}
+
 
 // void * mensajes_mdj()
 // 	int socket = crear_socket_mdj();

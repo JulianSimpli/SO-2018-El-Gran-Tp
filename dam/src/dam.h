@@ -43,6 +43,7 @@ void exit_gracefully(int return_nr);
 int handshake_fm9();
 int handshake_mdj();
 int handshake_safa();
+int crear_socket_safa();
 
 void enviar_mensaje(Mensaje mensaje){
 

@@ -25,6 +25,18 @@ int main(int argc, char **argv)
 
   handshake(diego, CPU);
 
+  char *ip_fm9 = config_get_string_value(config, "IP_FM9");
+  char *puerto_fm9 = config_get_string_value(config, "PUERTO_FM9");
+  int fm9 = connect_to_server(ip_fm9, puerto_fm9);
+  handshake(fm9, CPU);
+
+  char *ip_safa = config_get_string_value(config, "IP_SAFA");
+  char *puerto_safa = config_get_string_value(config, "PUERTO_SAFA");
+  int safa = connect_to_server(ip_safa, puerto_safa);
+  handshake(safa, CPU);
+
+  Mensaje *mensaje = recibir_mensaje(safa);
+  log_info(logger, "SAFA me envio un dummy");
   return 0;
 }
 
@@ -34,22 +46,24 @@ int main(int argc, char **argv)
  */
 int handshake_safa()
 {
-	int safa = crear_socket_safa();
-	handshake(safa, CPU);
-	Mensaje *mensaje = recibir_mensaje(safa);
-	if (mensaje->paquete.header.tipoMensaje != ESHANDSHAKE) {
-		_exit_with_error(safa, "No se logro el handshake", NULL);
-	}
-	log_info(logger, "Se concreto el handshake con MDJ, empiezo a recibir mensajes");
-	return safa;
+  int safa = crear_socket_safa();
+  handshake(safa, CPU);
+  Mensaje *mensaje = recibir_mensaje(safa);
+  if (mensaje->paquete.header.tipoMensaje != ESHANDSHAKE)
+  {
+    _exit_with_error(safa, "No se logro el handshake", NULL);
+  }
+  log_info(logger, "Se concreto el handshake con MDJ, empiezo a recibir mensajes");
+  return safa;
 }
 
-void handshake(int socket, int emisor) {
-	Mensaje *mensaje = malloc(sizeof(Mensaje));
-	mensaje->socket = socket;
-	mensaje->paquete.header.tipoMensaje = ESHANDSHAKE;
-	mensaje->paquete.header.tamPayload = 0;
-	mensaje->paquete.header.emisor = emisor;
+void handshake(int socket, int emisor)
+{
+  Mensaje *mensaje = malloc(sizeof(Mensaje));
+  mensaje->socket = socket;
+  mensaje->paquete.header.tipoMensaje = ESHANDSHAKE;
+  mensaje->paquete.header.tamPayload = 0;
+  mensaje->paquete.header.emisor = emisor;
   enviar_mensaje(*mensaje);
 }
 
@@ -117,69 +131,69 @@ int connect_to_server(char *ip, char *port)
 
 int interpretar(char *linea)
 {
-	int i = 0, existe = 0;
-	//Calcula la cantidad de primitivas que hay en el array
-	size_t cantidad_primitivas = sizeof(primitivas) / sizeof(primitivas[0]) - 1;
+  int i = 0, existe = 0;
+  //Calcula la cantidad de primitivas que hay en el array
+  size_t cantidad_primitivas = sizeof(primitivas) / sizeof(primitivas[0]) - 1;
 
-	//Para poder identificar el comando y que el resto son parametros necesarios para que ejecute
-	//Por ej: linea = abrir /home/utnso/
-	char **parameters = string_split(linea, " ");
+  //Para poder identificar el comando y que el resto son parametros necesarios para que ejecute
+  //Por ej: linea = abrir /home/utnso/
+  char **parameters = string_split(linea, " ");
 
-	for (i; i < cantidad_primitivas; i++)
-	{
-		if (!strcmp(primitivas[i].name, parameters[0]))
-		{
-			existe = 1;
-			log_info(logger, primitivas[i].doc);
-			//llama a la funcion que tiene guardado esa primitiva en la estructura
-			primitivas[i].func(parameters);
-			break;
-		}
-	}
+  for (i; i < cantidad_primitivas; i++)
+  {
+    if (!strcmp(primitivas[i].name, parameters[0]))
+    {
+      existe = 1;
+      log_info(logger, primitivas[i].doc);
+      //llama a la funcion que tiene guardado esa primitiva en la estructura
+      primitivas[i].func(parameters);
+      break;
+    }
+  }
 
-	if (!existe)
-	{
-		error_show("No existe el comando %s\n", linea);
-	}
+  if (!existe)
+  {
+    error_show("No existe el comando %s\n", linea);
+  }
 
-	return existe;
+  return existe;
 }
 
 void enviar_mensaje(Mensaje mensaje)
 {
-	void *buffer = malloc(sizeof(Paquete));
+  void *buffer = malloc(sizeof(Paquete));
 
-	int mensaje_enviado = send(mensaje.socket, buffer, sizeof(Paquete), 0);
+  int mensaje_enviado = send(mensaje.socket, buffer, sizeof(Paquete), 0);
 
-	if (mensaje_enviado < 0)
-	{
-		log_error(logger, "No pudo enviar el mensaje");
-	}
+  if (mensaje_enviado < 0)
+  {
+    log_error(logger, "No pudo enviar el mensaje");
+  }
 }
 
 Mensaje *recibir_mensaje(int conexion)
 {
-	Mensaje *buffer = (Mensaje *)malloc(sizeof(Mensaje));
-	read(conexion, buffer, sizeof(Mensaje));
+  Mensaje *buffer = (Mensaje *)malloc(sizeof(Mensaje));
+  read(conexion, buffer, sizeof(Mensaje));
 
-	if (buffer == NULL)
-	{
-		log_error(logger, "Error en la lectura del Mensaje");
-		exit_gracefully(2);
-	}
+  if (buffer == NULL)
+  {
+    log_error(logger, "Error en la lectura del Mensaje");
+    exit_gracefully(2);
+  }
 
-	return buffer;
+  return buffer;
 }
 
 int crear_socket_safa()
 {
-	char *puerto_safa = config_get_string_value(config, "PUERTO_SAFA");
+  char *puerto_safa = config_get_string_value(config, "PUERTO_SAFA");
 
-	char *ip_safa = config_get_string_value(config, "IP_SAFA");
+  char *ip_safa = config_get_string_value(config, "IP_SAFA");
 
-	int socket = connect_to_server(ip_safa, puerto_safa);
+  int socket = connect_to_server(ip_safa, puerto_safa);
 
-	return socket;
+  return socket;
 }
 
 void _exit_with_error(int socket, char *error_msg, void *buffer)
