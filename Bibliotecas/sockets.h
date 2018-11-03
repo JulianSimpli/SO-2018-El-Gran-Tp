@@ -16,9 +16,17 @@
 #define TAMANIOHEADER sizeof(Header)
 #define STRHANDSHAKE "10"
 
+<<<<<<< 59c480a3f9794bd044b0421302509f2246cd0d43
 char* Emisores[5];
+=======
+extern int RETARDO_PLANIF, QUANTUM;
+
+extern char* ALGORITMO_PLANIFICACION;
+
+const char* Emisores[];
+
+>>>>>>> Agrego a socket.c handshake de SAFA a CPU y a ELDIEGO y a .h variables globales. Cambian funciones de orden superior en planificador.c
 extern int MAX_LINEA;
-typedef enum { CPU, FM9, ELDIEGO, MDJ, SAFA } Emisor;
 
 typedef enum {
 	ESHANDSHAKE, ESSTRING, ESDATOS, SUCCESS, ERROR,									// Mensajes generales

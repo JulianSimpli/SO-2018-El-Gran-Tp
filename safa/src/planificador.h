@@ -59,6 +59,8 @@ DTB* devuelve_DTB_asociado_a_pid_de_lista(t_list* lista, int* pid);
 t_cpu* devuelve_cpu_asociada_a_socket_de_lista(t_list* lista, int* socket);
 
 //Funciones booleanas
+bool coincide_pid(int* pid, void* DTB);
+bool coincide_socket(int* socket, void* cpu)
 bool permite_multiprogramacion();
 bool lista_vacia(t_list* lista);
 bool esta_libre_cpu(t_cpu* cpu);

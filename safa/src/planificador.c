@@ -9,6 +9,7 @@ void planificador_largo_plazo() {
     while(1) {
         if(permite_multiprogramacion() && !lista_vacia(lista_PLP)){
             mover_primero_de_lista1_a_lista2(lista_PLP, lista_listos);
+            procesos_en_memoria++;
         }
     }
 }
@@ -17,6 +18,7 @@ void planificador_largo_plazo() {
 void mover_primero_de_lista1_a_lista2(t_list* lista1, t_list* lista2) {
     DTB* DTB_a_mover = list_remove(lista1, 0);
     list_add(lista2, DTB_a_mover);
+
 }
 
 //Hilo planificador corto plazo
@@ -34,9 +36,9 @@ void planificador_corto_plazo() {
 //Funciones planificador corto plazo
 void ejecutar_primer_dtb_listo(DTB* DTB_ejecutar, t_cpu* cpu_libre) {
     Paquete* paquete = malloc(sizeof(Paquete));
-    int* tamanio_DTB;
-    paquete->Payload = DTB_serializar(DTB_ejecutar, tamanio_DTB);
-    paquete->header.tamPayload = *tamanio_DTB;
+    int tamanio_DTB = 0;
+    paquete->Payload = DTB_serializar(DTB_ejecutar, &tamanio_DTB);
+    paquete->header.tamPayload = tamanio_DTB;
     paquete->header.emisor = SAFA;
 
     int socket_cpu_libre = cpu_libre->socket;
@@ -78,20 +80,28 @@ int notificar_al_PLP(t_list* lista, int* pid) {
     return list_add(lista_PLP, DTB_a_mover);
 }
 
+bool coincide_pid(int* pid, void* DTB) {
+	return ((DTB*)DTB)->gdtPID == *pid;
+}
 DTB* devuelve_DTB_asociado_a_pid_de_lista(t_list* lista, int* pid) {
-    bool coincide_pid(DTB* DTB) {
-        return (DTB->gdtPID == *pid);
+    bool compara_con_DTB(void* DTB) {
+        return coincide_pid(pid, DTB);
     }
-    return list_find(lista, (void*) coincide_pid);
+    return list_remove(lista, compara_con_DTB);
 }
 // va sin parentesis coincide_pid porque tiene que llamar al puntero a la funcion despues de que hacer list_find
 
-t_cpu* devuelve_cpu_asociada_a_socket_de_lista(t_list* lista, int* socket) {
-    bool coincide_socket(t_cpu* cpu) {
-        return cpu->socket == *socket;
-    }
-    return list_find(lista, (void*) coincide_socket);
+bool coincide_socket(int* socket, void* cpu) {
+	return ((t_cpu*)cpu)->socket == *socket;
 }
+
+t_cpu* devuelve_cpu_asociada_a_socket_de_lista(t_list* lista, int* socket) {
+    bool compara_cpu(void* cpu) {
+        return coincide_socket(socket, cpu);
+    }
+    return list_find(lista, compara_cpu);
+}
+
 
 //Funciones booleanas
 

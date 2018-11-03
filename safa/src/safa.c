@@ -107,8 +107,8 @@ void accion(void* socket) {
 			}
 
 			case CPU: {
-			manejar_paquetes_CPU(&paquete, &socketFD);  
-			break;             
+				manejar_paquetes_CPU(&paquete, &socketFD);
+				break;
 			}
 		}
 	}
@@ -129,9 +129,9 @@ void manejar_paquetes_CPU(Paquete* paquete, int* socketFD) {
 		}
 
     	case DUMMY_SUCCES: {
-            int pid;
+            u_int32_t pid;
             memcpy(&pid, paquete->Payload, sizeof(u_int32_t));
-            // list_remove_by_condition(lista_bloqueados, (void*)coincide_pid(&pid));
+            DTB = list_remove_by_condition(lista_bloqueados, (void*)coincide_pid(&pid));
 			notificar_al_PLP(lista_nuevos, &pid);
             t_cpu* cpu_actual = devuelve_cpu_asociada_a_socket_de_lista(lista_cpu, socketFD);
             pthread_mutex_unlock(&cpu_actual->mutex_estado);
