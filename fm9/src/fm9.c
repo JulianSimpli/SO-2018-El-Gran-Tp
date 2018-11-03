@@ -1,7 +1,8 @@
-#include "../../Bibliotecas/sockets.h"
+#include "sockets.h"
 
-char *MODO, *IP;
-int PUERTO, TAMANIO, MAX_LINEA, TAM_PAGINA, socketElDiego;
+
+char *MODO, *IP_FM9;
+int PUERTO_FM9, TAMANIO, MAX_LINEA, TAM_PAGINA, socketElDiego;
 void *ptrStorage;
 
 t_list* listaHilos;
@@ -14,9 +15,10 @@ void crearLogger() {
 }
 
 void obtenerValoresArchivoConfiguracion() {
-	t_config* arch = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/fm9/src/FM9.config");
-	IP = "127.0.0.1";
-	PUERTO = config_get_int_value(arch, "PUERTO");
+	t_config* arch = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/fm9/FM9.cfg");
+
+	IP_FM9 = string_duplicate(config_get_string_value(arch, "IP_FM9"));
+	PUERTO_FM9 = config_get_int_value(arch, "PUERTO_FM9");
 	MODO = string_duplicate(config_get_string_value(arch, "MODO"));
 	TAMANIO = config_get_int_value(arch, "TAMANIO");
 	MAX_LINEA = config_get_int_value(arch, "MAX_LINEA");
@@ -27,46 +29,28 @@ void obtenerValoresArchivoConfiguracion() {
 
 void imprimirArchivoConfiguracion() {
 	printf("Configuracion:\n"
-			"IP=%s\n"
-			"PUERTO=%d\n"
+			"IP_FM9=%s\n"
+			"PUERTO_FM9=%d\n"
 			"MODO=%s\n"
 			"TAMANIO=%d\n"
 			"MAX_LINEA=%d\n"
 			"TAMANIO_PAGINA=%d\n",
-			IP, PUERTO, MODO, TAMANIO, MAX_LINEA, TAM_PAGINA);
-}
-
-void EnviarHandshakeELDIEGO(int socketFD) {
-	Paquete* paquete = malloc(TAMANIOHEADER);
-	Header header;
-	void *datos = &MAX_LINEA;
-	header.tipoMensaje = ESHANDSHAKE;
-	header.tamPayload = sizeof(MAX_LINEA);
-	header.emisor = FM9;
-	paquete->header = header;
-	paquete->Payload = datos;
-	bool valor_retorno=EnviarPaquete(socketFD, paquete);
-	free(paquete);
+			IP_FM9, PUERTO_FM9, MODO, TAMANIO, MAX_LINEA, TAM_PAGINA);
 }
 
 void accion(void* socket) {
 	int socketFD = *(int*) socket;
 	Paquete paquete;
 	void* datos;
-	while (RecibirPaqueteServidor(socketFD, FM9, &paquete) > 0) {
+	while (RecibirPaqueteServidorFm9(socketFD, FM9, &paquete) > 0) {
 		int emisor = paquete.header.emisor;
-		if (paquete.header.emisor = ELDIEGO) {
-			switch (paquete.header.tipoMensaje) {
-				case ESHANDSHAKE: {
-					socketElDiego = socketFD;
-					//otra opcion mas sencilla, usar directamente:
-					//bool EnviarDatosTipo(int socketFD, char emisor[8], void* datos, int tamDatos, tipo tipoMensaje);
-					//EnviarDatosTipo(socketFD, FM9, MAX_LINE(debe ser puntero al int), sizeof(MAX_LINE), ESHANDSHAKE);
-					EnviarHandshakeELDIEGO(socketFD);
-				}
-				break;
-			}
-		}
+//		if (paquete.header.emisor = ELDIEGO) {
+//			switch (paquete.header.TipoMensaje) {
+//				case MENSAJE: {
+//				}
+//				break;
+//			}
+//		}
 	}
 }
 
@@ -134,31 +118,30 @@ while (RecibirPaqueteServidor(socketFD, FM9, &paquete) > 0) {
 */
 
 void consola() {
-	char *linea;
+	char * linea;
 	while (true) {
 		linea = readline(">> ");
 		if (linea) add_history(linea);
-		char **dump = string_split(linea, " ");
-		if (!strcmp(dump[0], "dump")) {
+		char** dump = string_split(linea, " ");
+		if (string_starts_with(linea, dump[0])) {
 			int idDump = atoi(dump[1]);
 			printf ("id para Dump: %d", idDump);
 			//mostrar toda la info del id que pertenece a un proceso, y la info del storage
-		} else {
-			printf("No se conoce el comando\n");
 		}
+		else printf("No se conoce el comando\n");
 		free(linea);
 	}
 }
 
-int main(int argc, char **argv) {
+int main() {
 	crearLogger();
 	log_info(logger, "Probando FM9.log");
 	obtenerValoresArchivoConfiguracion();
 	imprimirArchivoConfiguracion();
 	//ptrStorage = malloc(TAMANIO);
-	ServidorConcurrente(IP, PUERTO, FM9, &listaHilos, &end, accion);
 	pthread_t hiloConsola; //un hilo para la consola
 	pthread_create(&hiloConsola, NULL, (void*) consola, NULL);
+	ServidorConcurrente(IP_FM9, PUERTO_FM9, FM9, &listaHilos, &end, accion);
 	pthread_join(hiloConsola, NULL);
 	return EXIT_SUCCESS;
 }
