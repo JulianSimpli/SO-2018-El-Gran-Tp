@@ -1,7 +1,7 @@
 #ifndef SAFA_H_
 #define SAFA_H_
 
-#include "sockets.h"
+#include "/../../Bibliotecas/sockets.h"
 #include "planificador.h"
 
 //Declaracion de constantes

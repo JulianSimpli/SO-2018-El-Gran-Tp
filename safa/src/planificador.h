@@ -1,8 +1,8 @@
 #ifndef PLANIFICADOR_H_
 #define PLANIFICADOR_H_
 
-#include "../Bibliotecas/dtb.h"
-#include "../Bibliotecas/helper.h"
+#include "../../Bibliotecas/dtb.h"
+#include "../../Bibliotecas/helper.h"
 
 typedef enum {
 	ESTADO_NUEVO,
