@@ -190,7 +190,7 @@ void RecibirHandshake(int socketFD, Emisor emisor) {
 	Header header;
 	int resul = RecibirDatos(&header, socketFD, TAMANIOHEADER);
 	if (resul > 0) { // si no hubo error en la recepcion
-		if (header.emisor = emisor) {
+		if (header.emisor == emisor) {
 			if (header.tipoMensaje == ESHANDSHAKE)
 				printf("\nConectado con el servidor\n");
 			else
@@ -238,40 +238,6 @@ int RecibirPaqueteServidor(int socketFD, Emisor receptor, Paquete* paquete) {
 	}
 	return resul;
 }
-
-//funcion de fm9
-// int RecibirPaqueteServidorFm9(int socketFD, Emisor receptor, Paquete* paquete) {
-// 	paquete->Payload = NULL;
-// 	int resul = RecibirDatos(&(paquete->header), socketFD, TAMANIOHEADER);
-// 	char* n = Emisores[paquete->header.emisor];
-// 	if (resul > 0) { //si no hubo error
-// 		if ((paquete->header.tipoMensaje == ESHANDSHAKE) && (paquete->header.emisor == ELDIEGO)) { //vemos si es un handshake
-// 			printf("Se establecio conexion con %s\n", n);
-// 			EnviarHandshakeELDIEGO(socketFD); // paquete->header.emisor
-// 		} else if ((paquete->header.tipoMensaje == ESHANDSHAKE) && (paquete->header.emisor == CPU)) {
-// 			printf("Se establecio conexion con %s\n", n);
-// 			EnviarHandshake(socketFD, receptor); // paquete->header.emisor
-// 		} else if (paquete->header.tamPayload > 0){ //recibimos un payload y lo procesamos (por ej, puede mostrarlo)
-// 			paquete->Payload = malloc(paquete->header.tamPayload);
-// 			resul = RecibirDatos(paquete->Payload, socketFD, paquete->header.tamPayload);
-// 		}
-// 	}
-// 	return resul;
-// }
-
-
-//funcion de fm9
-// void EnviarHandshakeELDIEGO(int socketFD) {
-// 	Paquete* paquete = malloc(TAMANIOHEADER + sizeof(MAX_LINEA));
-// 	Header header;
-// 	header.tipoMensaje = ESHANDSHAKE;
-// 	header.tamPayload = sizeof(MAX_LINEA);
-// 	header.emisor = FM9;
-// 	paquete->header = header;
-// 	memcpy(paquete->Payload, &MAX_LINEA, sizeof(u_int32_t));
-// 	bool valor_retorno=EnviarPaquete(socketFD, paquete);
-// 	free(paquete);
-// }
 
 int RecibirPaqueteServidorSafa(int socketFD, Emisor receptor, Paquete* paquete) {
 	paquete->Payload = NULL;

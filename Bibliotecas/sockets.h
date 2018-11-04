@@ -20,8 +20,6 @@ char* Emisores[5];
 
 typedef enum {CPU, FM9, ELDIEGO, MDJ, SAFA} Emisor;
 
-extern int MAX_LINEA;
-
 typedef enum {
 	ESHANDSHAKE, ESSTRING, ESDATOS, SUCCESS, ERROR,									// Mensajes generales
 	VALIDAR_ARCHIVO, CREAR_ARCHIVO, OBTENER_DATOS, GUARDAR_DATOS, BORRAR_ARCHIVO, 	// Mensajes MDJ
@@ -77,7 +75,6 @@ Para entender como funciona S-AFA, leer en orden:
 ServidorConcurrente -> StartServidor -> RecibirPaqueteServidorSafa -> RecibirDatos
 
 
-/*
 Funcion: ServidorConcurrente
 
 Parametros:
