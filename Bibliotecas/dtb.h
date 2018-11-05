@@ -9,7 +9,6 @@
 typedef struct DTB{
 	u_int32_t gdtPID; // PID = ProcessID
 	u_int32_t PC; // PC = Program Counter
-	u_int32_t estado;
 	u_int32_t flagInicializacion;
 	u_int32_t cantidadLineas;
 	char *pathEscriptorio;

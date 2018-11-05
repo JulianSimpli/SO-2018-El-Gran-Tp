@@ -20,7 +20,6 @@ context(test_dtb) {
 			dtb_mock = malloc(sizeof(DTB));
 			dtb_mock->gdtPID = 1;
 			dtb_mock->PC = 2;
-			dtb_mock->estado = 3;
 			dtb_mock->flagInicializacion = 0;
 			dtb_mock->cantidadLineas = 10;
 			dtb_mock->pathEscriptorio = path_escriptorio;
@@ -95,7 +94,7 @@ context(test_dtb) {
 		 */
 		it("Puede crear un dtb") {
 			size_t tamanio = sizeof(*dtb_mock);
-			should_int(tamanio) be equal to(40);
+			should_int(tamanio) be equal to(32);
 			should_int(dtb_mock->gdtPID) be equal to(1);
 		} end
 
@@ -106,7 +105,6 @@ context(test_dtb) {
 			DTB_cargar_estaticos(dtb, payload, &offset);
 			should_int(dtb->gdtPID) be equal to(1);
 			should_int(dtb->PC) be equal to(2);
-			should_int(dtb->estado) be equal to(3);
 			should_int(dtb->flagInicializacion) be equal to(0);
 			should_int(dtb->cantidadLineas) be equal to(10);
 		} end
@@ -115,14 +113,14 @@ context(test_dtb) {
 			DTB *dtb = malloc(sizeof(DTB));
 			int offset = 0;
 			DTB_cargar_estaticos(dtb, payload, &offset);
-			should_int(offset) be equal to(20);
+			should_int(offset) be equal to(16);
 		} end
 
 		it("Puede copiar el path del escriptorio") {
 			DTB *dtb = malloc(sizeof(DTB));
-			int offset = 20;
+			int offset = 16;
 			DTB_cargar_path_escriptorio(dtb, payload, &offset);
-			should_int(offset) be equal to(32);
+			should_int(offset) be equal to(28);
 		} end
 
 		it("Puede crear lista a partir de payload") {

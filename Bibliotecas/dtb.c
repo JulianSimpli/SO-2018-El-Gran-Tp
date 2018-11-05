@@ -50,8 +50,6 @@ void *DTB_serializar(DTB *dtb, int *tamanio_dtb)
     desplazamiento += tamanio;
     memcpy(payload + desplazamiento, &dtb->PC, tamanio);
     desplazamiento += tamanio;
-    memcpy(payload + desplazamiento, &dtb->estado, tamanio);
-    desplazamiento += tamanio;
     memcpy(payload + desplazamiento, &dtb->flagInicializacion, tamanio);
     desplazamiento += tamanio;
     memcpy(payload + desplazamiento, &dtb->cantidadLineas, tamanio);
@@ -92,7 +90,7 @@ void *DTB_serializar(DTB *dtb, int *tamanio_dtb)
 
 void DTB_cargar_estaticos(DTB *dtb, void *data, int *desplazamiento)
 {
-    size_t tamanio = sizeof(u_int32_t) * 5;
+    size_t tamanio = sizeof(u_int32_t) * 4;
     memcpy(dtb, data, tamanio);
     *desplazamiento += tamanio;
 }

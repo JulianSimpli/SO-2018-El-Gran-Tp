@@ -80,7 +80,7 @@ context(test_dtb) {
 		it("Puede serializar dtb entero") {
 			int tamanio_dtb = 0;
 			void *dtb_serializado = DTB_serializar(un_dtb, &tamanio_dtb);
-			should_int(tamanio_dtb) be equal to(75);
+			should_int(tamanio_dtb) be equal to(71);
 
 			DTB *dtb = DTB_deserializar(dtb_serializado);
 			should_string(dtb->pathEscriptorio) be equal to("path");
