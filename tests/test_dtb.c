@@ -30,9 +30,6 @@ context(test_dtb) {
 			list_add(una_lista, otro_archivo);
 
 			un_dtb = malloc(sizeof(DTB));
-			char *path = "path";
-			un_dtb->pathEscriptorio = malloc(strlen(path));
-			memcpy(un_dtb->pathEscriptorio, path, strlen(path));
 
 			un_dtb->archivosAbiertos = una_lista;
 
@@ -45,7 +42,6 @@ context(test_dtb) {
 			liberar_archivo_abierto(un_archivo);
 			liberar_archivo_abierto(otro_archivo);
 			list_destroy(una_lista);
-			free(un_dtb->pathEscriptorio);
 			free(un_dtb);
 		} end
 
@@ -63,16 +59,12 @@ context(test_dtb) {
 		} end
 
 		it("Puede agregar un archivo a la lista de dtb") {
-			_DTB_agregar_archivo(un_dtb, cant_lineas, path_archivo);
+			DTB_agregar_archivo(un_dtb, cant_lineas, path_archivo);
 			should_int(list_size(un_dtb->archivosAbiertos)) be equal to(3);
 		} end
 
 		it("Puede encontrar el escriptorio") {
 			DTB *un_dtb = malloc(sizeof(DTB));
-			char *path = "path";
-			un_dtb->pathEscriptorio = malloc(strlen(path));
-			memcpy(un_dtb->pathEscriptorio, path, strlen(path));
-
 			un_dtb->archivosAbiertos = list_create();
 
 			ArchivoAbierto *archivo = _DTB_crear_archivo(12, "escriptorio"); 
@@ -84,7 +76,7 @@ context(test_dtb) {
 
 		it("Puede remover un archivo de la lista") {
 
-			_DTB_agregar_archivo(un_dtb, cant_lineas, path_archivo);
+			DTB_agregar_archivo(un_dtb, cant_lineas, path_archivo);
 			should_int(list_size(un_dtb->archivosAbiertos)) be equal to(3);
 			
 			//Tiene que buscar el archivo comparando el nombre

@@ -28,9 +28,6 @@ context(test_dtb) {
 			list_add(una_lista, otro_archivo);
 
 			un_dtb = malloc(sizeof(DTB));
-			char *path = "path";
-			un_dtb->pathEscriptorio = malloc(strlen(path));
-			memcpy(un_dtb->pathEscriptorio, path, strlen(path));
 
 			un_dtb->archivosAbiertos = una_lista;
 		} end
@@ -39,7 +36,6 @@ context(test_dtb) {
 			free(un_archivo);
 			free(otro_archivo);
 			list_destroy(una_lista);
-			free(un_dtb->pathEscriptorio);
 			free(un_dtb);
 		} end
 
@@ -80,10 +76,9 @@ context(test_dtb) {
 		it("Puede serializar dtb entero") {
 			int tamanio_dtb = 0;
 			void *dtb_serializado = DTB_serializar(un_dtb, &tamanio_dtb);
-			should_int(tamanio_dtb) be equal to(71);
+			should_int(tamanio_dtb) be equal to(59);
 
 			DTB *dtb = DTB_deserializar(dtb_serializado);
-			should_string(dtb->pathEscriptorio) be equal to("path");
 			
 			ArchivoAbierto *a = list_get(dtb->archivosAbiertos, 0);
 			should_int(a->cantLineas) be equal to(10);
