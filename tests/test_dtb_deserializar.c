@@ -24,6 +24,7 @@ context(test_dtb) {
 			dtb_mock->flagInicializacion = 0;
 			dtb_mock->cantidadLineas = 10;
 			dtb_mock->pathEscriptorio = path_escriptorio;
+			dtb_mock->archivosAbiertos = list_create();
 		}
 
 		void mock_payload()
@@ -45,7 +46,6 @@ context(test_dtb) {
 			cant_archivos = 1;
 
 			//Por ahora es un solo ArchivoAbierto
-			mock_archivo_abierto();
 			//Primero agrega un int que indica cuantos hay en la lista
 			//Depues el primer int es cantidad de lineas el segundo el len
 			//Y por ultimo el tamanio del string
@@ -77,9 +77,10 @@ context(test_dtb) {
 		}
 
 		before {
+			mock_archivo_abierto();
+			mock_lista_archivos();
 			create_mock();
 			mock_payload();
-			mock_lista_archivos();
 		} end
 
 		after {
@@ -134,7 +135,7 @@ context(test_dtb) {
 
 			ArchivoAbierto *archivo = list_get(dtb->archivosAbiertos, 0);
 			should_int(archivo->cantLineas) be equal to(cant_lineas);
-			should_string(archivo->direccionArchivo) be equal to(direccion_archivo);
+			should_string(archivo->path) be equal to(direccion_archivo);
 		} end
 
 		it("Puede deserializar dtb") {
@@ -145,7 +146,7 @@ context(test_dtb) {
 			should_int(list_size(dtb->archivosAbiertos)) be equal to(cant_archivos);
 			ArchivoAbierto *archivo = list_get(dtb->archivosAbiertos, 0);
 			should_int(archivo->cantLineas) be equal to(cant_lineas);
-			should_string(archivo->direccionArchivo) be equal to(direccion_archivo);
+			should_string(archivo->path) be equal to(direccion_archivo);
 			*/
 		} end
 

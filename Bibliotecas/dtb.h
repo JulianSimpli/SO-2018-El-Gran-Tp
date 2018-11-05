@@ -18,7 +18,7 @@ typedef struct DTB{
 
 typedef struct {
     u_int32_t cantLineas;
-    char *direccionArchivo;
+    char *path;
 } ArchivoAbierto;
 
 //Funciones
@@ -37,5 +37,13 @@ ArchivoAbierto *DTB_leer_struct_archivo(void *data, int *desplazamiento);
 void DTB_cargar_archivos_abiertos(t_list *archivos_abiertos, void *data, int *desplazamiento);
 
 DTB *DTB_deserializar(void *data);
+
+ArchivoAbierto *_DTB_crear_archivo(int cant_lineas, char *path);
+void liberar_archivo_abierto(void *archivo);
+void _DTB_agregar_archivo(DTB *dtb, int cant_lineas, char *path);
+bool find_file(t_list *files, char *path_archivo);
+ArchivoAbierto *_DTB_encontrar_archivo(DTB *dtb, char *path_archivo);
+void _DTB_remover_archivo(DTB *dtb, char *path);
+ArchivoAbierto *DTB_obtener_escriptorio(DTB *dtb);
 
 #endif

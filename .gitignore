@@ -27,6 +27,11 @@ safa
 fm9
 cpu
 
+# Tests
+tests/dtb
+tests/serializar
+tests/deserializar
+
 # Prerequisites
 *.d
 

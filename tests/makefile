@@ -1,12 +1,15 @@
-LIBS = -lcommons -lcspecs
-all: program1 program2
+LIBS = -lcommons -lcspecs ../Bibliotecas/dtb.c
+all: program1 program2 dtb
 
 program1:
-	gcc test_dtb_deserializar.c -I/home/utnso/workspace/tp-2018-2c-Nene-Malloc/tests -o deserializar $(LIBS)
+	gcc test_dtb_deserializar.c -o deserializar $(LIBS)
 
 program2:
-	gcc test_dtb_serializar.c -I/home/utnso/workspace/tp-2018-2c-Nene-Malloc/tests -o serializar $(LIBS)
+	gcc test_dtb_serializar.c -o serializar $(LIBS)
+
+dtb:
+	gcc test_dtb.c -o dtb $(LIBS)
 
 clean:
 	-rm -f *.o
-	-rm -f $(TARGET)
+	-rm -f serializar deserializar dtb

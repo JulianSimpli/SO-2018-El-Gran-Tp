@@ -14,14 +14,14 @@ context(test_dtb) {
 			un_archivo = malloc(sizeof(ArchivoAbierto));
 			un_archivo->cantLineas = 10;
 			char *ejemplo = "ejemplo.txt";
-			un_archivo->direccionArchivo = malloc(strlen(ejemplo) + 1);
-			memcpy(un_archivo->direccionArchivo, ejemplo, strlen(ejemplo));
+			un_archivo->path = malloc(strlen(ejemplo) + 1);
+			memcpy(un_archivo->path, ejemplo, strlen(ejemplo));
 
 			otro_archivo = malloc(sizeof(ArchivoAbierto));
 			otro_archivo->cantLineas = 11;
 			char *otro_ejemplo = "otro_ejemplo.txt";
-			otro_archivo->direccionArchivo = malloc(strlen(otro_ejemplo) + 1);
-			memcpy(otro_archivo->direccionArchivo, otro_ejemplo, strlen(otro_ejemplo));
+			otro_archivo->path = malloc(strlen(otro_ejemplo) + 1);
+			memcpy(otro_archivo->path, otro_ejemplo, strlen(otro_ejemplo));
 
 			una_lista = list_create();
 			list_add(una_lista, un_archivo);
@@ -43,7 +43,6 @@ context(test_dtb) {
 			free(un_dtb);
 		} end
 
-
 		it("Puede serializar archivo") {
 			int tamanio_serializado = 0;
 			void *serializado = DTB_serializar_archivo(un_archivo, &tamanio_serializado);
@@ -52,9 +51,8 @@ context(test_dtb) {
 			int desplazamiento = 0;
         	ArchivoAbierto *deserializado = DTB_leer_struct_archivo(serializado, &desplazamiento);
 			should_int(deserializado->cantLineas) be equal to(10);
-			should_string(deserializado->direccionArchivo) be equal to("ejemplo.txt");
+			should_string(deserializado->path) be equal to("ejemplo.txt");
 		} end
-
 
 		it("Puede serializar lista") {
 			int tamanio_lista_serializada = 0;
@@ -72,11 +70,11 @@ context(test_dtb) {
 
 			ArchivoAbierto *a = list_get(lista, 0);
 			should_int(a->cantLineas) be equal to(10);
-			should_string(a->direccionArchivo) be equal to("ejemplo.txt");
+			should_string(a->path) be equal to("ejemplo.txt");
 
 			ArchivoAbierto *b = list_get(lista, 1);
 			should_int(b->cantLineas) be equal to(11);
-			should_string(b->direccionArchivo) be equal to("otro_ejemplo.txt");
+			should_string(b->path) be equal to("otro_ejemplo.txt");
 		} end
 
 		it("Puede serializar dtb entero") {
@@ -89,14 +87,13 @@ context(test_dtb) {
 			
 			ArchivoAbierto *a = list_get(dtb->archivosAbiertos, 0);
 			should_int(a->cantLineas) be equal to(10);
-			should_string(a->direccionArchivo) be equal to("ejemplo.txt");
+			should_string(a->path) be equal to("ejemplo.txt");
 
 			ArchivoAbierto *b = list_get(dtb->archivosAbiertos, 1);
 			should_int(b->cantLineas) be equal to(11);
-			should_string(b->direccionArchivo) be equal to("otro_ejemplo.txt");
+			should_string(b->path) be equal to("otro_ejemplo.txt");
 
 		} end
-
 
 	} end
 
