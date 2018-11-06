@@ -3,19 +3,17 @@
 
 #include "../../Bibliotecas/dtb.h"
 #include "../../Bibliotecas/sockets.h"
+#include <semaphore.h>
 #include <stdio.h>
 
 typedef enum {
-	ESTADO_NUEVO,
-	ESTADO_LISTO,
-	ESTADO_EJECUTANDO,
-	ESTADO_BLOQUEADO,
-	ESTADO_FINALIZADO
+	DTB_NUEVO, DTB_LISTO, DTB_EJECUTANDO, DTB_BLOQUEADO, DTB_FINALIZADO,
+	CPU_LIBRE, CPU_OCUPADA
 } Estado;
 
 typedef struct {
 	int socket;
-    pthread_mutex_t mutex_estado;
+    Estado estado;
 }__attribute__((packed)) t_cpu;
 
 t_list *lista_cpu;
@@ -24,7 +22,7 @@ t_list *lista_listos;
 t_list *lista_ejecutando;
 t_list *lista_bloqueados;
 t_list *lista_finalizados;
-t_list *lista_PLP;
+t_list *lista_plp;
 
 t_list* ptr2;
 t_list* ptr3;
@@ -49,22 +47,23 @@ void planificador_corto_plazo();
 //Funciones planificador corto plazo
 void ejecutar_primer_dtb_listo(DTB* DTB_ejecutar, t_cpu* cpu_libre);
 
-//Funciones asociadas a DTB
+//Funciones de DTB
 DTB* crearDTB(char* path);
 int desbloquear_dtb_dummy(DTB* DTBNuevo);
-int notificar_al_PLP(t_list* lista, int *pid);
-
-//Funciones de listas
+void notificar_al_PLP(t_list* lista, int *pid);
 DTB* devuelve_DTB_asociado_a_pid_de_lista(t_list* lista, int* pid);
-t_cpu* devuelve_cpu_asociada_a_socket_de_lista(t_list* lista, int* socket);
+bool coincide_pid(int* pid, void* DTB);
+
+//Funciones de cpu
+void liberar_cpu(t_list *lista, int *socket);
+t_cpu* cpu_con_socket(t_list* lista, int* socket);
+bool coincide_socket(int* socket, void* cpu);
+bool esta_libre_cpu(void* cpu);
+t_cpu *cpu_libre();
 
 //Funciones booleanas
-bool coincide_pid(int* pid, void* DTB);
-bool coincide_socket(int* socket, void* cpu);
 bool permite_multiprogramacion();
 bool lista_vacia(t_list* lista);
-bool esta_libre_cpu(t_cpu* cpu);
-bool hay_cpu_libre();
 
 //
 void desplegarCola(DTB* listaProcesos);

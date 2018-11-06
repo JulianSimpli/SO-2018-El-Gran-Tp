@@ -13,15 +13,15 @@
 char *IP, *ALGORITMO_PLANIFICACION;
 int PUERTO, RETARDO_PLANIF, QUANTUM;
 
-t_list* lista_hilos;
-t_list* lista_cpu;
+t_list *lista_hilos;
+t_list *lista_cpu;
 
 bool end;
 
-pthread_mutex_t mutex_handshake_diego;
-pthread_mutex_t mutex_handshake_cpu;
+sem_t mutex_handshake_diego;
+sem_t mutex_handshake_cpu;
 
-t_log* logger;
+t_log *logger;
 
 // Declaracion de funciones
 void crearLogger();

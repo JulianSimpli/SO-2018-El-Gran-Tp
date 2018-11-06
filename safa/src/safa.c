@@ -2,7 +2,7 @@
 
 /*Creación de Logger*/
 void crearLogger() {
-	logger = log_create("SAFA.log", "safa", true, LOG_LEVEL_INFO);
+	logger = log_create("safa.log", "safa", true, LOG_LEVEL_INFO);
 }
 
 void inicializarVariables() {
@@ -18,14 +18,14 @@ void inicializarVariables() {
 	stateArray[2] = lista_ejecutando;
 	stateArray[3] = lista_bloqueados;
 	stateArray[4] = lista_finalizados;
-    lista_PLP = list_create();
-    pthread_mutex_init(&mutex_handshake_diego, NULL);
-    pthread_mutex_init(&mutex_handshake_cpu, NULL);
+    lista_plp = list_create();
+    sem_init(&mutex_handshake_diego, 0, 0);
+    sem_init(&mutex_handshake_cpu, 0, 0);
 }
 
 void obtenerValoresArchivoConfiguracion() {
-	t_config* arch = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src/SAFA.config");
-	IP = "127.0.0.1"; //agregado
+	t_config* arch = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src/safa.config");
+	IP = "127.0.0.1";
 	PUERTO = config_get_int_value(arch, "PUERTO");
 	ALGORITMO_PLANIFICACION = string_duplicate(config_get_string_value(arch, "ALGORITMO"));
 	QUANTUM = config_get_int_value(arch, "QUANTUM");
@@ -36,7 +36,7 @@ void obtenerValoresArchivoConfiguracion() {
 
 void imprimirArchivoConfiguracion() {
 	printf("Configuración:\n"
-			"IP=%s\n" //agregado
+			"IP=%s\n"
 			"PUERTO=%d\n"
 			"ALGORITMO_PLANIFICACION=%s\n"
 			"QUANTUM=%d\n"
@@ -46,7 +46,14 @@ void imprimirArchivoConfiguracion() {
 }
 
 void consola() {
-	char * linea;
+	printf("Esperando que conecte el diego y al menos 1 CPU\nSAFA esta en estado corrupto\n");
+	log_info(logger, "Esperando que conecte el diego y al menos 1 CPU. SAFA esta en estado corrupto\n");
+	sem_wait(&mutex_handshake_diego);
+	sem_wait(&mutex_handshake_cpu);
+	printf("Se conectaron Diego y 1 CPU\nSAFA esta en estado operativo\nYa puede usar la consola\n");
+	log_info(logger, "Se conectaron Diego y 1 CPU. SAFA esta en estado operativo");
+
+	char *linea;
 	while (true) {
 		linea = readline(">> ");
 		if (linea) add_history(linea);
@@ -100,7 +107,7 @@ void accion(void* socket) {
 
 				switch (paquete.header.tipoMensaje) {
 					case ESHANDSHAKE: {
-                    	pthread_mutex_unlock(&mutex_handshake_diego);
+                    	sem_post(&mutex_handshake_diego);
 						log_info(logger, "llegada de el diego");
 						EnviarHandshake(socketFD, SAFA);
 						break;
@@ -123,10 +130,10 @@ void manejar_paquetes_CPU(Paquete* paquete, int* socketFD) {
 		case ESHANDSHAKE: {
 			t_cpu *cpu_nuevo = malloc(sizeof(t_cpu));
 			cpu_nuevo->socket = *socketFD;
-            pthread_mutex_init(&cpu_nuevo->mutex_estado, NULL);
+            cpu_nuevo->estado = CPU_LIBRE;
 			list_add(lista_cpu, cpu_nuevo);
 			log_info(logger, "llegada cpu nuevo en socket: %i", cpu_nuevo->socket);
-            pthread_mutex_unlock(&mutex_handshake_cpu);
+            sem_post(&mutex_handshake_cpu);
 			enviar_handshake_cpu(*socketFD);
 			break;
 		}
@@ -134,10 +141,8 @@ void manejar_paquetes_CPU(Paquete* paquete, int* socketFD) {
     	case DUMMY_SUCCES: {
             u_int32_t pid;
             memcpy(&pid, paquete->Payload, sizeof(u_int32_t));
-            DTB* dtb_desbloqueado = devuelve_DTB_asociado_a_pid_de_lista(lista_bloqueados, &pid);
 			notificar_al_PLP(lista_nuevos, &pid);
-            t_cpu* cpu_actual = devuelve_cpu_asociada_a_socket_de_lista(lista_cpu, socketFD);
-            pthread_mutex_unlock(&cpu_actual->mutex_estado);
+			liberar_cpu(lista_cpu, socketFD);
 			break;
 		}
 
@@ -159,8 +164,7 @@ void manejar_paquetes_CPU(Paquete* paquete, int* socketFD) {
             int pid = DTB_succes->gdtPID;
             // list_remove_by_condition(lista_bloqueados, (void*)coincide_pid(&pid));
 			// chequear si va a ready o a exit
-            t_cpu* cpu_actual = devuelve_cpu_asociada_a_socket_de_lista(lista_cpu, socketFD);
-			pthread_mutex_unlock(&cpu_actual->mutex_estado);
+			liberar_cpu(lista_cpu, socketFD);
 			break;
         }
 	}
@@ -206,27 +210,20 @@ int main(void) {
 	obtenerValoresArchivoConfiguracion();
 	imprimirArchivoConfiguracion();
 	log_info(logger, "Probando SAFA.log");
-	
-	printf("Esperando que conecte el diego y al menos 1 CPU\n");
-	log_info(logger, "Esperando a Diego y al menos 1 CPU");
-	pthread_mutex_lock(&mutex_handshake_diego);
-    pthread_mutex_lock(&mutex_handshake_cpu);
 
-	pthread_t hiloConsola; //un hilo para la consola
+	pthread_t hiloConsola;
     pthread_create(&hiloConsola, NULL, (void*) consola, NULL);
 
-    pthread_t hilo_PLP;
-    pthread_create(&hilo_PLP, NULL, (void*) planificador_largo_plazo, NULL);
+    pthread_t hilo_plp;
+    pthread_create(&hilo_plp, NULL, (void*) planificador_largo_plazo, NULL);
 
-    pthread_t hilo_PCP;
-    pthread_create(&hilo_PCP, NULL, (void*) planificador_corto_plazo, NULL);
+    pthread_t hilo_pcp;
+    pthread_create(&hilo_pcp, NULL, (void*) planificador_corto_plazo, NULL);
 
-	//defino a safa como servidor concurrente para que diego y cpu se puedan conectar a él
-	//a los clientes conectados a safa se los atiende con un hilo y mediante la funcion accion a c/u
     ServidorConcurrente(IP, PUERTO, SAFA, &lista_hilos, &end, accion);
 
 	pthread_join(hiloConsola, NULL);
-    pthread_join(hilo_PCP, NULL);
-    pthread_join(hilo_PLP, NULL);
+    pthread_join(hilo_pcp, NULL);
+    pthread_join(hilo_plp, NULL);
 	return EXIT_SUCCESS;
 }

@@ -7,31 +7,30 @@ u_int32_t procesos_en_memoria = 0;
 //Hilo planificador largo plazo
 void planificador_largo_plazo() {
     while(1) {
-        if(permite_multiprogramacion() && !lista_vacia(lista_PLP)){
-            mover_primero_de_lista1_a_lista2(lista_PLP, lista_listos);
+        if(permite_multiprogramacion() && !lista_vacia(lista_plp)){
+            mover_primero_de_lista1_a_lista2(lista_plp, lista_listos);
             procesos_en_memoria++;
         }
     }
 }
 
-//Funciones del planificador largo plazo (las booleanas todas juntas abajo)
-void mover_primero_de_lista1_a_lista2(t_list* lista1, t_list* lista2) {
-    DTB* DTB_a_mover = list_remove(lista1, 0);
-    list_add(lista2, DTB_a_mover);
-
-}
-
 //Hilo planificador corto plazo
 void planificador_corto_plazo() {
     while(1) {
-        t_cpu* cpu_libre = list_find(lista_cpu, (void*)esta_libre_cpu);
+        t_cpu* cpu_libre = list_find(lista_cpu, esta_libre_cpu);
         if(cpu_libre != NULL && !lista_vacia(lista_listos)) {
-            pthread_mutex_lock(&cpu_libre->mutex_estado);
+            cpu_libre->estado = CPU_OCUPADA;
             DTB* DTB_ejecutar = list_remove(lista_listos, 0);
             list_add(lista_ejecutando, DTB_ejecutar);
             ejecutar_primer_dtb_listo(DTB_ejecutar, cpu_libre);
         }
     }
+}
+
+void mover_primero_de_lista1_a_lista2(t_list* lista1, t_list* lista2) {
+    DTB* DTB_a_mover = list_remove(lista1, 0);
+    list_add(lista2, DTB_a_mover);
+
 }
 //Funciones planificador corto plazo
 void ejecutar_primer_dtb_listo(DTB* DTB_ejecutar, t_cpu* cpu_libre) {
@@ -41,14 +40,12 @@ void ejecutar_primer_dtb_listo(DTB* DTB_ejecutar, t_cpu* cpu_libre) {
     paquete->header.tamPayload = tamanio_DTB;
     paquete->header.emisor = SAFA;
 
-    int socket_cpu_libre = cpu_libre->socket;
-
     if(DTB_ejecutar->flagInicializacion == 0) {
         paquete->header.tipoMensaje = ESDTBDUMMY;
-        EnviarPaquete(socket_cpu_libre, paquete);
+        EnviarPaquete(cpu_libre->socket, paquete);
     } else {
         paquete->header.tipoMensaje = ESDTB;
-        EnviarPaquete(socket_cpu_libre, paquete);
+        EnviarPaquete(cpu_libre->socket, paquete);
     }
 }
 
@@ -57,7 +54,7 @@ DTB* crearDTB(char* path) {
 
 	DTB* DTBNuevo = malloc (sizeof(DTB));
 	DTBNuevo->PC = 1;
-	DTBNuevo->estado = ESTADO_NUEVO;
+	DTBNuevo->estado = DTB_NUEVO;
 	DTBNuevo->flagInicializacion = 1;
 	DTBNuevo->pathEscriptorio = string_duplicate(path); //pathEscriptorio es un char*
 	DTBNuevo->gdtPID = numero_pid;
@@ -72,12 +69,12 @@ int desbloquear_dtb_dummy(DTB* DTBNuevo) {
     dtb_dummy->flagInicializacion = 0;
     dtb_dummy->pathEscriptorio = DTBNuevo->pathEscriptorio;
     
-    return list_add(lista_PLP, dtb_dummy);
+    return list_add(lista_plp, dtb_dummy);
 }
 
-int notificar_al_PLP(t_list* lista, int* pid) {
+void notificar_al_PLP(t_list* lista, int* pid) {
     DTB* DTB_a_mover = devuelve_DTB_asociado_a_pid_de_lista(lista, pid);
-    return list_add(lista_PLP, DTB_a_mover);
+    list_add(lista_plp, DTB_a_mover);
 }
 
 bool coincide_pid(int* pid, void* DTB_comparar) {
@@ -92,17 +89,25 @@ DTB* devuelve_DTB_asociado_a_pid_de_lista(t_list* lista, int* pid) {
 }
 // va sin parentesis coincide_pid porque tiene que llamar al puntero a la funcion despues de que hacer list_find
 
-bool coincide_socket(int* socketFD, void* cpu) {
-	return ((t_cpu*)cpu)->socket == *socketFD;
+void liberar_cpu(t_list *lista, int *socket) {
+    t_cpu* cpu_actual = cpu_con_socket(lista_cpu, socket);
+    cpu_actual->estado = CPU_LIBRE;
 }
 
-t_cpu* devuelve_cpu_asociada_a_socket_de_lista(t_list* lista, int* socket) {
+bool coincide_socket(int* socket, void* cpu) {
+	return ((t_cpu*)cpu)->socket == *socket;
+}
+
+t_cpu* cpu_con_socket(t_list* lista, int* socket) {
     bool compara_cpu(void* cpu) {
         return coincide_socket(socket, cpu);
     }
     return list_find(lista, compara_cpu);
 }
 
+bool esta_libre_cpu(void* cpu) {
+    return ((t_cpu*)cpu)->estado == CPU_LIBRE;
+}
 
 //Funciones booleanas
 
@@ -112,14 +117,6 @@ bool permite_multiprogramacion() {
 
 bool lista_vacia(t_list* lista) {
     return list_size(lista) == 0;
-}
-
-bool esta_libre_cpu(t_cpu* cpu) {
-    return (int)(cpu->mutex_estado.__align) != 0;
-}
-
-bool hay_cpu_libre() {
-    return list_any_satisfy(lista_cpu, (void*)esta_libre_cpu);
 }
 
 //
