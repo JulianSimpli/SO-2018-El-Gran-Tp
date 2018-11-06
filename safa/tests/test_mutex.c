@@ -5,7 +5,7 @@
 
 context(test_mutex_cpu) {
 
-    describe("Comportamiento mutex de estructura cpu"){
+    describe("Test inutil, no ver - Comportamiento mutex de struct cpu"){
         
 typedef struct {
     int socket;
@@ -46,7 +46,7 @@ void cpu_mock() {
     pthread_mutex_init(&cpu1->mutex_estado, NULL);
     cpu2 = malloc(sizeof(t_cpu));
     cpu2->socket = 2;
-    pthread_mutex_init(&cpu1->mutex_estado, NULL);
+    pthread_mutex_init(&cpu2->mutex_estado, NULL);
 }
 
 before {
@@ -64,10 +64,10 @@ it ("El mutex se inicializa en 0") {
 	should_int(z) be equal to (0);
 } end
 
-it ("El mutex es 1 al hacer lock") {
+it ("El mutex es 0 al hacer lock") {
     pthread_mutex_lock(&cpu1->mutex_estado);
     z = cpu1->mutex_estado.__align;
-	should_int(z) be equal to (1);
+	should_int(z) be equal to (0);
 } end
 
 it ("El mutex es 0 al hacer unlock") {

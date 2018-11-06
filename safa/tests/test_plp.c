@@ -1,27 +1,18 @@
 #include <cspecs/cspec.h>
 #include "../../Bibliotecas/dtb.h"
+#include <stdio.h>
 
-context(test_plp) {
-
-	describe("Planificador largo plazo") {
-
+context(test_plp)
+{
+	describe("Planificador largo plazo")
+	{
 		DTB *dtb1;
-		DTB *dtb2;
-		char *path_escriptorio1 = "test1";
-		char *path_escriptorio2 = "test2";
+		char *path_escriptorio = "test1";
 		int numero_pid = 1;
 		int *p;
 		t_list *lista_plp;
 		t_list *lista_nuevos;
-
-		typedef enum {
-			ESTADO_NUEVO,
-			ESTADO_LISTO,
-			ESTADO_EJECUTANDO,
-			ESTADO_BLOQUEADO,
-			ESTADO_FINALIZADO
-		} Estados;
-
+		
 		char *string_duplicate(char *string) {
 			size_t len = strlen(string);
 			char *ret = malloc(len);
@@ -29,19 +20,53 @@ context(test_plp) {
 			return ret;
 		}
 
-		DTB* crearDTB(char* path) {
-
-			DTB* DTBNuevo = malloc (sizeof(DTB));
-			DTBNuevo->PC = 1;
-			DTBNuevo->estado = ESTADO_NUEVO;
-			DTBNuevo->flagInicializacion = 1;
-			DTBNuevo->pathEscriptorio = string_duplicate(path); //pathEscriptorio es un char*
-			DTBNuevo->gdtPID = numero_pid;
-			numero_pid++;
-
-			return DTBNuevo;
+		ArchivoAbierto *_DTB_crear_archivo(int cant_lineas, char *path)
+		{
+			ArchivoAbierto *archivo = malloc(sizeof(ArchivoAbierto));
+			archivo->cantLineas = cant_lineas;
+			archivo->path = malloc(strlen(path));
+			strcpy(archivo->path, path);
+			return archivo;
 		}
-		
+
+		void DTB_agregar_archivo(DTB *dtb, int cant_lineas, char *path)
+		{
+			ArchivoAbierto *archivo = _DTB_crear_archivo(cant_lineas, path);
+			list_add(dtb->archivosAbiertos, archivo);
+		}
+
+		ArchivoAbierto *DTB_obtener_escriptorio(DTB *dtb)
+		{
+			return list_get(dtb->archivosAbiertos, 0);
+		}
+
+		DTB *crear_dtb(int pid_asociado, char* path, int flag_inicializacion) {
+			DTB* dtb_nuevo = malloc(sizeof(DTB));
+			dtb_nuevo->flagInicializacion = flag_inicializacion;
+			dtb_nuevo->PC = 1;
+			switch(flag_inicializacion) {
+				case 0: {
+					dtb_nuevo->gdtPID = pid_asociado;
+					break;
+				}
+				case 1: {
+					dtb_nuevo->gdtPID = numero_pid;
+					numero_pid++;
+					break;
+				}
+				default: {
+					printf("flag_inicializacion invalida");
+					free(dtb_nuevo);
+					return dtb_nuevo;
+				}
+			}
+
+			dtb_nuevo->archivosAbiertos = list_create();
+			DTB_agregar_archivo(dtb_nuevo, 0, path);
+
+			return dtb_nuevo;
+		}
+
 		bool coincide_pid(int* pid, void* DTB_comparar) {
 			return ((DTB*)DTB_comparar)->gdtPID == *pid;
 		}
@@ -52,24 +77,25 @@ context(test_plp) {
 			}
 			return list_remove_by_condition(lista, compara_con_DTB);
 		}
-
 		void notificar_al_plp(t_list* lista, int* pid) {
 			DTB* DTB_a_mover = devuelve_DTB_asociado_a_pid_de_lista(lista, pid);
 			list_add(lista_plp, DTB_a_mover);
 		}
 
-		void liberar_dtb() {
-			free(dtb1->pathEscriptorio);
-			free(dtb1);
-			free(dtb2->pathEscriptorio);
-			free(dtb2);
+		void liberar_archivo_abierto(void *archivo)
+		{
+			free(((ArchivoAbierto *)archivo)->path);
+			free(archivo);
+		}
+
+		void liberar_dtb(void *dtb) {
+			list_clean_and_destroy_elements(((DTB *)dtb)->archivosAbiertos, liberar_archivo_abierto);
+			free(dtb);
 		}
 
 		void dtb_mock() {
-			dtb1 = crearDTB(path_escriptorio1);
-			dtb2 = crearDTB(path_escriptorio2);
+			dtb1 = crear_dtb(0, path_escriptorio, 1);
 		}
-
 
 		before {
 			dtb_mock();
@@ -77,26 +103,21 @@ context(test_plp) {
 			lista_nuevos = list_create();
 			numero_pid = 1;
 			list_add(lista_nuevos, dtb1);
-			list_add(lista_nuevos, dtb2);
 		} end
 
 		after {
-			liberar_dtb();
+			liberar_dtb(dtb1);
 			list_destroy(lista_plp);
-		} end
-
-		it("Logra crear un dtb al path indicado") {
-			should_string(dtb1->pathEscriptorio) be equal to(path_escriptorio1);
+			list_destroy(lista_nuevos);
 		} end
 
 		it("Logra crear DTBs con pid 1 y 2") {
 			should_int(dtb1->gdtPID) be equal to (1);
-			should_int(dtb2->gdtPID) be equal to (2);
 		} end
 
-		it("Logra notificar al plp que se cargo pid 1") {
+		it("Logra notificar al plp que se cargo ") {
 			should_int(list_size(lista_plp)) be equal to(0);
-			should_int(list_size(lista_nuevos)) be equal to(2);
+			should_int(list_size(lista_nuevos)) be equal to(1);
 			
 			int i = 1;
 			p = &i;
@@ -108,5 +129,4 @@ context(test_plp) {
 		} end
 
 	} end
-
 }

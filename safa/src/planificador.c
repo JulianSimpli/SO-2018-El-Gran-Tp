@@ -1,5 +1,4 @@
 #include "planificador.h"
-#include <commons/string.h>
 
 u_int32_t numero_pid = 1;
 u_int32_t procesos_en_memoria = 0;
@@ -50,26 +49,41 @@ void ejecutar_primer_dtb_listo(DTB* DTB_ejecutar, t_cpu* cpu_libre) {
 }
 
 //Funciones asociadas a DTB
-DTB* crearDTB(char* path) {
+DTB *crear_dtb(int pid_asociado, char* path, int flag_inicializacion) {
+	DTB* dtb_nuevo = malloc(sizeof(DTB));
+    dtb_nuevo->flagInicializacion = flag_inicializacion;
+    dtb_nuevo->PC = 1;
+    switch(flag_inicializacion) {
+        case 0: {
+            dtb_nuevo->gdtPID = pid_asociado;
+            break;
+        }
+        case 1: {
+            dtb_nuevo->gdtPID = numero_pid;
+            numero_pid++;
+            break;
+        }
+        default: {
+            printf("flag_inicializacion invalida");
+        }
+    }
 
-	DTB* DTBNuevo = malloc (sizeof(DTB));
-	DTBNuevo->PC = 1;
-	DTBNuevo->estado = DTB_NUEVO;
-	DTBNuevo->flagInicializacion = 1;
-	DTBNuevo->pathEscriptorio = string_duplicate(path); //pathEscriptorio es un char*
-	DTBNuevo->gdtPID = numero_pid;
-	numero_pid++;
+    dtb_nuevo->archivosAbiertos = list_create();
+    DTB_agregar_archivo(dtb_nuevo, 0, path);
 
-	return DTBNuevo;
+	return dtb_nuevo;
 }
 
-int desbloquear_dtb_dummy(DTB* DTBNuevo) {
+void liberar_dtb(void *dtb) {
+    list_clean_and_destroy_elements(((DTB *)dtb)->archivosAbiertos, liberar_archivo_abierto);
+    free(dtb);
+}
+
+void desbloquear_dtb_dummy(DTB* dtb_nuevo) {
     DTB* dtb_dummy = malloc (sizeof(DTB));
-    dtb_dummy->gdtPID = DTBNuevo->gdtPID;
-    dtb_dummy->flagInicializacion = 0;
-    dtb_dummy->pathEscriptorio = DTBNuevo->pathEscriptorio;
-    
-    return list_add(lista_plp, dtb_dummy);
+    ArchivoAbierto* escriptorio = DTB_obtener_escriptorio(dtb_nuevo);
+    dtb_dummy = crear_dtb(dtb_nuevo->gdtPID, escriptorio->path, 0);
+    list_add(lista_plp, dtb_dummy);
 }
 
 void notificar_al_PLP(t_list* lista, int* pid) {
@@ -143,9 +157,9 @@ void mostrarUnProceso(void* process){
 
 //Funciones de Consola
 void ejecutar(char* path) {
-	DTB* DTBNuevo = crearDTB(path);
-	list_add(lista_nuevos, DTBNuevo);
-    desbloquear_dtb_dummy(DTBNuevo);
+	DTB* dtb_nuevo = crear_dtb(0, path, 1);
+	list_add(lista_nuevos, dtb_nuevo);
+    desbloquear_dtb_dummy(dtb_nuevo);
 }
 
 void status() { ////NO Repitas! LLama a una list_iterate

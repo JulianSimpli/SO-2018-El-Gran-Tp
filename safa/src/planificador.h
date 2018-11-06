@@ -4,12 +4,19 @@
 #include "../../Bibliotecas/dtb.h"
 #include "../../Bibliotecas/sockets.h"
 #include <semaphore.h>
+#include <commons/string.h>
 #include <stdio.h>
 
 typedef enum {
 	DTB_NUEVO, DTB_LISTO, DTB_EJECUTANDO, DTB_BLOQUEADO, DTB_FINALIZADO,
 	CPU_LIBRE, CPU_OCUPADA
 } Estado;
+
+typedef struct DTB_local {
+	u_int32_t pid;
+	Estado estado;
+	time_t tiempo_respuesta;
+} DTB_local;
 
 typedef struct {
 	int socket;
@@ -48,10 +55,11 @@ void planificador_corto_plazo();
 void ejecutar_primer_dtb_listo(DTB* DTB_ejecutar, t_cpu* cpu_libre);
 
 //Funciones de DTB
-DTB* crearDTB(char* path);
-int desbloquear_dtb_dummy(DTB* DTBNuevo);
-void notificar_al_PLP(t_list* lista, int *pid);
-DTB* devuelve_DTB_asociado_a_pid_de_lista(t_list* lista, int* pid);
+DTB *crear_dtb(int pid_asociado, char *path, int flag_inicializacion);
+void liberar_dtb(void *dtb);
+void desbloquear_dtb_dummy(DTB* dtb_nuevo);
+void notificar_al_PLP(t_list *lista, int *pid);
+DTB *devuelve_DTB_asociado_a_pid_de_lista(t_list* lista, int* pid);
 bool coincide_pid(int* pid, void* DTB);
 
 //Funciones de cpu

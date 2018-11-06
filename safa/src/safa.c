@@ -48,8 +48,8 @@ void imprimirArchivoConfiguracion() {
 void consola() {
 	printf("Esperando que conecte el diego y al menos 1 CPU\nSAFA esta en estado corrupto\n");
 	log_info(logger, "Esperando que conecte el diego y al menos 1 CPU. SAFA esta en estado corrupto\n");
-	sem_wait(&mutex_handshake_diego);
-	sem_wait(&mutex_handshake_cpu);
+	// sem_wait(&mutex_handshake_diego);
+	// sem_wait(&mutex_handshake_cpu);
 	printf("Se conectaron Diego y 1 CPU\nSAFA esta en estado operativo\nYa puede usar la consola\n");
 	log_info(logger, "Se conectaron Diego y 1 CPU. SAFA esta en estado operativo");
 
@@ -170,13 +170,14 @@ void manejar_paquetes_CPU(Paquete* paquete, int* socketFD) {
 	}
 }
 
-void* handshake_cpu_serializar(int* tamanio_payload) {
-	void* payload = malloc(sizeof(RETARDO_PLANIF) + sizeof(QUANTUM));
+void *handshake_cpu_serializar(int *tamanio_payload)
+{
+	void *payload = malloc(sizeof(RETARDO_PLANIF) + sizeof(QUANTUM));
 	int desplazamiento = 0;
 	int tamanio = sizeof(u_int32_t);
 	memcpy(payload, &RETARDO_PLANIF, tamanio);
 	desplazamiento += tamanio;
-	memcpy(payload, &QUANTUM, tamanio);
+	memcpy(payload + desplazamiento, &QUANTUM, tamanio);
 	desplazamiento += tamanio;
 
 	u_int32_t len_algoritmo = strlen(ALGORITMO_PLANIFICACION);
@@ -185,7 +186,7 @@ void* handshake_cpu_serializar(int* tamanio_payload) {
 	desplazamiento += tamanio;
 
 	payload = realloc(payload, desplazamiento + len_algoritmo);
-	memcpy(payload + desplazamiento, &ALGORITMO_PLANIFICACION, len_algoritmo);
+	memcpy(payload + desplazamiento, ALGORITMO_PLANIFICACION, len_algoritmo);
 	desplazamiento += len_algoritmo;
 
 	*tamanio_payload = desplazamiento;
