@@ -1,0 +1,65 @@
+[INFO] 21:22:30:838 safa/(29224:29224): Probando SAFA.log
+[INFO] 21:22:30:844 safa/(29224:29226): Esperando que conecte el diego y al menos 1 CPU. SAFA esta en estado corrupto
+
+[INFO] 23:52:51:265 safa/(31424:31424): Probando SAFA.log
+[INFO] 23:52:51:273 safa/(31424:31426): Esperando que conecte el diego y al menos 1 CPU. SAFA esta en estado corrupto
+
+[INFO] 23:57:40:941 safa/(31653:31653): Probando SAFA.log
+[INFO] 23:57:40:949 safa/(31653:31654): Esperando que conecte el diego y al menos 1 CPU. SAFA esta en estado corrupto
+
+[INFO] 01:05:07:765 safa/(1320:1320): Probando SAFA.log
+[INFO] 01:05:07:778 safa/(1320:1322): Esperando que conecte el diego y al menos 1 CPU. SAFA esta en estado corrupto
+
+[INFO] 01:05:07:778 safa/(1320:1322): Se conectaron Diego y 1 CPU. SAFA esta en estado operativo
+[INFO] 01:06:08:804 safa/(1377:1377): Probando SAFA.log
+[INFO] 01:06:08:816 safa/(1377:1380): Esperando que conecte el diego y al menos 1 CPU. SAFA esta en estado corrupto
+
+[INFO] 01:06:08:816 safa/(1377:1380): Se conectaron Diego y 1 CPU. SAFA esta en estado operativo
+[INFO] 01:06:31:737 safa/(1404:1404): Probando SAFA.log
+[INFO] 01:06:31:749 safa/(1404:1406): Esperando que conecte el diego y al menos 1 CPU. SAFA esta en estado corrupto
+
+[INFO] 01:06:31:749 safa/(1404:1406): Se conectaron Diego y 1 CPU. SAFA esta en estado operativo
+[INFO] 01:06:42:127 safa/(1435:1435): Probando SAFA.log
+[INFO] 01:06:42:138 safa/(1435:1437): Esperando que conecte el diego y al menos 1 CPU. SAFA esta en estado corrupto
+
+[INFO] 01:06:42:138 safa/(1435:1437): Se conectaron Diego y 1 CPU. SAFA esta en estado operativo
+[INFO] 01:08:01:562 safa/(1496:1496): Probando SAFA.log
+[INFO] 01:08:01:573 safa/(1496:1498): Esperando que conecte el diego y al menos 1 CPU. SAFA esta en estado corrupto
+
+[INFO] 01:08:01:573 safa/(1496:1498): Se conectaron Diego y 1 CPU. SAFA esta en estado operativo
+[INFO] 01:08:37:686 safa/(1535:1535): Probando SAFA.log
+[INFO] 01:08:37:697 safa/(1535:1537): Esperando que conecte el diego y al menos 1 CPU. SAFA esta en estado corrupto
+
+[INFO] 01:08:37:697 safa/(1535:1537): Se conectaron Diego y 1 CPU. SAFA esta en estado operativo
+[INFO] 01:09:35:48 safa/(1627:1627): Probando SAFA.log
+[INFO] 01:09:35:55 safa/(1627:1629): Esperando que conecte el diego y al menos 1 CPU. SAFA esta en estado corrupto
+
+[INFO] 01:09:35:55 safa/(1627:1629): Se conectaron Diego y 1 CPU. SAFA esta en estado operativo
+[INFO] 01:09:52:823 safa/(1657:1657): Probando SAFA.log
+[INFO] 01:09:52:834 safa/(1657:1659): Esperando que conecte el diego y al menos 1 CPU. SAFA esta en estado corrupto
+
+[INFO] 01:09:52:834 safa/(1657:1659): Se conectaron Diego y 1 CPU. SAFA esta en estado operativo
+[INFO] 01:11:49:733 safa/(1711:1711): Probando SAFA.log
+[INFO] 01:11:49:745 safa/(1711:1713): Esperando que conecte el diego y al menos 1 CPU. SAFA esta en estado corrupto
+
+[INFO] 01:11:49:745 safa/(1711:1713): Se conectaron Diego y 1 CPU. SAFA esta en estado operativo
+[INFO] 12:18:35:415 safa/(3650:3650): Probando SAFA.log
+[INFO] 12:18:35:430 safa/(3650:3652): Esperando que conecte el diego y al menos 1 CPU. SAFA esta en estado corrupto
+
+[INFO] 12:18:35:430 safa/(3650:3652): Se conectaron Diego y 1 CPU. SAFA esta en estado operativo
+[INFO] 12:23:30:705 safa/(3878:3878): Probando SAFA.log
+[INFO] 12:23:30:717 safa/(3878:3879): Esperando que conecte el diego y al menos 1 CPU. SAFA esta en estado corrupto
+
+[INFO] 12:23:30:717 safa/(3878:3879): Se conectaron Diego y 1 CPU. SAFA esta en estado operativo
+[INFO] 12:50:49:584 safa/(3386:3386): Probando SAFA.log
+[INFO] 12:50:49:592 safa/(3386:3387): Esperando que conecte el diego y al menos 1 CPU. SAFA esta en estado corrupto
+
+[INFO] 12:50:49:592 safa/(3386:3387): Se conectaron Diego y 1 CPU. SAFA esta en estado operativo
+[INFO] 23:45:56:415 safa/(5703:5703): Probando SAFA.log
+[INFO] 23:45:56:438 safa/(5703:5704): Esperando que conecte el diego y al menos 1 CPU. SAFA esta en estado corrupto
+
+[INFO] 23:45:56:439 safa/(5703:5704): Se conectaron Diego y 1 CPU. SAFA esta en estado operativo
+[INFO] 00:34:08:735 safa/(6805:6805): Probando SAFA.log
+[INFO] 00:34:08:743 safa/(6805:6807): Esperando que conecte el diego y al menos 1 CPU. SAFA esta en estado corrupto
+
+[INFO] 00:34:08:744 safa/(6805:6807): Se conectaron Diego y 1 CPU. SAFA esta en estado operativo
