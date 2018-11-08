@@ -32,7 +32,9 @@ void consola();
 void parseoConsola(char* operacion, char* primerParametro);
 void accion(void* socket);
 void manejar_paquetes_CPU(Paquete* paquete, int* socketFD);
+void cargar_header(Paquete** paquete, int tamanio_payload, Tipo tipo_mensaje, Emisor emisor);
 void* handshake_cpu_serializar(int* tamanio_payload);
 void enviar_handshake_cpu(int socketFD);
+void enviar_handshake_diego(int socketFD);
 
 #endif /* SAFA_H_ */

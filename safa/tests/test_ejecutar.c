@@ -6,8 +6,8 @@ context(test_ejecutar)
 {
     describe("primitiva consola ejecutar")
     {
-        char *path_escriptorio1 = "path1";
-		char *path_escriptorio2 = "path2";
+        char *path_escriptorio1;
+		char *path_escriptorio2;
 		int numero_pid = 1;
 		t_list *lista_plp;
 		t_list *lista_nuevos;
@@ -44,7 +44,7 @@ context(test_ejecutar)
         {
 			DTB* dtb_nuevo = malloc(sizeof(DTB));
 			dtb_nuevo->flagInicializacion = flag_inicializacion;
-			dtb_nuevo->PC = 1;
+			dtb_nuevo->PC = 0;
 			switch(flag_inicializacion) {
 				case 0:
                 {
@@ -102,6 +102,8 @@ context(test_ejecutar)
         {
             lista_nuevos = list_create();
             lista_plp = list_create();
+			path_escriptorio1 = "path1";
+			path_escriptorio2 = "path2";
         } end
 
         after 
@@ -125,7 +127,7 @@ context(test_ejecutar)
 
 			DTB *dtb1 = list_get(lista_nuevos, 0);
 			should_int(dtb1->gdtPID) be equal to (1);
-            should_int(dtb1->PC) be equal to (1);
+            should_int(dtb1->PC) be equal to (0);
             should_int(dtb1->flagInicializacion) be equal to (1);
 
             ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb1);
@@ -147,7 +149,7 @@ context(test_ejecutar)
 
             DTB *dtb_dummy = list_get(lista_plp, 0);
 			should_int(dtb_dummy->gdtPID) be equal to (1);
-            should_int(dtb_dummy->PC) be equal to (1);
+            should_int(dtb_dummy->PC) be equal to (0);
             should_int(dtb_dummy->flagInicializacion) be equal to (0);
             
             ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb_dummy);

@@ -3,9 +3,7 @@
 
 #include "../../Bibliotecas/dtb.h"
 #include "../../Bibliotecas/sockets.h"
-#include <semaphore.h>
-#include <commons/string.h>
-#include <stdio.h>
+#include "../../Bibliotecas/helper.h"
 
 typedef enum {
 	DTB_NUEVO, DTB_LISTO, DTB_EJECUTANDO, DTB_BLOQUEADO, DTB_FINALIZADO,

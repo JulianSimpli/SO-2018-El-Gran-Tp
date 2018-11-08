@@ -109,7 +109,7 @@ void accion(void* socket) {
 					case ESHANDSHAKE: {
                     	sem_post(&mutex_handshake_diego);
 						log_info(logger, "llegada de el diego");
-						EnviarHandshake(socketFD, SAFA);
+						enviar_handshake_diego(socketFD);
 						break;
 					}
 				}
@@ -132,7 +132,7 @@ void manejar_paquetes_CPU(Paquete* paquete, int* socketFD) {
 			cpu_nuevo->socket = *socketFD;
             cpu_nuevo->estado = CPU_LIBRE;
 			list_add(lista_cpu, cpu_nuevo);
-			log_info(logger, "llegada cpu nuevo en socket: %i", cpu_nuevo->socket);
+			log_info(logger, "llegada cpu con id %i", cpu_nuevo->socket);
             sem_post(&mutex_handshake_cpu);
 			enviar_handshake_cpu(*socketFD);
 			break;
@@ -194,15 +194,27 @@ void *handshake_cpu_serializar(int *tamanio_payload)
 }
 
 void enviar_handshake_cpu(int socketFD) {
-
 	int tamanio_payload = 0;
 	Paquete* paquete = malloc(sizeof(Paquete));
 	paquete->Payload = handshake_cpu_serializar(&tamanio_payload);
-	paquete->header.tamPayload = tamanio_payload;
-	paquete->header.tipoMensaje = ESHANDSHAKE;
-	paquete->header.emisor = SAFA;
+	cargar_header(&paquete, tamanio_payload, ESHANDSHAKE, SAFA);
+	EnviarPaquete(socketFD, paquete);
+	free(paquete);
+}
+
+void cargar_header(Paquete** paquete, int tamanio_payload, Tipo tipo_mensaje, Emisor emisor) {
+	Header header;
+	(*paquete)->header.tamPayload = tamanio_payload;
+	(*paquete)->header.tipoMensaje = tipo_mensaje;
+	(*paquete)->header.emisor = emisor;
+}
+
+void enviar_handshake_diego(int socketFD) {
+	Paquete* paquete = malloc(sizeof(Paquete));
+	cargar_header(&paquete, 0, ESHANDSHAKE, SAFA);
 
 	EnviarPaquete(socketFD, paquete);
+	free(paquete);
 }
 
 int main(void) {

@@ -52,7 +52,7 @@ void ejecutar_primer_dtb_listo(DTB* DTB_ejecutar, t_cpu* cpu_libre) {
 DTB *crear_dtb(int pid_asociado, char* path, int flag_inicializacion) {
 	DTB* dtb_nuevo = malloc(sizeof(DTB));
     dtb_nuevo->flagInicializacion = flag_inicializacion;
-    dtb_nuevo->PC = 1;
+    dtb_nuevo->PC = 0;
     switch(flag_inicializacion) {
         case 0: {
             dtb_nuevo->gdtPID = pid_asociado;
