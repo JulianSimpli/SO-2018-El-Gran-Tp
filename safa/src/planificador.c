@@ -6,9 +6,9 @@ u_int32_t procesos_en_memoria = 0;
 //Hilo planificador largo plazo
 void planificador_largo_plazo() {
     while(1) {
-        if(permite_multiprogramacion() && !lista_vacia(lista_plp)){
-            mover_primero_de_lista1_a_lista2(lista_plp, lista_listos);
-            procesos_en_memoria++;
+        if(permite_multiprogramacion() && !lista_vacia(lista_nuevos)){
+            DTB* dtb_nuevo = list_get(lista_nuevos, 0);
+            desbloquear_dtb_dummy(dtb_nuevo);
         }
     }
 }
@@ -36,14 +36,12 @@ void ejecutar_primer_dtb_listo(DTB* DTB_ejecutar, t_cpu* cpu_libre) {
     Paquete* paquete = malloc(sizeof(Paquete));
     int tamanio_DTB = 0;
     paquete->Payload = DTB_serializar(DTB_ejecutar, &tamanio_DTB);
-    paquete->header.tamPayload = tamanio_DTB;
-    paquete->header.emisor = SAFA;
 
     if(DTB_ejecutar->flagInicializacion == 0) {
-        paquete->header.tipoMensaje = ESDTBDUMMY;
+        cargar_header(&paquete, tamanio_DTB, ESDTBDUMMY, SAFA);
         EnviarPaquete(cpu_libre->socket, paquete);
     } else {
-        paquete->header.tipoMensaje = ESDTB;
+        cargar_header(&paquete, tamanio_DTB, ESDTB, SAFA);
         EnviarPaquete(cpu_libre->socket, paquete);
     }
 }
@@ -83,19 +81,20 @@ void desbloquear_dtb_dummy(DTB* dtb_nuevo) {
     DTB* dtb_dummy = malloc (sizeof(DTB));
     ArchivoAbierto* escriptorio = DTB_obtener_escriptorio(dtb_nuevo);
     dtb_dummy = crear_dtb(dtb_nuevo->gdtPID, escriptorio->path, 0);
-    list_add(lista_plp, dtb_dummy);
+    list_add(lista_listos, dtb_dummy);
 }
 
-void notificar_al_PLP(t_list* lista, int* pid) {
-    DTB* DTB_a_mover = devuelve_DTB_asociado_a_pid_de_lista(lista, pid);
-    list_add(lista_plp, DTB_a_mover);
+void notificar_al_plp(int* pid) {
+    DTB* DTB_a_mover = DTB_asociado_a_pid_de_lista(lista_nuevos, pid);
+    list_add(lista_listos, DTB_a_mover);
+    procesos_en_memoria++;
 }
 
 bool coincide_pid(int* pid, void* DTB_comparar) {
 	return ((DTB*)DTB_comparar)->gdtPID == *pid;
 }
 
-DTB* devuelve_DTB_asociado_a_pid_de_lista(t_list* lista, int* pid) {
+DTB* DTB_asociado_a_pid_de_lista(t_list* lista, int* pid) {
     bool compara_con_DTB(void* DTB) {
         return coincide_pid(pid, DTB);
     }
@@ -103,7 +102,7 @@ DTB* devuelve_DTB_asociado_a_pid_de_lista(t_list* lista, int* pid) {
 }
 // va sin parentesis coincide_pid porque tiene que llamar al puntero a la funcion despues de que hacer list_find
 
-void liberar_cpu(t_list *lista, int *socket) {
+void liberar_cpu(int *socket) {
     t_cpu* cpu_actual = cpu_con_socket(lista_cpu, socket);
     cpu_actual->estado = CPU_LIBRE;
 }
@@ -159,7 +158,6 @@ void mostrarUnProceso(void* process){
 void ejecutar(char* path) {
 	DTB* dtb_nuevo = crear_dtb(0, path, 1);
 	list_add(lista_nuevos, dtb_nuevo);
-    desbloquear_dtb_dummy(dtb_nuevo);
 }
 
 void status() { ////NO Repitas! LLama a una list_iterate

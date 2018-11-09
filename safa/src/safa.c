@@ -18,7 +18,6 @@ void inicializarVariables() {
 	stateArray[2] = lista_ejecutando;
 	stateArray[3] = lista_bloqueados;
 	stateArray[4] = lista_finalizados;
-    lista_plp = list_create();
     sem_init(&mutex_handshake_diego, 0, 0);
     sem_init(&mutex_handshake_cpu, 0, 0);
 }
@@ -95,27 +94,24 @@ void parseoConsola(char* operacion, char* primerParametro) {
 	} else printf("No se conoce la operacion\n");
 }
 
-void accion(void* socket) {
+void accion(void* socket)
+{
 	int socketFD = *(int*) socket;
 	Paquete paquete;
 	void* datos;
 	//while que recibe paquetes que envian a safa, de qué socket y el paquete mismo
 	//el socket del cliente conectado lo obtiene con la funcion servidorConcurrente en el main
-	while (RecibirPaqueteServidorSafa(socketFD, SAFA, &paquete) > 0) {
-		switch(paquete.header.emisor) {
-			case ELDIEGO: {
-
-				switch (paquete.header.tipoMensaje) {
-					case ESHANDSHAKE: {
-                    	sem_post(&mutex_handshake_diego);
-						log_info(logger, "llegada de el diego");
-						enviar_handshake_diego(socketFD);
-						break;
-					}
-				}
+	while (RecibirPaqueteServidorSafa(socketFD, SAFA, &paquete) > 0)
+	{
+		switch(paquete.header.emisor)
+		{
+			case ELDIEGO:
+			{
+				manejar_paquetes_diego(&paquete, &socketFD);
+				break;
 			}
-
-			case CPU: {
+			case CPU:
+			{
 				manejar_paquetes_CPU(&paquete, &socketFD);
 				break;
 			}
@@ -123,6 +119,47 @@ void accion(void* socket) {
 	}
 	if (paquete.Payload != NULL) free(paquete.Payload);
 	close(socketFD);
+}
+
+void manejar_paquetes_diego(Paquete *paquete, int *socketFD)
+{
+	switch (paquete->header.tipoMensaje)
+	{
+		case ESHANDSHAKE:
+		{
+			sem_post(&mutex_handshake_diego);
+			log_info(logger, "llegada de el diego");
+			enviar_handshake_diego(*socketFD);
+			break;
+		}
+		case DUMMY_SUCCES:
+		{
+			// Mensaje contiene pid, posicion en memoria, path
+			u_int32_t pid;
+			memcpy(&pid, paquete->Payload, sizeof(u_int32_t));
+			log_info(logger, "%d fue cargado en memoria", pid);
+			notificar_al_plp(&pid);
+			log_info(logger, "%d pasa a lista de procesos listos", pid);
+			liberar_cpu(socketFD);
+			log_info(logger, "Cpu %d liberada", *socketFD);
+			break;
+		}
+		case DUMMY_FAIL:
+		{
+			u_int32_t pid;
+			memcpy(&pid, paquete->Payload, sizeof(u_int32_t));
+			log_error(logger, "Fallo la carga en memoria del %d", pid);
+			break;
+		}
+		case DTB_SUCCES:
+		{
+			//Me manda pid, archivos abiertos, datos de memoria virtual para buscar el archivo.
+		}
+		case DTB_FAIL:
+		{
+			
+		}
+	}
 }
 
 void manejar_paquetes_CPU(Paquete* paquete, int* socketFD) {
@@ -138,18 +175,6 @@ void manejar_paquetes_CPU(Paquete* paquete, int* socketFD) {
 			break;
 		}
 
-    	case DUMMY_SUCCES: {
-            u_int32_t pid;
-            memcpy(&pid, paquete->Payload, sizeof(u_int32_t));
-			notificar_al_PLP(lista_nuevos, &pid);
-			liberar_cpu(lista_cpu, socketFD);
-			break;
-		}
-
-        case DUMMY_FAIL: {
-			break;
-        }
-
         case DTB_BLOQUEAR: {
 			break;
     	}
@@ -159,12 +184,12 @@ void manejar_paquetes_CPU(Paquete* paquete, int* socketFD) {
 			break;
         }
 
-        case DTB_SUCCES: {
+        case DTB_EJECUTO: {
             DTB* DTB_succes = DTB_deserializar(paquete->Payload);
             int pid = DTB_succes->gdtPID;
             // list_remove_by_condition(lista_bloqueados, (void*)coincide_pid(&pid));
 			// chequear si va a ready o a exit
-			liberar_cpu(lista_cpu, socketFD);
+			liberar_cpu(socketFD);
 			break;
         }
 	}
@@ -172,12 +197,10 @@ void manejar_paquetes_CPU(Paquete* paquete, int* socketFD) {
 
 void *handshake_cpu_serializar(int *tamanio_payload)
 {
-	void *payload = malloc(sizeof(RETARDO_PLANIF) + sizeof(QUANTUM));
+	void *payload = malloc(sizeof(QUANTUM));
 	int desplazamiento = 0;
 	int tamanio = sizeof(u_int32_t);
-	memcpy(payload, &RETARDO_PLANIF, tamanio);
-	desplazamiento += tamanio;
-	memcpy(payload + desplazamiento, &QUANTUM, tamanio);
+	memcpy(payload, &QUANTUM, tamanio);
 	desplazamiento += tamanio;
 
 	u_int32_t len_algoritmo = strlen(ALGORITMO_PLANIFICACION);
@@ -200,13 +223,6 @@ void enviar_handshake_cpu(int socketFD) {
 	cargar_header(&paquete, tamanio_payload, ESHANDSHAKE, SAFA);
 	EnviarPaquete(socketFD, paquete);
 	free(paquete);
-}
-
-void cargar_header(Paquete** paquete, int tamanio_payload, Tipo tipo_mensaje, Emisor emisor) {
-	Header header;
-	(*paquete)->header.tamPayload = tamanio_payload;
-	(*paquete)->header.tipoMensaje = tipo_mensaje;
-	(*paquete)->header.emisor = emisor;
 }
 
 void enviar_handshake_diego(int socketFD) {

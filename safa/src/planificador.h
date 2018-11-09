@@ -27,7 +27,6 @@ t_list *lista_listos;
 t_list *lista_ejecutando;
 t_list *lista_bloqueados;
 t_list *lista_finalizados;
-t_list *lista_plp;
 
 t_list* ptr2;
 t_list* ptr3;
@@ -56,12 +55,12 @@ void ejecutar_primer_dtb_listo(DTB* DTB_ejecutar, t_cpu* cpu_libre);
 DTB *crear_dtb(int pid_asociado, char *path, int flag_inicializacion);
 void liberar_dtb(void *dtb);
 void desbloquear_dtb_dummy(DTB* dtb_nuevo);
-void notificar_al_PLP(t_list *lista, int *pid);
-DTB *devuelve_DTB_asociado_a_pid_de_lista(t_list* lista, int* pid);
+void notificar_al_plp(int *pid);
+DTB *DTB_asociado_a_pid_de_lista(t_list* lista, int* pid);
 bool coincide_pid(int* pid, void* DTB);
 
 //Funciones de cpu
-void liberar_cpu(t_list *lista, int *socket);
+void liberar_cpu(int *socket);
 t_cpu* cpu_con_socket(t_list* lista, int* socket);
 bool coincide_socket(int* socket, void* cpu);
 bool esta_libre_cpu(void* cpu);

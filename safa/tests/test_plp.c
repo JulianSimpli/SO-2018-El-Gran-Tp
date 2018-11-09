@@ -10,7 +10,7 @@ context(test_plp)
 		char *path_escriptorio = "test1";
 		int numero_pid = 1;
 		int *p;
-		t_list *lista_plp;
+		t_list *lista_listos;
 		t_list *lista_nuevos;
 		
 		char *string_duplicate(char *string) {
@@ -77,9 +77,9 @@ context(test_plp)
 			}
 			return list_remove_by_condition(lista, compara_con_DTB);
 		}
-		void notificar_al_plp(t_list* lista, int* pid) {
-			DTB* DTB_a_mover = devuelve_DTB_asociado_a_pid_de_lista(lista, pid);
-			list_add(lista_plp, DTB_a_mover);
+		void notificar_al_plp(int* pid) {
+			DTB* DTB_a_mover = devuelve_DTB_asociado_a_pid_de_lista(lista_nuevos, pid);
+			list_add(lista_listos, DTB_a_mover);
 		}
 
 		void liberar_archivo_abierto(void *archivo)
@@ -99,7 +99,7 @@ context(test_plp)
 
 		before {
 			dtb_mock();
-			lista_plp = list_create();
+			lista_listos = list_create();
 			lista_nuevos = list_create();
 			numero_pid = 1;
 			list_add(lista_nuevos, dtb1);
@@ -107,7 +107,7 @@ context(test_plp)
 
 		after {
 			liberar_dtb(dtb1);
-			list_destroy(lista_plp);
+			list_destroy(lista_listos);
 			list_destroy(lista_nuevos);
 		} end
 
@@ -116,15 +116,15 @@ context(test_plp)
 		} end
 
 		it("Logra notificar al plp que se cargo ") {
-			should_int(list_size(lista_plp)) be equal to(0);
+			should_int(list_size(lista_listos)) be equal to(0);
 			should_int(list_size(lista_nuevos)) be equal to(1);
 			
 			int i = 1;
 			p = &i;
-			notificar_al_plp(lista_nuevos, p);
-			should_int(list_size(lista_plp)) be equal to(1);
+			notificar_al_plp(p);
+			should_int(list_size(lista_listos)) be equal to(1);
 
-			DTB *dtb = list_get(lista_plp, 0);
+			DTB *dtb = list_get(lista_listos, 0);
 			should_int(dtb->gdtPID) be equal to(1);
 		} end
 

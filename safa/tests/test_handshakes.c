@@ -1,6 +1,6 @@
 #include <cspecs/cspec.h>
 #include "../../Bibliotecas/dtb.h"
-#include <semaphore.h>
+//#include <semaphore.h>
 
         int RETARDO_PLANIF = 2;
         int QUANTUM = 3;
@@ -49,20 +49,30 @@ context(test_mensajes_safa) {
         int quantum;
         char *algoritmo;
 
+        void cargar_header(Paquete** paquete, int tamanio_payload, Tipo tipo_mensaje, Emisor emisor)
+        {
+            Header header;
+            (*paquete)->header.tamPayload = tamanio_payload;
+            (*paquete)->header.tipoMensaje = tipo_mensaje;
+            (*paquete)->header.emisor = emisor;
+        }
+
         void mock_handshake_cpu()
         {
             handshake_cpu = malloc(sizeof(Paquete));
-            handshake_cpu->header.tipoMensaje = ESHANDSHAKE;
-            handshake_cpu->header.tamPayload = 0;
-            handshake_cpu->header.emisor = CPU;
+            // handshake_cpu->header.tipoMensaje = ESHANDSHAKE;
+            // handshake_cpu->header.tamPayload = 0;
+            // handshake_cpu->header.emisor = CPU;
+            cargar_header(&handshake_cpu, 0, ESHANDSHAKE, CPU);
         }
 
         void mock_handshake_diego()
         {
             handshake_diego = malloc(sizeof(Paquete));
-            handshake_diego->header.tipoMensaje = ESHANDSHAKE;
-            handshake_diego->header.tamPayload = 0;
-            handshake_diego->header.emisor = ELDIEGO;
+            // handshake_diego->header.tipoMensaje = ESHANDSHAKE;
+            // handshake_diego->header.tamPayload = 0;
+            // handshake_diego->header.emisor = ELDIEGO;
+            cargar_header(&handshake_diego, 0, ESHANDSHAKE, ELDIEGO);
         }
 
         void leer_config_safa(Paquete * paquete)
@@ -74,14 +84,6 @@ context(test_mensajes_safa) {
 			memcpy(algoritmo, paquete->Payload + sizeof(u_int32_t) * 3, len);
 			algoritmo[len] = '\0';
 		}
-
-        void cargar_header(Paquete** paquete, int tamanio_payload, Tipo tipo_mensaje, Emisor emisor)
-        {
-            Header header;
-            (*paquete)->header.tamPayload = tamanio_payload;
-            (*paquete)->header.tipoMensaje = tipo_mensaje;
-            (*paquete)->header.emisor = emisor;
-        }
 
         void *handshake_cpu_serializar(int *tamanio_payload)
         {
@@ -119,7 +121,6 @@ context(test_mensajes_safa) {
         {
             Paquete* paquete = malloc(sizeof(Paquete));
             cargar_header(&paquete, 0, ESHANDSHAKE, SAFA);
-
             // EnviarPaquete(socketFD, paquete);
             return paquete;
         }
@@ -127,45 +128,15 @@ context(test_mensajes_safa) {
         void test_manejar_paquetes_CPU(Paquete *paquete, int* socketFD) {
             switch (paquete->header.tipoMensaje) {
                 case ESHANDSHAKE: {
+                    // sem_post(&mutex_handshake_cpu);
                     t_cpu *cpu_nuevo = malloc(sizeof(t_cpu));
                     cpu_nuevo->socket = *socketFD;
                     cpu_nuevo->estado = CPU_LIBRE;
                     list_add(lista_cpu, cpu_nuevo);
                     // log_info(logger, "llegada cpu nuevo en socket: %i", cpu_nuevo->socket);
-                    // sem_post(&mutex_handshake_cpu);
                     // enviar_handshake_cpu(*socketFD);
                     break;
                 }
-
-                // case DUMMY_SUCCES: {
-                //     u_int32_t pid;
-                //     memcpy(&pid, paquete->Payload, sizeof(u_int32_t));
-                //     notificar_al_PLP(lista_nuevos, &pid);
-                //     liberar_cpu(lista_cpu, socketFD);
-                //     break;
-                // }
-
-                // case DUMMY_FAIL: {
-                //     break;
-                // }
-
-                // case DTB_BLOQUEAR: {
-                //     break;
-                // }
-
-                // case PROCESS_TIMEOUT: {
-                //     // falta quantum. Chequeo si finaliza o vuelve a listo aca y en succes
-                //     break;
-                // }
-
-                // case DTB_SUCCES: {
-                //     DTB* DTB_succes = DTB_deserializar(paquete->Payload);
-                //     int pid = DTB_succes->gdtPID;
-                //     // list_remove_by_condition(lista_bloqueados, (void*)coincide_pid(&pid));
-                //     // chequear si va a ready o a exit
-                //     liberar_cpu(lista_cpu, socketFD);
-                //     break;
-                // }
             }
         }
         void test_RecibirPaquetes(Paquete paquete, int socketFD)
@@ -257,11 +228,18 @@ context(test_mensajes_safa) {
             should_string(mensaje_diego) be equal to ("Llego el diegote");
 
             Paquete *paquete = test_enviar_handshake_diego();
-            should (paquete->header.tamPayload) be equal to (0);
-            should (paquete->header.emisor) be equal to (SAFA);
-            should (paquete->header.tipoMensaje) be equal to (ESHANDSHAKE);
+            should_int(paquete->header.tamPayload) be equal to (0);
+            should_int(paquete->header.emisor) be equal to (SAFA);
+            should_int(paquete->header.tipoMensaje) be equal to (ESHANDSHAKE);
 
             free(paquete);
+        }
+        end
+        it("Despues de hacer handshake con cpu y diego sigue la ejecucion del programa")
+        {
+            // sem_wait(&mutex_handshake_cpu);
+            // sem_wait(&mutex_handshake_diego);
+            should_bool(false) be truthy;
         }
         end
     }

@@ -21,10 +21,11 @@ char* Emisores[5];
 typedef enum {CPU, FM9, ELDIEGO, MDJ, SAFA} Emisor;
 
 typedef enum {
-	ESHANDSHAKE, ESSTRING, ESDATOS, SUCCESS, ERROR,									// Mensajes generales
-	VALIDAR_ARCHIVO, CREAR_ARCHIVO, OBTENER_DATOS, GUARDAR_DATOS, BORRAR_ARCHIVO, 	// Mensajes MDJ
-	DUMMY_SUCCES, DUMMY_FAIL, DTB_SUCCES, DTB_FAIL, DTB_BLOQUEAR, PROCESS_TIMEOUT,  // Mensajes Emisor: CPU, Receptor: SAFA
-	ESDTBDUMMY, ESDTB																// Mensajes Emisor: SAFA, Receptor: CPU
+	ESHANDSHAKE, ESSTRING, ESDATOS, SUCCESS, ERROR,								   // Mensajes generales
+	VALIDAR_ARCHIVO, CREAR_ARCHIVO, OBTENER_DATOS, GUARDAR_DATOS, BORRAR_ARCHIVO, // Mensajes MDJ
+	DTB_SUCCES, DTB_FAIL, DTB_BLOQUEAR, PROCESS_TIMEOUT, 						 // Mensajes Emisor: CPU, Receptor: SAFA
+	ESDTBDUMMY, ESDTB,															// Mensajes Emisor: SAFA, Receptor: CPU
+	DUMMY_SUCCES, DUMMY_FAIL													
 	} Tipo;													
 
 typedef struct {
@@ -69,6 +70,7 @@ int RecibirPaqueteCliente(int socketFD, Emisor receptor, Paquete* paquete); //No
 int RecibirPaqueteServidorSafa(int socketFD, Emisor receptor, Paquete* paquete);
 int RecibirPaqueteServidorFm9(int socketFD, Emisor receptor, Paquete* paquete);
 int RecibirDatos(void* paquete, int socketFD, uint32_t cantARecibir);
+void cargar_header(Paquete** paquete, int tamanio_payload, Tipo tipo_mensaje, Emisor emisor);
 
 /*
 Para entender como funciona S-AFA, leer en orden:
