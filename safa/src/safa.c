@@ -7,19 +7,31 @@ void crearLogger() {
 
 void inicializarVariables() {
 
+	crear_listas();
+	llenar_lista_estados();
+    sem_init(&mutex_handshake_diego, 0, 0);
+    sem_init(&mutex_handshake_cpu, 0, 0);
+}
+
+void crear_listas()
+{
 	lista_cpu = list_create();
     lista_nuevos = list_create();
     lista_listos = list_create();
     lista_ejecutando = list_create();
     lista_bloqueados = list_create();
     lista_finalizados = list_create();
-	stateArray[0] = lista_nuevos;
-	stateArray[1] = lista_listos;
-	stateArray[2] = lista_ejecutando;
-	stateArray[3] = lista_bloqueados;
-	stateArray[4] = lista_finalizados;
-    sem_init(&mutex_handshake_diego, 0, 0);
-    sem_init(&mutex_handshake_cpu, 0, 0);
+	lista_estados = list_create();
+	lista_info_dtb = list_create();
+}
+
+void llenar_lista_estados()
+{
+	list_add_in_index(lista_estados, 0, lista_nuevos);
+	list_add_in_index(lista_estados, 1, lista_listos);
+	list_add_in_index(lista_estados, 2, lista_ejecutando);
+	list_add_in_index(lista_estados, 3, lista_bloqueados);
+	list_add_in_index(lista_estados, 4, lista_finalizados);
 }
 
 void obtenerValoresArchivoConfiguracion() {
@@ -64,7 +76,7 @@ void consola() {
 }
 
 void parseoConsola(char* operacion, char* primerParametro) {
-	int pid;
+	int pid = 0;
 	if (string_equals_ignore_case (operacion, EJECUTAR)) {
 		printf("path a ejecutar es %s\n", primerParametro);
 		ejecutar(primerParametro);
@@ -81,7 +93,7 @@ void parseoConsola(char* operacion, char* primerParametro) {
 	} else if(string_equals_ignore_case (operacion, FINALIZAR)) {
 		pid = atoi(primerParametro);
 		printf("pid a finalizar es %i\n", pid);
-		//moverAExit(pid);
+		finalizar(&pid);
 	} else if(string_equals_ignore_case (operacion, METRICAS)) {
 		if (primerParametro != NULL) {
 			pid = atoi(primerParametro);
@@ -138,6 +150,7 @@ void manejar_paquetes_diego(Paquete *paquete, int *socketFD)
 			u_int32_t pid;
 			memcpy(&pid, paquete->Payload, sizeof(u_int32_t));
 			log_info(logger, "%d fue cargado en memoria", pid);
+			bloquear_dummy(&pid);
 			notificar_al_plp(&pid);
 			log_info(logger, "%d pasa a lista de procesos listos", pid);
 			liberar_cpu(socketFD);
@@ -148,16 +161,18 @@ void manejar_paquetes_diego(Paquete *paquete, int *socketFD)
 		{
 			u_int32_t pid;
 			memcpy(&pid, paquete->Payload, sizeof(u_int32_t));
+			bloquear_dummy(&pid);
 			log_error(logger, "Fallo la carga en memoria del %d", pid);
 			break;
 		}
 		case DTB_SUCCES:
 		{
+			break;
 			//Me manda pid, archivos abiertos, datos de memoria virtual para buscar el archivo.
 		}
 		case DTB_FAIL:
 		{
-			
+			break;
 		}
 	}
 }

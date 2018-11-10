@@ -6,7 +6,7 @@ u_int32_t procesos_en_memoria = 0;
 //Hilo planificador largo plazo
 void planificador_largo_plazo() {
     while(1) {
-        if(permite_multiprogramacion() && !lista_vacia(lista_nuevos)){
+        if(permite_multiprogramacion() && !list_is_empty(lista_nuevos)){
             DTB* dtb_nuevo = list_get(lista_nuevos, 0);
             desbloquear_dtb_dummy(dtb_nuevo);
         }
@@ -17,7 +17,7 @@ void planificador_largo_plazo() {
 void planificador_corto_plazo() {
     while(1) {
         t_cpu* cpu_libre = list_find(lista_cpu, esta_libre_cpu);
-        if(cpu_libre != NULL && !lista_vacia(lista_listos)) {
+        if(cpu_libre != NULL && !list_is_empty(lista_listos)) {
             cpu_libre->estado = CPU_OCUPADA;
             DTB* DTB_ejecutar = list_remove(lista_listos, 0);
             list_add(lista_ejecutando, DTB_ejecutar);
@@ -47,21 +47,30 @@ void ejecutar_primer_dtb_listo(DTB* DTB_ejecutar, t_cpu* cpu_libre) {
 }
 
 //Funciones asociadas a DTB
-DTB *crear_dtb(int pid_asociado, char* path, int flag_inicializacion) {
+DTB *crear_dtb(int pid, char* path, int flag_inicializacion)
+{
 	DTB* dtb_nuevo = malloc(sizeof(DTB));
     dtb_nuevo->flagInicializacion = flag_inicializacion;
     dtb_nuevo->PC = 0;
     switch(flag_inicializacion) {
-        case 0: {
-            dtb_nuevo->gdtPID = pid_asociado;
+        case 0:
+        {
+            dtb_nuevo->gdtPID = pid;
             break;
         }
-        case 1: {
+        case 1:
+        {
             dtb_nuevo->gdtPID = numero_pid;
             numero_pid++;
+
+            DTB_info *info_dtb = malloc(sizeof(DTB_info));
+            info_dtb->gdtPID = dtb_nuevo->gdtPID;
+            info_dtb->estado = DTB_NUEVO;
+            list_add(lista_info_dtb, info_dtb);
             break;
         }
-        default: {
+        default:
+        {
             printf("flag_inicializacion invalida");
         }
     }
@@ -72,9 +81,31 @@ DTB *crear_dtb(int pid_asociado, char* path, int flag_inicializacion) {
 	return dtb_nuevo;
 }
 
-void liberar_dtb(void *dtb) {
+void liberar_dtb(void *dtb)
+{
+    if (((DTB *)dtb)->flagInicializacion == 1) liberar_info(dtb);
+    
     list_clean_and_destroy_elements(((DTB *)dtb)->archivosAbiertos, liberar_archivo_abierto);
     free(dtb);
+}
+
+void liberar_info(void *dtb)
+{
+    int pid = ((DTB *)dtb)->gdtPID;
+    bool coincide_info(void *info_dtb)
+    {
+        return coincide_pid_info(pid, info_dtb);
+    }
+    list_remove_and_destroy_by_condition(lista_info_dtb, coincide_info, free);
+}
+
+void bloquear_dummy(int *pid)
+{
+    bool compara_dummy(void *dtb)
+    {
+        return coincide_pid(*pid, dtb);
+    }
+    list_remove_and_destroy_by_condition(lista_listos, compara_dummy, liberar_dtb);
 }
 
 void desbloquear_dtb_dummy(DTB* dtb_nuevo) {
@@ -85,24 +116,41 @@ void desbloquear_dtb_dummy(DTB* dtb_nuevo) {
 }
 
 void notificar_al_plp(int* pid) {
-    DTB* DTB_a_mover = DTB_asociado_a_pid_de_lista(lista_nuevos, pid);
+    DTB* DTB_a_mover = DTB_asociado_a_pid(lista_nuevos, *pid);
     list_add(lista_listos, DTB_a_mover);
     procesos_en_memoria++;
 }
 
-bool coincide_pid(int* pid, void* DTB_comparar) {
-	return ((DTB*)DTB_comparar)->gdtPID == *pid;
+bool coincide_pid(int pid, void* DTB_comparar)
+{
+	return ((DTB *)DTB_comparar)->gdtPID == pid;
 }
 
-DTB* DTB_asociado_a_pid_de_lista(t_list* lista, int* pid) {
-    bool compara_con_DTB(void* DTB) {
+bool coincide_pid_info(int pid, void *info_dtb)
+{
+    return ((DTB_info *)info_dtb)->gdtPID == pid;
+}
+
+DTB_info *info_asociada_a_pid(t_list *lista, int pid)
+{
+    bool compara_con_info(void *info_dtb)
+    {
+        return coincide_pid_info(pid, info_dtb);
+    }
+    return list_find(lista, compara_con_info);
+}
+
+DTB* DTB_asociado_a_pid(t_list* lista, int pid)
+{
+    bool compara_con_dtb(void* DTB) {
         return coincide_pid(pid, DTB);
     }
-    return list_remove_by_condition(lista, compara_con_DTB);
+    return list_remove_by_condition(lista, compara_con_dtb);
 }
 // va sin parentesis coincide_pid porque tiene que llamar al puntero a la funcion despues de que hacer list_find
 
-void liberar_cpu(int *socket) {
+void liberar_cpu(int *socket)
+{
     t_cpu* cpu_actual = cpu_con_socket(lista_cpu, socket);
     cpu_actual->estado = CPU_LIBRE;
 }
@@ -128,14 +176,9 @@ bool permite_multiprogramacion() {
     return procesos_en_memoria < MULTIPROGRAMACION;
 }
 
-bool lista_vacia(t_list* lista) {
-    return list_size(lista) == 0;
-}
-
 //
 
 void desplegar_lista(t_list *listaProcesos){ //Modificar y usar con list_iterate y printf
-
 	mostrarProcesos(listaProcesos);
 }
 
@@ -178,31 +221,65 @@ printf("\nCola de Finalizados- cant. de procesos: %d\nInfo. procesos en esta col
 desplegar_lista(lista_finalizados);
 
 }
-/*
-void finalizar(int PID){
-    ptr3=NULL;
 
-    for(i=0; i<5; i++){
-        ptr3 = list_find(stateArray[i], PID);   //Busco a una PCB que tenga ese PID
-        if(ptr3 != NULL){
-                if(stateArray[i]== ESTADO_EJECUTANDO){
-                    printf("\n El proceso de PID = %d se encuentra en Ejecucion\n", PID);
-                    //Esperar que termine de ejecutar
-                    //queue_push(Finalizar, ptr3);  //Cuando termine la ejecucion
-                    //list_remove_and_destroy_by_condition(, ,); //eliminarlo de la cola
-                    printf("\n El proceso de PID %d se ha movido a la cola de Finalizados\n", PID);
-                }else{
-                    queue_push(ptr3, (void*)ESTADO_FINALIZADO);
-                    //list_remove_and_destroy_by_condition(, ,); //eliminarlo de la cola en que se encuentre
-                    printf("\n El proceso de PID %d se ha movido a la cola de Finalizados\n", PID);
-                }
-        }else if(i==4 && ptr3==NULL){
-            printf("\n El proceso de PID %d no se encontro en las colas de estados\n", PID);
+void finalizar(int *pid)
+{
+    for(int i = 0; i < (list_size(lista_estados)); i++)
+    {   
+        bool compara_con_dtb(void* dtb)
+        {
+            return coincide_pid(*pid, dtb);
         }
-
+        t_list *lista_actual = list_get(lista_estados, i);
+        DTB *dtb_finalizar = list_find(lista_actual, compara_con_dtb);
+        if(dtb_finalizar != NULL)
+        {
+            DTB_info *info_dtb = info_asociada_a_pid(lista_info_dtb, dtb_finalizar->gdtPID);
+            manejar_finalizar(pid, info_dtb, dtb_finalizar, lista_actual);
+            break;
+        }
+        else if(i == 4 && dtb_finalizar == NULL) printf("El proceso %d no esta en ninguna cola", *pid);
     }
 }
 
-void metricas()
+void manejar_finalizar(int *pid, DTB_info *info_dtb, DTB *dtb_finalizar, t_list *lista_actual)
+{
+    switch(info_dtb->estado)
+    {
+        case DTB_EJECUTANDO:
+        {
+            printf("\n El proceso de pid = %d se encuentra en Ejecucion\n", *pid);
+            //Esperar que termine de ejecutar
+            list_add(lista_finalizados, dtb_finalizar);  //Cuando termine la ejecucion
+            liberar_dtb(dtb_finalizar);
+            printf("\n El proceso de PID %d se ha movido a la cola de Finalizados\n", *pid);
+            break;
+        }
+        case DTB_BLOQUEADO:
+        {
+            break;
+        }
+        case DTB_LISTO:
+        {
+            break;
+        }
+        case DTB_NUEVO:
+        {
+            printf("El proceso %d se encuentra en la cola de nuevos", *pid);
+            break;
+        }
+        case DTB_FINALIZADO:
+        {
+            printf("El proceso %d ya esta en cola de finalizados", *pid);
+            liberar_dtb(dtb_finalizar);
+            break;
+        }
+        default:
+        {
+            printf("El proceso %d no esta en ninguna cola", *pid);
+            break;
+        }
+    }
+}
 
-*/
+void metricas();

@@ -26,6 +26,8 @@ t_log *logger;
 // Declaracion de funciones
 void crearLogger();
 void inicializarVariables();
+void crear_listas();
+void llenar_lista_estados();
 void obtenerValoresArchivoConfiguracion();
 void imprimirArchivoConfiguracion();
 void consola();
@@ -38,3 +40,4 @@ void enviar_handshake_cpu(int socketFD);
 void enviar_handshake_diego(int socketFD);
 
 #endif /* SAFA_H_ */
+

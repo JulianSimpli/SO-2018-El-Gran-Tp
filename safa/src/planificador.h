@@ -10,11 +10,11 @@ typedef enum {
 	CPU_LIBRE, CPU_OCUPADA
 } Estado;
 
-typedef struct DTB_local {
-	u_int32_t pid;
+typedef struct DTB_info {
+	u_int32_t gdtPID;
 	Estado estado;
 	time_t tiempo_respuesta;
-} DTB_local;
+} DTB_info;
 
 typedef struct {
 	int socket;
@@ -27,6 +27,8 @@ t_list *lista_listos;
 t_list *lista_ejecutando;
 t_list *lista_bloqueados;
 t_list *lista_finalizados;
+t_list *lista_estados;
+t_list *lista_info_dtb;
 
 t_list* ptr2;
 t_list* ptr3;
@@ -34,9 +36,6 @@ t_list* ptr3;
 u_int32_t numero_pid;
 u_int32_t procesos_en_memoria;
 int MULTIPROGRAMACION; //La carga la config y SAFA al inicializarse
-
-//Vector de estructuras para buscar un PID y finalizarlo
-t_list *stateArray[5];
 
 //Funciones
 //Hilo planificador largo plazo
@@ -52,12 +51,16 @@ void planificador_corto_plazo();
 void ejecutar_primer_dtb_listo(DTB* DTB_ejecutar, t_cpu* cpu_libre);
 
 //Funciones de DTB
-DTB *crear_dtb(int pid_asociado, char *path, int flag_inicializacion);
+DTB *crear_dtb(int pid, char *path, int flag_inicializacion);
 void liberar_dtb(void *dtb);
+void liberar_info(void *dtb);
 void desbloquear_dtb_dummy(DTB* dtb_nuevo);
+void bloquear_dummy(int *pid);
 void notificar_al_plp(int *pid);
-DTB *DTB_asociado_a_pid_de_lista(t_list* lista, int* pid);
-bool coincide_pid(int* pid, void* DTB);
+DTB *DTB_asociado_a_pid(t_list* lista, int pid);
+bool coincide_pid(int pid, void* DTB);
+DTB_info *info_asociada_a_pid(t_list *lista, int pid);
+bool coincide_pid_info(int pid, void *info_dtb);
 
 //Funciones de cpu
 void liberar_cpu(int *socket);
@@ -68,7 +71,6 @@ t_cpu *cpu_libre();
 
 //Funciones booleanas
 bool permite_multiprogramacion();
-bool lista_vacia(t_list* lista);
 
 //
 void desplegarCola(DTB* listaProcesos);
@@ -78,7 +80,9 @@ void mostrarUnProceso(void* process);
 //Funciones de Consola
 void ejecutar(char* path);
 void status();
-void finalizar(int PID);
+// void status(int pid);
+void finalizar(int *pid);
+void manejar_finalizar(int *pid, DTB_info *info_dtb, DTB *dtb_finalizar, t_list *lista_actual);
 void metricas();
 
 #endif /* PLANIFICADOR_H_ */
