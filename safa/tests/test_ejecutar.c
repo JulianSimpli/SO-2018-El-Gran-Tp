@@ -1,6 +1,16 @@
 #include <cspecs/cspec.h>
 #include "../../Bibliotecas/dtb.h"
-#include <stdio.h>
+
+typedef enum {
+	DTB_NUEVO, DTB_LISTO, DTB_EJECUTANDO, DTB_BLOQUEADO, DTB_FINALIZADO,
+	CPU_LIBRE, CPU_OCUPADA
+} Estado;
+
+typedef struct DTB_info {
+	u_int32_t gdtPID;
+	Estado estado;
+	// time_t tiempo_respuesta;
+} DTB_info;
 
 context(test_ejecutar)
 {
@@ -9,8 +19,10 @@ context(test_ejecutar)
         char *path_escriptorio1;
 		char *path_escriptorio2;
 		int numero_pid = 1;
-		t_list *lista_plp;
+		t_list *lista_listos;
 		t_list *lista_nuevos;
+		t_list *lista_info_dtb;
+
 
         char *string_duplicate(char *string)
         {
@@ -40,28 +52,27 @@ context(test_ejecutar)
 			return list_get(dtb->archivosAbiertos, 0);
 		}
 
-		DTB *crear_dtb(int pid_asociado, char* path, int flag_inicializacion)
-        {
+		DTB *crear_dtb(int pid, char* path, int flag_inicializacion) {
 			DTB* dtb_nuevo = malloc(sizeof(DTB));
 			dtb_nuevo->flagInicializacion = flag_inicializacion;
 			dtb_nuevo->PC = 0;
 			switch(flag_inicializacion) {
-				case 0:
-                {
-					dtb_nuevo->gdtPID = pid_asociado;
+				case 0: {
+					dtb_nuevo->gdtPID = pid;
 					break;
 				}
-				case 1:
-                {
+				case 1: {
 					dtb_nuevo->gdtPID = numero_pid;
 					numero_pid++;
+
+					DTB_info *info_dtb = malloc(sizeof(DTB_info));
+					info_dtb->gdtPID = dtb_nuevo->gdtPID;
+					info_dtb->estado = DTB_NUEVO;
+					list_add(lista_info_dtb, info_dtb);
 					break;
 				}
-				default:
-                {
+				default: {
 					printf("flag_inicializacion invalida");
-					free(dtb_nuevo);
-					return dtb_nuevo;
 				}
 			}
 
@@ -71,19 +82,24 @@ context(test_ejecutar)
 			return dtb_nuevo;
 		}
 
-        void desbloquear_dtb_dummy(DTB* dtb_nuevo)
-        {
-			DTB* dtb_dummy = malloc (sizeof(DTB));
-			ArchivoAbierto* escriptorio = DTB_obtener_escriptorio(dtb_nuevo);
-			dtb_dummy = crear_dtb(dtb_nuevo->gdtPID, escriptorio->path, 0);
-			list_add(lista_plp, dtb_dummy);
-		}
-		
 		void ejecutar(char* path)
-        {
+		{
 			DTB* dtb_nuevo = crear_dtb(0, path, 1);
 			list_add(lista_nuevos, dtb_nuevo);
-			desbloquear_dtb_dummy(dtb_nuevo);
+		}
+
+		bool coincide_pid_info(int pid, void *info_dtb)
+		{
+			return ((DTB_info *)info_dtb)->gdtPID == pid;
+		}
+
+		DTB_info *info_asociada_a_pid(t_list *lista, int pid)
+		{
+			bool compara_con_info(void *info_dtb)
+			{
+				return coincide_pid_info(pid, info_dtb);
+			}
+			return list_find(lista, compara_con_info);
 		}
 
 		void liberar_archivo_abierto(void *archivo)
@@ -92,8 +108,20 @@ context(test_ejecutar)
 			free(archivo);
 		}
 
+		void liberar_info(void *dtb)
+		{
+			int pid = ((DTB *)dtb)->gdtPID;
+			bool coincide_info(void *info_dtb)
+			{
+				return coincide_pid_info(pid, info_dtb);
+			}
+			list_remove_and_destroy_by_condition(lista_info_dtb, coincide_info, free);
+		}
+
 		void liberar_dtb(void *dtb)
-        {
+		{
+			if (((DTB *)dtb)->flagInicializacion == 1) liberar_info(dtb);
+			
 			list_clean_and_destroy_elements(((DTB *)dtb)->archivosAbiertos, liberar_archivo_abierto);
 			free(dtb);
 		}
@@ -101,15 +129,17 @@ context(test_ejecutar)
         before
         {
             lista_nuevos = list_create();
-            lista_plp = list_create();
+            lista_listos = list_create();
+			lista_info_dtb = list_create();
 			path_escriptorio1 = "path1";
 			path_escriptorio2 = "path2";
         } end
 
         after 
         {
-            list_destroy_and_destroy_elements(lista_nuevos,liberar_dtb);
-            list_destroy_and_destroy_elements(lista_plp, liberar_dtb);
+            list_destroy_and_destroy_elements(lista_nuevos, liberar_dtb);
+            list_destroy_and_destroy_elements(lista_listos, liberar_dtb);
+			list_destroy(lista_info_dtb);
             numero_pid = 1;
         } end
 
@@ -136,27 +166,32 @@ context(test_ejecutar)
 		}
         end
 
-		it("ejecutar path agrega dtb_dummy a lista plp") {
-            should_int(list_size(lista_plp)) be equal to (0);
+		it("ejecutar path agrega dtb_info a lista_info_dtb") {
+            should_int(list_size(lista_info_dtb)) be equal to (0);
 			ejecutar(path_escriptorio1);
-            should_int(list_size(lista_plp)) be equal to (1);
+            should_int(list_size(lista_info_dtb)) be equal to (1);
 		}
         end
 
-        it("ejecutar path crea dtb_dummy con los campos correctos")
+        it("ejecutar path crea dtb_info con los campos correctos")
         {
             ejecutar(path_escriptorio1);
 
-            DTB *dtb_dummy = list_get(lista_plp, 0);
-			should_int(dtb_dummy->gdtPID) be equal to (1);
-            should_int(dtb_dummy->PC) be equal to (0);
-            should_int(dtb_dummy->flagInicializacion) be equal to (0);
-            
-            ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb_dummy);
-            should_string(escriptorio->path) be equal to ("path1");
-            should_int(escriptorio->cantLineas) be equal to (0);
+            DTB_info *info_dtb = list_get(lista_info_dtb, 0);
+			should_int(info_dtb->gdtPID) be equal to (1);
+			should_int(info_dtb->estado) be equal to (DTB_NUEVO);
         }
         end
+
+		it("Puede encontrar dtb_info a partir de pid")
+		{
+			ejecutar(path_escriptorio1);
+			DTB_info *info_dtb = info_asociada_a_pid(lista_info_dtb, 1);
+
+			should_int(info_dtb->gdtPID) be equal to (1);
+			should_int(info_dtb->estado) be equal to (DTB_NUEVO);
+		}
+		end
     }
     end
 }

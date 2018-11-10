@@ -23,9 +23,9 @@ typedef enum {CPU, FM9, ELDIEGO, MDJ, SAFA} Emisor;
 typedef enum {
 	ESHANDSHAKE, ESSTRING, ESDATOS, SUCCESS, ERROR,								   // Mensajes generales
 	VALIDAR_ARCHIVO, CREAR_ARCHIVO, OBTENER_DATOS, GUARDAR_DATOS, BORRAR_ARCHIVO, // Mensajes MDJ
-	DTB_SUCCES, DTB_FAIL, DTB_BLOQUEAR, PROCESS_TIMEOUT, 						 // Mensajes Emisor: CPU, Receptor: SAFA
-	ESDTBDUMMY, ESDTB,															// Mensajes Emisor: SAFA, Receptor: CPU
-	DUMMY_SUCCES, DUMMY_FAIL													
+	DTB_EJECUTO, DTB_BLOQUEAR, PROCESS_TIMEOUT, 						 		// Emisor: CPU, Receptor: SAFA
+	DUMMY_SUCCES, DUMMY_FAIL, DTB_SUCCES, DTB_FAIL,							 	// Emisor: Diego, Receptor: SAFA
+	ESDTBDUMMY, ESDTB															// Emisor: SAFA, Receptor: CPU												
 	} Tipo;													
 
 typedef struct {
