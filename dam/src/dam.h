@@ -33,6 +33,7 @@ void enviar_mensaje(Mensaje mensaje);
 int escuchar_conexiones();
 int crear_socket_mdj();
 int ligar_socket();
+int recibir_todo(Paquete *paquete, int socketFD, uint32_t cantARecibir);
 
 // Finalmente, los prototipos de las funciones que vamos a implementar
 void configure_logger();
@@ -47,7 +48,7 @@ int crear_socket_safa();
 
 void enviar_mensaje(Mensaje mensaje){
 
-  log_debug(logger, "Voy a enviar el mensaje del tipo %d", mensaje.paquete.header.tipoMensaje);
+	log_debug(logger, "Voy a enviar el mensaje del tipo %d", mensaje.paquete.header.tipoMensaje);
 
 	int mensaje_enviado = send(mensaje.socket, &mensaje.paquete, sizeof(Paquete), 0);
 
