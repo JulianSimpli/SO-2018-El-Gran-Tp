@@ -99,11 +99,11 @@ context(test_plp)
 			return ((DTB_info *)info_dtb)->gdtPID == pid;
 		}
 
-		DTB_info *info_asociada_a_pid(t_list *lista, int pid)
+		DTB_info *info_asociada_a_dtb(t_list *lista, DTB *dtb)
 		{
 			bool compara_con_info(void *info_dtb)
 			{
-				return coincide_pid_info(pid, info_dtb);
+				return coincide_pid_info(dtb->gdtPID, info_dtb);
 			}
 			return list_find(lista, compara_con_info);
 		}
@@ -221,7 +221,7 @@ context(test_plp)
             should_string(escriptorio->path) be equal to ("path1");
             should_int(escriptorio->cantLineas) be equal to (0);
 
-			DTB_info * info_dtb = list_get(lista_info_dtb,0);
+			DTB_info * info_dtb = info_asociada_a_dtb(lista_info_dtb, dtb1);
 			should_int(info_dtb->gdtPID) be equal to (1);
 			should_int(info_dtb->estado) be equal to (DTB_NUEVO);
 		} end

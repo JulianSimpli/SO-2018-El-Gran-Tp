@@ -72,6 +72,8 @@ void consola() {
 		printf("operacion es %s\n", lineaSpliteada[0]);
 		parseoConsola(lineaSpliteada[0], lineaSpliteada[1]);
 		free(linea);
+		free(lineaSpliteada[0]);
+		free(lineaSpliteada[1]);
 	}
 }
 
@@ -84,12 +86,11 @@ void parseoConsola(char* operacion, char* primerParametro) {
 		if (primerParametro != NULL) {
 			pid = atoi(primerParametro);
 			printf("pid a mostrar status es %i\n", pid);
-			//mostrarDatosDe(pid);
+			gdt_status(&pid);
 		} else {
 			printf("status no trajo parametros. Se mostraran estados de las colas\n");
-			//mostrarEstadosDeColas();
+			status();
 		}
-		printf ("primerParametro es: %s\n", primerParametro);
 	} else if(string_equals_ignore_case (operacion, FINALIZAR)) {
 		pid = atoi(primerParametro);
 		printf("pid a finalizar es %i\n", pid);
@@ -146,7 +147,7 @@ void manejar_paquetes_diego(Paquete *paquete, int *socketFD)
 		}
 		case DUMMY_SUCCES:
 		{
-			// Mensaje contiene pid, posicion en memoria, path
+			// Mensaje contiene pid, posicion en memoria, largo path, cantidad lineas
 			u_int32_t pid;
 			memcpy(&pid, paquete->Payload, sizeof(u_int32_t));
 			log_info(logger, "%d fue cargado en memoria", pid);

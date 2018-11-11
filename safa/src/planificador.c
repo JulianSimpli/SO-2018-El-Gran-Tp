@@ -3,14 +3,22 @@
 u_int32_t numero_pid = 1;
 u_int32_t procesos_en_memoria = 0;
 
+char* Estados[5] = {"Nuevo", "Listo", "Ejecutando", "Bloqueado", "Finalizado"};
+
 //Hilo planificador largo plazo
 void planificador_largo_plazo() {
     while(1) {
         if(permite_multiprogramacion() && !list_is_empty(lista_nuevos)){
             DTB* dtb_nuevo = list_get(lista_nuevos, 0);
-            desbloquear_dtb_dummy(dtb_nuevo);
+            if(!dummy_creado(dtb_nuevo)) desbloquear_dtb_dummy(dtb_nuevo);
         }
     }
+}
+
+bool dummy_creado(void *_dtb)
+{
+    DTB *dtb = (DTB *)_dtb;
+    return (DTB_asociado_a_pid(lista_listos, dtb->gdtPID) != NULL) || (DTB_asociado_a_pid(lista_ejecutando, dtb->gdtPID) != NULL);
 }
 
 //Hilo planificador corto plazo
@@ -131,11 +139,11 @@ bool coincide_pid_info(int pid, void *info_dtb)
     return ((DTB_info *)info_dtb)->gdtPID == pid;
 }
 
-DTB_info *info_asociada_a_pid(t_list *lista, int pid)
+DTB_info *info_asociada_a_dtb(t_list *lista, DTB* dtb)
 {
     bool compara_con_info(void *info_dtb)
     {
-        return coincide_pid_info(pid, info_dtb);
+        return coincide_pid_info(dtb->gdtPID, info_dtb);
     }
     return list_find(lista, compara_con_info);
 }
@@ -178,25 +186,57 @@ bool permite_multiprogramacion() {
 
 //
 
-void desplegar_lista(t_list *listaProcesos){ 
-	mostrarProcesos(listaProcesos);
+DTB *buscar_dtb_en_todos_lados(int *pid, DTB_info **info_dtb, t_list **lista_actual)
+{
+    DTB *dtb_encontrado;
+    for(int i = 0; i < (list_size(lista_estados)); i++)
+    {   
+        *lista_actual = list_get(lista_estados, i);
+        dtb_encontrado = DTB_asociado_a_pid(*lista_actual, *pid);
+        if(dtb_encontrado != NULL)
+        {
+            *info_dtb = info_asociada_a_dtb(lista_info_dtb, dtb_encontrado);
+            break;
+        }
+    }
+    return dtb_encontrado;
 }
 
-
-void mostrarProcesos(t_list* listaProcesos){
-	list_iterate(listaProcesos, mostrarUnProceso);
-	printf("\n\n");
+void mostrar_proceso_reducido(void *_dtb)
+{
+    DTB *dtb = (DTB *)_dtb;
+    printf( "PID: %i\n"
+            "Archivos Abiertos: %i\n",
+            dtb->gdtPID, list_size(dtb->archivosAbiertos));
 }
 
-void mostrarUnProceso(void* process){ 
-	 DTB* proceso = (DTB*) process;
-     ArchivoAbierto archivos_abiertos = DTB_obtener_escriptorio(proceso);
-	 printf("\ngdtPID: %i", proceso->gdtPID);
-     printf("\nflagInicializacion: %i", proceso->flagInicializacion);
-     pritnf("\nProgram Counter: %i", proceso->PC);
-     printf("\npath de DTB: %s y cantidad de lineas: %i", archivos_abiertos->path, archivos_abiertos->cantLineas;
-     printf("\n");
+void mostrar_proceso(void *_dtb, void *_info_dtb)
+{ 
+	DTB* dtb = (DTB *) _dtb;
+    DTB_info *info_dtb = (DTB_info *) _info_dtb;
+	printf( "Status Proceso:\n"
+            "PID: %i\n"
+            "Flag inicializacion: %i\n"
+            "Program Counter: %i\n"
+            "Estado: %s\n"
+            // "Tiempo de respuesta: %lu\n"
+            "Archivos abiertos: %i\n"
+            "Escriptorio:\n",
+            dtb->gdtPID, dtb->flagInicializacion, dtb->PC,
+            Estados[info_dtb->estado],
+            // info_dtb->tiempo_respuesta,
+            list_size(dtb->archivosAbiertos));
 
+    list_iterate(dtb->archivosAbiertos, mostrar_archivo);
+}
+
+void mostrar_archivo(void *_archivo)
+{
+    ArchivoAbierto *archivo = (ArchivoAbierto *) _archivo;
+    printf( "Directorio: %s\n"
+            "Cantidad de lineas: %i\n",
+            // Agregar si se agregan campos a ArchivoAbierto
+            archivo->path, archivo->cantLineas);
 }
 
 //Funciones de Consola
@@ -205,68 +245,36 @@ void ejecutar(char* path) {
 	list_add(lista_nuevos, dtb_nuevo);
 }
 
-
-
-DTB* buscar_dtb_por_pid (void* pid_recibido, int index ){ //Usada en status(pid) y finalizar(pid)
-
-    int pid = *pid_recibido;
-    int i = index;
-
-    bool compara_con_dtb(void* dtb)
+void status()
+{
+    for(int i = 0; i < (list_size(lista_estados)); i++)
     {
-        return coincide_pid(pid, dtb);
-    }
-
-    t_list *lista_actual = list_get(lista_estados, i);
-    DTB *dtb_encontrado  =  list_find(lista_actual, compara_con_dtb);
-    return dtb_encontrado;
-}
-
-
-char nombre_estados[5][12]={"Nuevos","Listos","Ejecutando","Bloqueados", "Finalizados"};
-
-void status() { 
-
-    for(i=0; i<(list_size(lista_estados)); i++){
-        t_list *lista_aux = list_get(lista_estados, i);
-        printf("\nCantidad de procesos en cola de %s: %i", nombre_estados[i], list_size(lista_aux));
-        printf("\nInformacion asociada a los procesos de la lista: \n");
-        desplegar_lista(lista_aux);
-
-    }
-
-}
-
-void status(int* pid){
-    DTB* dtb_encontrado=NULL;
-    int i = 0;
-    while(dtb_encontrado == NULL &&  (i < (list_size(lista_estados))) )
-    {
-        dtb_encontrado = buscar_dtb_por_pid(pid, i);
-        i++;
-    }
-    if(dtb_encontrado != NULL){  
-        mostrarUnProceso(dtb_encontrado);
-    }else{
-        printf("\nEl proceso no se encuentra en el sistema\n");
+        t_list *lista_mostrar = list_get(lista_estados, i);
+        printf("Cantidad de procesos en Estado %s: %i\n", Estados[i], list_size(lista_mostrar));
+        // if(list_size(lista_mostrar) != 0)printf("Informacion asociada a los procesos de la lista:\n");
+	    if (list_size(lista_mostrar) != 0) list_iterate(lista_mostrar, mostrar_proceso_reducido);
+        // Informacion complementaria de cada cola??
     }
 }
 
+void gdt_status(int* pid)
+{
+    t_list *lista_actual;
+    DTB_info *info_dtb;
+    DTB *dtb_status = buscar_dtb_en_todos_lados(pid, &info_dtb, &lista_actual);
 
+    if (dtb_status != NULL) mostrar_proceso(dtb_status, info_dtb);
+    else printf("El proceso %i no esta en el sistema\n", *pid);
+}
 
 void finalizar(int *pid)
 {
-    for(int i = 0; i < (list_size(lista_estados)); i++) 
-    {   
-        if( (buscar_dtb_por_pid(pid, i)) != NULL)
-    {
-        DTB_info *info_dtb = info_asociada_a_pid(lista_info_dtb, dtb_finalizar->gdtPID);
-        manejar_finalizar(pid, info_dtb, dtb_finalizar, lista_actual);
-        break;
-    }
-        
-        else if(i == 4 && dtb_finalizar == NULL) printf("El proceso %d no esta en ninguna cola", *pid);
-    }
+    t_list *lista_actual;
+    DTB_info *info_dtb;
+    DTB *dtb_finalizar = buscar_dtb_en_todos_lados(pid, &info_dtb, &lista_actual);
+    
+    if (dtb_finalizar != NULL) manejar_finalizar(pid, info_dtb, dtb_finalizar, lista_actual);
+    else printf("El proceso %i no esta en el sistema\n", *pid);
 }
 
 void manejar_finalizar(int *pid, DTB_info *info_dtb, DTB *dtb_finalizar, t_list *lista_actual)
@@ -292,18 +300,18 @@ void manejar_finalizar(int *pid, DTB_info *info_dtb, DTB *dtb_finalizar, t_list 
         }
         case DTB_NUEVO:
         {
-            printf("El proceso %d se encuentra en la cola de nuevos", *pid);
+            printf("El proceso %d se encuentra en la cola de nuevos\n", *pid);
             break;
         }
         case DTB_FINALIZADO:
         {
-            printf("El proceso %d ya esta en cola de finalizados", *pid);
+            printf("El proceso %d ya esta en cola de finalizados\n", *pid);
             liberar_dtb(dtb_finalizar);
             break;
         }
         default:
         {
-            printf("El proceso %d no esta en ninguna cola", *pid);
+            printf("El proceso %d no esta en ninguna cola\n", *pid);
             break;
         }
     }

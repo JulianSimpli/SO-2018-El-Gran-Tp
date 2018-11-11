@@ -1,5 +1,6 @@
 #include <cspecs/cspec.h>
 #include "../../Bibliotecas/dtb.h"
+#include <stdio.h>
 
 typedef enum {
 	DTB_NUEVO, DTB_LISTO, DTB_EJECUTANDO, DTB_BLOQUEADO, DTB_FINALIZADO,
@@ -88,16 +89,29 @@ context(test_ejecutar)
 			list_add(lista_nuevos, dtb_nuevo);
 		}
 
+		bool coincide_pid(int pid, void* DTB_comparar)
+		{
+			return ((DTB *)DTB_comparar)->gdtPID == pid;
+		}
+
+		DTB* DTB_asociado_a_pid(t_list* lista, int pid)
+		{
+			bool compara_con_dtb(void* DTB) {
+				return coincide_pid(pid, DTB);
+			}
+			return list_remove_by_condition(lista, compara_con_dtb);
+		}
+
 		bool coincide_pid_info(int pid, void *info_dtb)
 		{
 			return ((DTB_info *)info_dtb)->gdtPID == pid;
 		}
 
-		DTB_info *info_asociada_a_pid(t_list *lista, int pid)
+		DTB_info *info_asociada_a_dtb(t_list *lista, DTB* dtb)
 		{
 			bool compara_con_info(void *info_dtb)
 			{
-				return coincide_pid_info(pid, info_dtb);
+				return coincide_pid_info(dtb->gdtPID, info_dtb);
 			}
 			return list_find(lista, compara_con_info);
 		}
@@ -186,7 +200,9 @@ context(test_ejecutar)
 		it("Puede encontrar dtb_info a partir de pid")
 		{
 			ejecutar(path_escriptorio1);
-			DTB_info *info_dtb = info_asociada_a_pid(lista_info_dtb, 1);
+			DTB *dtb = DTB_asociado_a_pid(lista_nuevos, 1);
+
+			DTB_info *info_dtb = info_asociada_a_dtb(lista_info_dtb, dtb);
 
 			should_int(info_dtb->gdtPID) be equal to (1);
 			should_int(info_dtb->estado) be equal to (DTB_NUEVO);

@@ -10,6 +10,8 @@ typedef enum {
 	CPU_LIBRE, CPU_OCUPADA
 } Estado;
 
+char *Estados[5];
+
 typedef struct DTB_info {
 	u_int32_t gdtPID;
 	Estado estado;
@@ -28,7 +30,6 @@ t_list *lista_ejecutando;
 t_list *lista_bloqueados;
 t_list *lista_finalizados;
 t_list *lista_estados;
-t_list *vector_estados[5];
 t_list *lista_info_dtb;
 
 t_list* ptr2;
@@ -60,8 +61,10 @@ void bloquear_dummy(int *pid);
 void notificar_al_plp(int *pid);
 DTB *DTB_asociado_a_pid(t_list* lista, int pid);
 bool coincide_pid(int pid, void* DTB);
-DTB_info *info_asociada_a_pid(t_list *lista, int pid);
+DTB_info *info_asociada_a_dtb(t_list *lista, DTB *dtb);
 bool coincide_pid_info(int pid, void *info_dtb);
+
+DTB *buscar_dtb_en_todos_lados(int *pid, DTB_info **info_dtb, t_list **lista_actual);
 
 //Funciones de cpu
 void liberar_cpu(int *socket);
@@ -72,16 +75,18 @@ t_cpu *cpu_libre();
 
 //Funciones booleanas
 bool permite_multiprogramacion();
+bool dummy_creado(void *_dtb);
 
 //
-void desplegarCola(DTB* listaProcesos);
-void mostrarProcesos(t_list* listaProcesos);
-void mostrarUnProceso(void* process);
+void mostrar_procesos(t_list* lista_procesos);
+void mostrar_proceso_reducido(void *_dtb);
+void mostrar_proceso(void *_dtb, void *_info_dtb);
+void mostrar_archivo(void *_archivo);
 
 //Funciones de Consola
 void ejecutar(char* path);
 void status();
-void status(int* pid);
+void gdt_status(int* pid);
 void finalizar(int *pid);
 void manejar_finalizar(int *pid, DTB_info *info_dtb, DTB *dtb_finalizar, t_list *lista_actual);
 void metricas();
