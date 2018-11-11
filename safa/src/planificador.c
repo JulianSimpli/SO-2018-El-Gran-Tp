@@ -178,7 +178,7 @@ bool permite_multiprogramacion() {
 
 //
 
-void desplegar_lista(t_list *listaProcesos){ //Modificar y usar con list_iterate y printf
+void desplegar_lista(t_list *listaProcesos){ 
 	mostrarProcesos(listaProcesos);
 }
 
@@ -188,11 +188,13 @@ void mostrarProcesos(t_list* listaProcesos){
 	printf("\n\n");
 }
 
-void mostrarUnProceso(void* process){
+void mostrarUnProceso(void* process){ 
 	 DTB* proceso = (DTB*) process;
-	 printf("\ngdtPID: %i\n", proceso->gdtPID);
-     printf("flagInicializacion: %i\n", proceso->flagInicializacion);
-     //printf("\nfileDir: %s", proceso->????);
+     ArchivoAbierto archivos_abiertos = DTB_obtener_escriptorio(proceso);
+	 printf("\ngdtPID: %i", proceso->gdtPID);
+     printf("\nflagInicializacion: %i", proceso->flagInicializacion);
+     pritnf("\nProgram Counter: %i", proceso->PC);
+     printf("\npath de DTB: %s y cantidad de lineas: %i", archivos_abiertos->path, archivos_abiertos->cantLineas;
      printf("\n");
 
 }
@@ -203,41 +205,66 @@ void ejecutar(char* path) {
 	list_add(lista_nuevos, dtb_nuevo);
 }
 
-void status() { ////NO Repitas! LLama a una list_iterate
 
-printf("\nCola de Nuevos- cant. de procesos: %d", list_size(lista_nuevos));
-desplegar_lista(lista_nuevos);
 
-printf("\nCola de Listos- cant. de procesos: %d\nInfo. procesos en esta cola:\n", list_size(lista_listos));
-desplegar_lista(lista_listos);
+DTB* buscar_dtb_por_pid (void* pid_recibido, int index ){ //Usada en status(pid) y finalizar(pid)
 
-printf("\nCola de Ejecutados- cant. de procesos: %d\nInfo. procesos en esta cola:\n", list_size(lista_ejecutando));
-desplegar_lista(lista_ejecutando);
+    int pid = *pid_recibido;
+    int i = index;
 
-printf("\nCola de Bloqueados- cant. de procesos: %d\nInfo. procesos en esta cola:\n", list_size(lista_bloqueados));
-desplegar_lista(lista_bloqueados);
+    bool compara_con_dtb(void* dtb)
+    {
+        return coincide_pid(pid, dtb);
+    }
 
-printf("\nCola de Finalizados- cant. de procesos: %d\nInfo. procesos en esta cola:\n", list_size(lista_finalizados));
-desplegar_lista(lista_finalizados);
+    t_list *lista_actual = list_get(lista_estados, i);
+    DTB *dtb_encontrado  =  list_find(lista_actual, compara_con_dtb);
+    return dtb_encontrado;
+}
+
+
+char nombre_estados[5][12]={"Nuevos","Listos","Ejecutando","Bloqueados", "Finalizados"};
+
+void status() { 
+
+    for(i=0; i<(list_size(lista_estados)); i++){
+        t_list *lista_aux = list_get(lista_estados, i);
+        printf("\nCantidad de procesos en cola de %s: %i", nombre_estados[i], list_size(lista_aux));
+        printf("\nInformacion asociada a los procesos de la lista: \n");
+        desplegar_lista(lista_aux);
+
+    }
 
 }
 
+void status(int* pid){
+    DTB* dtb_encontrado=NULL;
+    int i = 0;
+    while(dtb_encontrado == NULL &&  (i < (list_size(lista_estados))) )
+    {
+        dtb_encontrado = buscar_dtb_por_pid(pid, i);
+        i++;
+    }
+    if(dtb_encontrado != NULL){  
+        mostrarUnProceso(dtb_encontrado);
+    }else{
+        printf("\nEl proceso no se encuentra en el sistema\n");
+    }
+}
+
+
+
 void finalizar(int *pid)
 {
-    for(int i = 0; i < (list_size(lista_estados)); i++)
+    for(int i = 0; i < (list_size(lista_estados)); i++) 
     {   
-        bool compara_con_dtb(void* dtb)
-        {
-            return coincide_pid(*pid, dtb);
-        }
-        t_list *lista_actual = list_get(lista_estados, i);
-        DTB *dtb_finalizar = list_find(lista_actual, compara_con_dtb);
-        if(dtb_finalizar != NULL)
-        {
-            DTB_info *info_dtb = info_asociada_a_pid(lista_info_dtb, dtb_finalizar->gdtPID);
-            manejar_finalizar(pid, info_dtb, dtb_finalizar, lista_actual);
-            break;
-        }
+        if( (buscar_dtb_por_pid(pid, i)) != NULL)
+    {
+        DTB_info *info_dtb = info_asociada_a_pid(lista_info_dtb, dtb_finalizar->gdtPID);
+        manejar_finalizar(pid, info_dtb, dtb_finalizar, lista_actual);
+        break;
+    }
+        
         else if(i == 4 && dtb_finalizar == NULL) printf("El proceso %d no esta en ninguna cola", *pid);
     }
 }

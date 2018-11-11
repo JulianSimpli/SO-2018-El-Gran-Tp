@@ -28,6 +28,7 @@ t_list *lista_ejecutando;
 t_list *lista_bloqueados;
 t_list *lista_finalizados;
 t_list *lista_estados;
+t_list *vector_estados[5];
 t_list *lista_info_dtb;
 
 t_list* ptr2;
@@ -80,9 +81,11 @@ void mostrarUnProceso(void* process);
 //Funciones de Consola
 void ejecutar(char* path);
 void status();
-// void status(int pid);
+void status(int* pid);
 void finalizar(int *pid);
 void manejar_finalizar(int *pid, DTB_info *info_dtb, DTB *dtb_finalizar, t_list *lista_actual);
 void metricas();
+DTB* buscar_dtb_por_pid (void* pid_recibido, int index );
+
 
 #endif /* PLANIFICADOR_H_ */

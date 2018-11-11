@@ -173,5 +173,5 @@ void _DTB_remover_archivo(DTB *dtb, char *path)
 
 ArchivoAbierto *DTB_obtener_escriptorio(DTB *dtb)
 {
-    return list_get(dtb->archivosAbiertos, 0);
+    return list_get(dtb->archivosAbiertos, 0); //Porque el 1° que se guarda es el escriptorio
 }
