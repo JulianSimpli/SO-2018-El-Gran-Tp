@@ -222,7 +222,7 @@ bool permite_multiprogramacion() {
 
 bool esta_en_memoria(DTB_info *info_dtb)
 {
-    return (info_dtb->estado == DTB_LISTO || info_dtb->estado == DTB_EJECUTANDO || info_dtb->estado == DTB_BLOQUEADO)
+    return (info_dtb->estado == DTB_LISTO || info_dtb->estado == DTB_EJECUTANDO || info_dtb->estado == DTB_BLOQUEADO);
 }
 
 bool dummy_creado(void *_dtb)
@@ -288,8 +288,10 @@ void dtb_imprimir_polenta(DTB *dtb, DTB_info *info_dtb)
     printf( "Program Counter: %i\n"
             "Ultima CPU: %i\n"
             "Tiempo de respuesta: %f\n"
-            "Archivos Abiertos: %i\n",
-            dtb->PC, info_dtb->socket_cpu, info_dtb->tiempo_respuesta, list_size(dtb->archivosAbiertos));
+            "Archivos Abiertos: %i\n"
+            "Proceso finalizado por usuario: %s\n",
+            dtb->PC, info_dtb->socket_cpu, info_dtb->tiempo_respuesta, list_size(dtb->archivosAbiertos),
+            (info_dtb->kill) ? "si" : "no");
 }
 
 void mostrar_proceso(void *_dtb, void *_info_dtb)
@@ -317,9 +319,9 @@ void mostrar_proceso(void *_dtb, void *_info_dtb)
 void mostrar_archivo(void *_archivo)
 {
     ArchivoAbierto *archivo = (ArchivoAbierto *) _archivo;
-    printf( "Directorio: %s, cantidad de lineas: %i\n",
+    printf( "Directorio: %s, cantidad de lineas: %s\n",
             // Agregar si se agregan campos a ArchivoAbierto
-            archivo->path, archivo->cantLineas);
+            archivo->path, (archivo->cantLineas) ? ("%i", archivo->cantLineas) : "No fueron cargadas todavia");
 }
 
 //Funciones de Consola
