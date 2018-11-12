@@ -6,7 +6,6 @@ void crearLogger() {
 }
 
 void inicializarVariables() {
-
 	crear_listas();
 	llenar_lista_estados();
     sem_init(&mutex_handshake_diego, 0, 0);
@@ -122,29 +121,31 @@ void accion(void* socket)
 		{
 			case ELDIEGO:
 			{
-				manejar_paquetes_diego(&paquete, &socketFD);
+				manejar_paquetes_diego(&paquete, socketFD);
 				break;
 			}
 			case CPU:
 			{
-				manejar_paquetes_CPU(&paquete, &socketFD);
+				manejar_paquetes_CPU(&paquete, socketFD);
 				break;
 			}
 		}
 	}
+	// Caso desconexion cpu
 	if (paquete.Payload != NULL) free(paquete.Payload);
 	close(socketFD);
 }
 
-void manejar_paquetes_diego(Paquete *paquete, int *socketFD)
+void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 {
 	switch (paquete->header.tipoMensaje)
 	{
 		case ESHANDSHAKE:
 		{
 			sem_post(&mutex_handshake_diego);
-			log_info(logger, "llegada de el diego");
-			enviar_handshake_diego(*socketFD);
+			socket_diego = socketFD;
+			log_info(logger, "llegada de el diego en socket %d", socketFD);
+			enviar_handshake_diego(socketFD);
 			break;
 		}
 		case DUMMY_SUCCES:
@@ -157,13 +158,13 @@ void manejar_paquetes_diego(Paquete *paquete, int *socketFD)
 			notificar_al_plp(&pid);
 			log_info(logger, "%d pasa a lista de procesos listos", pid);
 			liberar_cpu(socketFD);
-			log_info(logger, "Cpu %d liberada", *socketFD);
+			log_info(logger, "Cpu %d liberada", socketFD);
 			break;
 		}
 		case DUMMY_FAIL:
 		{
 			u_int32_t pid;
-			memcpy(&pid, paquete->Payload, sizeof(u_int32_t));
+			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
 			bloquear_dummy(&pid);
 			log_error(logger, "Fallo la carga en memoria del %d", pid);
 			break;
@@ -177,22 +178,33 @@ void manejar_paquetes_diego(Paquete *paquete, int *socketFD)
 		{
 			break;
 		}
+		case DTB_FINALIZAR:
+		{
+			u_int32_t pid;
+			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
+			DTB *dtb = remueve_dtb_asociado_a_pid(lista_ejecutando, pid);
+            procesos_en_memoria--;
+            list_add(lista_finalizados, dtb);
+			procesos_finalizados++;
+			printf("\n El proceso de PID %d se ha movido a la cola de Finalizados\n", pid);
+            // en que momento liberar_dtb(dtb);
+		}
 	}
 }
 
-void manejar_paquetes_CPU(Paquete* paquete, int* socketFD)
+void manejar_paquetes_CPU(Paquete* paquete, int socketFD)
 {
 	switch (paquete->header.tipoMensaje)
 	{
 		case ESHANDSHAKE:
 		{
 			t_cpu *cpu_nuevo = malloc(sizeof(t_cpu));
-			cpu_nuevo->socket = *socketFD;
+			cpu_nuevo->socket = socketFD;
             cpu_nuevo->estado = CPU_LIBRE;
 			list_add(lista_cpu, cpu_nuevo);
 			log_info(logger, "llegada cpu con id %i", cpu_nuevo->socket);
             sem_post(&mutex_handshake_cpu);
-			enviar_handshake_cpu(*socketFD);
+			enviar_handshake_cpu(socketFD);
 			break;
 		}
 
@@ -206,11 +218,8 @@ void manejar_paquetes_CPU(Paquete* paquete, int* socketFD)
         }
 
         case DTB_EJECUTO: {
-            DTB* DTB_succes = DTB_deserializar(paquete->Payload);
-            // int pid = DTB_succes->gdtPID;
-            // list_remove_by_condition(lista_bloqueados, (void*)coincide_pid(&pid));
-			// chequear si va a ready o a exit
 			liberar_cpu(socketFD);
+            DTB* dtb = DTB_deserializar(paquete->Payload);
 			break;
         }
 	}

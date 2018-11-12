@@ -2,6 +2,7 @@
 
 u_int32_t numero_pid = 1;
 u_int32_t procesos_en_memoria = 0;
+u_int32_t procesos_finalizados = 0;
 
 char* Estados[5] = {"Nuevo", "Listo", "Ejecutando", "Bloqueado", "Finalizado"};
 
@@ -20,7 +21,6 @@ void planificador_largo_plazo()
                 DTB *dtb_a_cargar = list_get(lista_nuevos, i);
                 if(!dummy_creado(dtb_a_cargar)) desbloquear_dtb_dummy(dtb_a_cargar);
             }
-            
         }
     }
 }
@@ -56,18 +56,29 @@ void mover_primero_de_lista1_a_lista2(t_list* lista1, t_list* lista2) {
 }
 //Funciones planificador corto plazo
 void ejecutar_primer_dtb_listo(t_cpu* cpu_libre) {
-    DTB* DTB_ejecutar = list_remove(lista_listos, 0);
-    list_add(lista_ejecutando, DTB_ejecutar);
+    DTB* dtb_ejecutar = list_remove(lista_listos, 0);
+    DTB_info *info_dtb = info_asociada_a_dtb(dtb_ejecutar);
+    info_dtb->socket_cpu = cpu_libre->socket;
+    list_add(lista_ejecutando, dtb_ejecutar);
+    
     Paquete* paquete = malloc(sizeof(Paquete));
     int tamanio_DTB = 0;
-    paquete->Payload = DTB_serializar(DTB_ejecutar, &tamanio_DTB);
+    paquete->Payload = DTB_serializar(dtb_ejecutar, &tamanio_DTB);
 
-    if(DTB_ejecutar->flagInicializacion == 0) {
+    switch(dtb_ejecutar->flagInicializacion)
+    {
+        case 0:
+        {
         cargar_header(&paquete, tamanio_DTB, ESDTBDUMMY, SAFA);
         EnviarPaquete(cpu_libre->socket, paquete);
-    } else {
+        break;
+        }
+        case 1:
+        {
         cargar_header(&paquete, tamanio_DTB, ESDTB, SAFA);
         EnviarPaquete(cpu_libre->socket, paquete);
+        break;
+        }
     }
     free(paquete);
 }
@@ -92,6 +103,9 @@ DTB *crear_dtb(int pid, char* path, int flag_inicializacion)
             DTB_info *info_dtb = malloc(sizeof(DTB_info));
             info_dtb->gdtPID = dtb_nuevo->gdtPID;
             info_dtb->estado = DTB_NUEVO;
+            info_dtb->socket_cpu = 0;
+            info_dtb->tiempo_respuesta = 0;
+            info_dtb->kill = 0;
             list_add(lista_info_dtb, info_dtb);
             break;
         }
@@ -156,13 +170,13 @@ bool coincide_pid_info(int pid, void *info_dtb)
     return ((DTB_info *)info_dtb)->gdtPID == pid;
 }
 
-DTB_info *info_asociada_a_dtb(t_list *lista, DTB* dtb)
+DTB_info *info_asociada_a_dtb(DTB* dtb)
 {
     bool compara_con_info(void *info_dtb)
     {
         return coincide_pid_info(dtb->gdtPID, info_dtb);
     }
-    return list_find(lista, compara_con_info);
+    return list_find(lista_info_dtb, compara_con_info);
 }
 
 DTB  *encuentra_dtb_asociado_a_pid(t_list* lista, int pid)
@@ -182,17 +196,17 @@ DTB *remueve_dtb_asociado_a_pid(t_list* lista, int pid)
 }
 // va sin parentesis coincide_pid porque tiene que llamar al puntero a la funcion despues de que hacer list_find
 
-void liberar_cpu(int *socket)
+void liberar_cpu(int socket)
 {
     t_cpu* cpu_actual = cpu_con_socket(lista_cpu, socket);
     cpu_actual->estado = CPU_LIBRE;
 }
 
-bool coincide_socket(int* socket, void* cpu) {
-	return ((t_cpu*)cpu)->socket == *socket;
+bool coincide_socket(int socket, void* cpu) {
+	return ((t_cpu*)cpu)->socket == socket;
 }
 
-t_cpu* cpu_con_socket(t_list* lista, int* socket) {
+t_cpu* cpu_con_socket(t_list* lista, int socket) {
     bool compara_cpu(void* cpu) {
         return coincide_socket(socket, cpu);
     }
@@ -211,16 +225,16 @@ bool permite_multiprogramacion() {
 
 //
 
-DTB *buscar_dtb_en_todos_lados(int *pid, DTB_info **info_dtb, t_list **lista_actual)
+DTB *buscar_dtb_en_todos_lados(int pid, DTB_info **info_dtb, t_list **lista_actual)
 {
     DTB *dtb_encontrado;
     for(int i = 0; i < (list_size(lista_estados)); i++)
     {   
         *lista_actual = list_get(lista_estados, i);
-        dtb_encontrado = encuentra_dtb_asociado_a_pid(*lista_actual, *pid);
+        dtb_encontrado = encuentra_dtb_asociado_a_pid(*lista_actual, pid);
         if(dtb_encontrado != NULL)
         {
-            *info_dtb = info_asociada_a_dtb(lista_info_dtb, dtb_encontrado);
+            *info_dtb = info_asociada_a_dtb(dtb_encontrado);
             break;
         }
     }
@@ -230,36 +244,69 @@ DTB *buscar_dtb_en_todos_lados(int *pid, DTB_info **info_dtb, t_list **lista_act
 void mostrar_proceso_reducido(void *_dtb)
 {
     DTB *dtb = (DTB *)_dtb;
-    printf( "PID: %i\n"
+    switch(dtb->flagInicializacion)
+    {
+        case 0:
+        {
+            printf("DTB Dummy asociado a GDT %d\n", dtb->gdtPID);
+            break;
+        }
+        case 1:
+        {
+            ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
+            printf( "PID: %i\n"
+                    "Archivos Abiertos: %i\n"
+                    "Escriptorio: %s\n",
+                    dtb->gdtPID, list_size(dtb->archivosAbiertos), escriptorio->path);
+            break;
+        }
+    }
+}
+
+void dtb_imprimir_basico(DTB *dtb, DTB_info *info_dtb)
+{
+	printf( "Status Proceso:\n"
+            "PID: %i\n"
+            "Flag inicializacion: %i\n"
+            "Estado: %s\n",
+            dtb->gdtPID, dtb->flagInicializacion, Estados[info_dtb->estado]);
+}
+
+void dtb_imprimir_polenta(DTB *dtb, DTB_info *info_dtb)
+{
+    printf( "Program Counter: %i\n"
+            "Ultima CPU: %i\n"
+            "Tiempo de respuesta: %f\n"
             "Archivos Abiertos: %i\n",
-            dtb->gdtPID, list_size(dtb->archivosAbiertos));
+            dtb->PC, info_dtb->socket_cpu, info_dtb->tiempo_respuesta, list_size(dtb->archivosAbiertos));
 }
 
 void mostrar_proceso(void *_dtb, void *_info_dtb)
 { 
 	DTB* dtb = (DTB *) _dtb;
     DTB_info *info_dtb = (DTB_info *) _info_dtb;
-	printf( "Status Proceso:\n"
-            "PID: %i\n"
-            "Flag inicializacion: %i\n"
-            "Program Counter: %i\n"
-            "Estado: %s\n"
-            // "Tiempo de respuesta: %lu\n"
-            "Archivos abiertos: %i\n"
-            "Escriptorio:\n",
-            dtb->gdtPID, dtb->flagInicializacion, dtb->PC,
-            Estados[info_dtb->estado],
-            // info_dtb->tiempo_respuesta,
-            list_size(dtb->archivosAbiertos));
-
+    switch(info_dtb->estado)
+    {
+        case DTB_NUEVO:
+        {
+            dtb_imprimir_basico(dtb, info_dtb);
+            break;
+        }
+        default:
+        {
+            dtb_imprimir_basico(dtb, info_dtb);
+            dtb_imprimir_polenta(dtb, info_dtb);
+            break;
+        }
+    }
+    printf("Escriptorio:\n");
     list_iterate(dtb->archivosAbiertos, mostrar_archivo);
 }
 
 void mostrar_archivo(void *_archivo)
 {
     ArchivoAbierto *archivo = (ArchivoAbierto *) _archivo;
-    printf( "Directorio: %s\n"
-            "Cantidad de lineas: %i\n",
+    printf( "Directorio: %s, cantidad de lineas: %i\n",
             // Agregar si se agregan campos a ArchivoAbierto
             archivo->path, archivo->cantLineas);
 }
@@ -287,7 +334,7 @@ void gdt_status(int* pid)
 {
     t_list *lista_actual;
     DTB_info *info_dtb;
-    DTB *dtb_status = buscar_dtb_en_todos_lados(pid, &info_dtb, &lista_actual);
+    DTB *dtb_status = buscar_dtb_en_todos_lados(*pid, &info_dtb, &lista_actual);
 
     if (dtb_status != NULL) mostrar_proceso(dtb_status, info_dtb);
     else printf("El proceso %i no esta en el sistema\n", *pid);
@@ -297,53 +344,73 @@ void finalizar(int *pid)
 {
     t_list *lista_actual;
     DTB_info *info_dtb;
-    DTB *dtb_finalizar = buscar_dtb_en_todos_lados(pid, &info_dtb, &lista_actual);
+    DTB *dtb_finalizar = buscar_dtb_en_todos_lados(*pid, &info_dtb, &lista_actual);
     
-    if (dtb_finalizar != NULL) manejar_finalizar(pid, info_dtb, dtb_finalizar, lista_actual);
+    if (dtb_finalizar != NULL) manejar_finalizar(*pid, info_dtb, dtb_finalizar, lista_actual);
     else printf("El proceso %i no esta en el sistema\n", *pid);
 }
 
-void manejar_finalizar(int *pid, DTB_info *info_dtb, DTB *dtb_finalizar, t_list *lista_actual)
+void manejar_finalizar(int pid, DTB_info *info_dtb, DTB *dtb, t_list *lista_actual)
 {
+    info_dtb->kill = 1;
     switch(info_dtb->estado)
     {
-        case DTB_EJECUTANDO:
+        case DTB_EJECUTANDO: // Si dtb ejecutando le mando a cpu que lo esta exec el pid para que compruebe que tiene ese dtb.
         {
-            printf("\n El proceso de pid = %d se encuentra en Ejecucion\n", *pid);
-            //Esperar que termine de ejecutar
-            list_add(lista_finalizados, dtb_finalizar);
-            procesos_en_memoria--;
-            liberar_dtb(dtb_finalizar);
-            printf("\n El proceso de PID %d se ha movido a la cola de Finalizados\n", *pid);
+            printf("\n El GDT %d esta ejecutando\n", pid);
+            enviar_finalizar_cpu(pid, info_dtb->socket_cpu);
             break;
         }
-        case DTB_BLOQUEADO:
+        case DTB_BLOQUEADO: // Si dtb bloqueado
         {
-            
+            printf("\n El GDT %d esta bloqueado\n", pid);
+            enviar_finalizar_dam(pid);
             break;
         }
         case DTB_LISTO:
         {
-            procesos_en_memoria--;
+            printf("El GDT %d esta listo\n", pid);
+            enviar_finalizar_dam(pid);
             break;
         }
         case DTB_NUEVO:
         {
-            printf("El proceso %d se encuentra en la cola de nuevos\n", *pid);
+            printf("El GDT %d esta en nuevos\n", pid);
+            enviar_finalizar_dam(pid);
             break;
         }
         case DTB_FINALIZADO:
         {
-            printf("El proceso %d ya esta en cola de finalizados\n", *pid);
-            liberar_dtb(dtb_finalizar);
+            printf("El GDT %d ya fue finalizado\n", pid);
             break;
         }
         default:
         {
-            printf("El proceso %d no esta en ninguna cola\n", *pid);
+            printf("El proceso %d no esta en ninguna cola\n", pid);
             break;
         }
     }
+}
+
+void enviar_finalizar_dam(int pid)
+{
+    Paquete *paquete = malloc(sizeof(Paquete));
+    paquete->Payload = malloc(sizeof(pid));
+    memcpy(paquete->Payload, &pid, sizeof(pid));
+    cargar_header(paquete, sizeof(pid), FIN_BLOQUEADO, SAFA);
+    EnviarPaquete(socket_diego, paquete);
+    free(paquete);
+    printf("Le mande a dam que finalice GDT %d\n", pid);
+}
+void enviar_finalizar_cpu(int pid, int socket_cpu)
+{
+    Paquete *paquete = malloc(sizeof(Paquete));
+    paquete->Payload = malloc(sizeof(pid));
+    memcpy(&paquete->Payload, &pid, sizeof(pid));
+    cargar_header(&paquete,sizeof(pid), FIN_EJECUTANDO, SAFA);
+    EnviarPaquete(socket_cpu, paquete);
+    free(paquete);
+    printf("Le mande a cpu que finalice GDT %d\n", pid);
 }
 
 void metricas();
