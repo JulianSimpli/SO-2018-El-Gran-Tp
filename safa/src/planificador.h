@@ -32,9 +32,6 @@ t_list *lista_finalizados;
 t_list *lista_estados;
 t_list *lista_info_dtb;
 
-t_list* ptr2;
-t_list* ptr3;
-
 u_int32_t numero_pid;
 u_int32_t procesos_en_memoria;
 int MULTIPROGRAMACION; //La carga la config y SAFA al inicializarse
@@ -48,9 +45,7 @@ void mover_primero_de_lista1_a_lista2(t_list* lista1, t_list* lista2);
 
 //Hilo planificador corto plazo
 void planificador_corto_plazo();
-
-//Funciones planificador corto plazo
-void ejecutar_primer_dtb_listo(DTB* DTB_ejecutar, t_cpu* cpu_libre);
+void ejecutar_primer_dtb_listo(t_cpu* cpu_libre);
 
 //Funciones de DTB
 DTB *crear_dtb(int pid, char *path, int flag_inicializacion);
@@ -59,7 +54,8 @@ void liberar_info(void *dtb);
 void desbloquear_dtb_dummy(DTB* dtb_nuevo);
 void bloquear_dummy(int *pid);
 void notificar_al_plp(int *pid);
-DTB *DTB_asociado_a_pid(t_list* lista, int pid);
+DTB *encuentra_dtb_asociado_a_pid(t_list* lista, int pid);
+DTB *remueve_dtb_asociado_a_pid(t_list* lista, int pid);
 bool coincide_pid(int pid, void* DTB);
 DTB_info *info_asociada_a_dtb(t_list *lista, DTB *dtb);
 bool coincide_pid_info(int pid, void *info_dtb);

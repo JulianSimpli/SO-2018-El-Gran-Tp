@@ -1,7 +1,7 @@
 TARGET = safa
 LIBS = -lcommons -lreadline
 program:
-	gcc -pthread safa.c -I/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src -o $(TARGET) $(LIBS) planificador.c ../../Bibliotecas/sockets.c ../../Bibliotecas/dtb.c ../../Bibliotecas/helper.c
+	gcc -pthread safa.c -Wall -ggdb3 -I/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src -o $(TARGET) $(LIBS) planificador.c ../../Bibliotecas/sockets.c ../../Bibliotecas/dtb.c ../../Bibliotecas/helper.c
 
 clean:
 	-rm -f *.o

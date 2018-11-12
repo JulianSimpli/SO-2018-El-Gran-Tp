@@ -23,6 +23,7 @@ void crear_listas()
     lista_finalizados = list_create();
 	lista_estados = list_create();
 	lista_info_dtb = list_create();
+	printf("listas creadas\n");
 }
 
 void llenar_lista_estados()
@@ -69,6 +70,7 @@ void consola() {
 		linea = readline(">> ");
 		if (linea) add_history(linea);
 		char** lineaSpliteada = string_split(linea," ");
+		if(lineaSpliteada[0] == NULL) continue;
 		printf("operacion es %s\n", lineaSpliteada[0]);
 		parseoConsola(lineaSpliteada[0], lineaSpliteada[1]);
 		free(linea);
@@ -111,7 +113,7 @@ void accion(void* socket)
 {
 	int socketFD = *(int*) socket;
 	Paquete paquete;
-	void* datos;
+	// void* datos;
 	//while que recibe paquetes que envian a safa, de qué socket y el paquete mismo
 	//el socket del cliente conectado lo obtiene con la funcion servidorConcurrente en el main
 	while (RecibirPaqueteServidorSafa(socketFD, SAFA, &paquete) > 0)
@@ -178,9 +180,12 @@ void manejar_paquetes_diego(Paquete *paquete, int *socketFD)
 	}
 }
 
-void manejar_paquetes_CPU(Paquete* paquete, int* socketFD) {
-	switch (paquete->header.tipoMensaje) {
-		case ESHANDSHAKE: {
+void manejar_paquetes_CPU(Paquete* paquete, int* socketFD)
+{
+	switch (paquete->header.tipoMensaje)
+	{
+		case ESHANDSHAKE:
+		{
 			t_cpu *cpu_nuevo = malloc(sizeof(t_cpu));
 			cpu_nuevo->socket = *socketFD;
             cpu_nuevo->estado = CPU_LIBRE;
@@ -202,7 +207,7 @@ void manejar_paquetes_CPU(Paquete* paquete, int* socketFD) {
 
         case DTB_EJECUTO: {
             DTB* DTB_succes = DTB_deserializar(paquete->Payload);
-            int pid = DTB_succes->gdtPID;
+            // int pid = DTB_succes->gdtPID;
             // list_remove_by_condition(lista_bloqueados, (void*)coincide_pid(&pid));
 			// chequear si va a ready o a exit
 			liberar_cpu(socketFD);
