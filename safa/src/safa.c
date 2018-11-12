@@ -1,11 +1,11 @@
 #include "safa.h"
 
 /*Creación de Logger*/
-void crearLogger() {
+void crear_logger() {
 	logger = log_create("safa.log", "safa", true, LOG_LEVEL_INFO);
 }
 
-void inicializarVariables() {
+void inicializar_variables() {
 	crear_listas();
 	llenar_lista_estados();
     sem_init(&mutex_handshake_diego, 0, 0);
@@ -34,7 +34,7 @@ void llenar_lista_estados()
 	list_add_in_index(lista_estados, 4, lista_finalizados);
 }
 
-void obtenerValoresArchivoConfiguracion() {
+void obtener_valores_archivo_configuracion() {
 	t_config* arch = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src/SAFA.config");
 	IP = "127.0.0.1";
 	PUERTO = config_get_int_value(arch, "PUERTO");
@@ -45,7 +45,7 @@ void obtenerValoresArchivoConfiguracion() {
 	config_destroy(arch);
 }
 
-void imprimirArchivoConfiguracion() {
+void imprimir_archivo_configuracion() {
 	printf("Configuración:\n"
 			"IP=%s\n"
 			"PUERTO=%d\n"
@@ -71,14 +71,14 @@ void consola() {
 		char** lineaSpliteada = string_split(linea," ");
 		if(lineaSpliteada[0] == NULL) continue;
 		printf("operacion es %s\n", lineaSpliteada[0]);
-		parseoConsola(lineaSpliteada[0], lineaSpliteada[1]);
+		parseo_consola(lineaSpliteada[0], lineaSpliteada[1]);
 		free(linea);
 		free(lineaSpliteada[0]);
 		free(lineaSpliteada[1]);
 	}
 }
 
-void parseoConsola(char* operacion, char* primerParametro) {
+void parseo_consola(char* operacion, char* primerParametro) {
 	int pid = 0;
 	if (string_equals_ignore_case (operacion, EJECUTAR)) {
 		printf("path a ejecutar es %s\n", primerParametro);
@@ -154,9 +154,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			u_int32_t pid;
 			memcpy(&pid, paquete->Payload, sizeof(u_int32_t));
 			log_info(logger, "%d fue cargado en memoria", pid);
-			bloquear_dummy(&pid);
-			notificar_al_plp(&pid);
-			log_info(logger, "%d pasa a lista de procesos listos", pid);
+			pasaje_a_ready(&pid);
 			liberar_cpu(socketFD);
 			log_info(logger, "Cpu %d liberada", socketFD);
 			break;
@@ -174,6 +172,11 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			break;
 			//Me manda pid, archivos abiertos, datos de memoria virtual para buscar el archivo.
 		}
+		// case DTB_DESBLOQUEAR:
+		// {
+
+		// 	break;
+		// }
 		case DTB_FAIL:
 		{
 			break;
@@ -182,11 +185,11 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		{
 			u_int32_t pid;
 			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
-			DTB *dtb = remueve_dtb_asociado_a_pid(lista_ejecutando, pid);
-            procesos_en_memoria--;
-            list_add(lista_finalizados, dtb);
-			procesos_finalizados++;
-			printf("\n El proceso de PID %d se ha movido a la cola de Finalizados\n", pid);
+			DTB_info *info_dtb;
+			t_list *lista_actual;
+			DTB *dtb = buscar_dtb_en_todos_lados(pid, &info_dtb, &lista_actual);
+			if(esta_en_memoria(info_dtb)) procesos_en_memoria--;
+			dtb_finalizar_desde(dtb, lista_actual);
             // en que momento liberar_dtb(dtb);
 		}
 	}
@@ -208,7 +211,11 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD)
 			break;
 		}
 
-        case DTB_BLOQUEAR: {
+        case DTB_BLOQUEAR:
+		{
+			//clock();
+			DTB *dtb = DTB_deserializar(paquete->Payload);
+			dtb = dtb_reemplazar_de_lista(dtb, lista_ejecutando, lista_bloqueados, DTB_BLOQUEADO);
 			break;
     	}
 
@@ -264,24 +271,21 @@ void enviar_handshake_diego(int socketFD) {
 }
 
 int main(void) {
-	crearLogger();
-	inicializarVariables();
-	obtenerValoresArchivoConfiguracion();
-	imprimirArchivoConfiguracion();
+	crear_logger();
+	inicializar_variables();
+	obtener_valores_archivo_configuracion();
+	imprimir_archivo_configuracion();
 	log_info(logger, "Probando SAFA.log");
 
-	pthread_t hiloConsola;
-    pthread_create(&hiloConsola, NULL, (void*) consola, NULL);
+    pthread_create(&hilo_consola, NULL, (void*) consola, NULL);
 
-    pthread_t hilo_plp;
     pthread_create(&hilo_plp, NULL, (void*) planificador_largo_plazo, NULL);
 
-    pthread_t hilo_pcp;
     pthread_create(&hilo_pcp, NULL, (void*) planificador_corto_plazo, NULL);
 
     ServidorConcurrente(IP, PUERTO, SAFA, &lista_hilos, &end, accion);
 
-	pthread_join(hiloConsola, NULL);
+	pthread_join(hilo_consola, NULL);
     pthread_join(hilo_pcp, NULL);
     pthread_join(hilo_plp, NULL);
 	return EXIT_SUCCESS;

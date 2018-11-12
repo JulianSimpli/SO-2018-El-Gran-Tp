@@ -14,24 +14,21 @@ char *IP, *ALGORITMO_PLANIFICACION;
 int PUERTO, RETARDO_PLANIF, QUANTUM;
 
 t_list *lista_hilos;
-t_list *lista_cpu;
 
 bool end;
 
 sem_t mutex_handshake_diego;
 sem_t mutex_handshake_cpu;
 
-t_log *logger;
-
 // Declaracion de funciones
-void crearLogger();
-void inicializarVariables();
+void crear_logger();
+void inicializar_variables();
 void crear_listas();
 void llenar_lista_estados();
-void obtenerValoresArchivoConfiguracion();
-void imprimirArchivoConfiguracion();
+void obtener_valores_archivo_configuracion();
+void imprimir_archivo_configuracion();
 void consola();
-void parseoConsola(char* operacion, char* primerParametro);
+void parseo_consola(char* operacion, char* primerParametro);
 void accion(void* socket);
 void manejar_paquetes_diego(Paquete *paquete, int socketFD);
 void manejar_paquetes_CPU(Paquete *paquete, int socketFD);
