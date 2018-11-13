@@ -38,6 +38,7 @@ t_log *logger;
 
 u_int32_t numero_pid, procesos_en_memoria, procesos_finalizados;
 int MULTIPROGRAMACION, RETARDO_PLANIF; //La carga la config y SAFA al inicializarse
+char *ALGORITMO_PLANIFICACION;
 int socket_diego;
 pthread_t hilo_consola, hilo_plp, hilo_pcp;
 
@@ -50,7 +51,7 @@ DTB *mover_dtb_de_lista(DTB *dtb, t_list *source, t_list *dest);
 
 //Hilo planificador corto plazo
 void planificador_corto_plazo();
-void ejecutar_primer_dtb_listo(t_cpu* cpu_libre);
+void ejecutar_primer_dtb_listo();
 
 //Colas
 void dtb_finalizar_desde(DTB *dtb, t_list *source);

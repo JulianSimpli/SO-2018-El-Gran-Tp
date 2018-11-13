@@ -80,32 +80,42 @@ void consola() {
 
 void parseo_consola(char* operacion, char* primerParametro) {
 	int pid = 0;
-	if (string_equals_ignore_case (operacion, EJECUTAR)) {
+	if (string_equals_ignore_case (operacion, EJECUTAR))
+	{
 		if(primerParametro == NULL) {printf("expected ejecutar <path>\n"); return;}
 		printf("path a ejecutar es %s\n", primerParametro);
 		ejecutar(primerParametro);
-	} else if (string_equals_ignore_case (operacion, STATUS)) {
-		if (primerParametro != NULL) {
+	} else if (string_equals_ignore_case (operacion, STATUS))
+	{
+		if (primerParametro != NULL)
+		{
 			pid = atoi(primerParametro);
 			printf("pid a mostrar status es %i\n", pid);
 			gdt_status(&pid);
-		} else {
+		} else
+		{
 			printf("status no trajo parametros. Se mostraran estados de las colas\n");
 			status();
 		}
-	} else if(string_equals_ignore_case (operacion, FINALIZAR)) {
-		if(primerParametro == NULL) {printf("expected finalizar <pid>\n"); return;}
+	} else if(string_equals_ignore_case (operacion, FINALIZAR))
+	{
+		if(primerParametro == NULL)
+		{
+			printf("expected finalizar <pid>\n");
+			return;
+		}
+
 		pid = atoi(primerParametro);
 		printf("pid a finalizar es %i\n", pid);
 		finalizar(&pid);
-	} else if(string_equals_ignore_case (operacion, METRICAS)) {
-		if (primerParametro != NULL) {
+	} else if(string_equals_ignore_case (operacion, METRICAS))
+	{
+		if (primerParametro != NULL)
+		{
 			pid = atoi(primerParametro);
 			printf("pid a mostrar metricas es %i\n", pid);
 			//mostrarMetricasDe(pid);
-		} else {
-			printf("metricas no trajo parametros. Solo se muestran estadisticas del sistema\n");
-		}
+		} else printf("metricas no trajo parametros. Solo se muestran estadisticas del sistema\n");
 		//mostrarMetricasDelSistema();
 	} else printf("No se conoce la operacion\n");
 }
@@ -169,16 +179,12 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			log_error(logger, "Fallo la carga en memoria del %d", pid);
 			break;
 		}
-		case DTB_SUCCES:
-		{
+		case DTB_SUCCES: // igual que dtb_desbloquear?
+		{	
+			// METRICAS CLOCK
 			break;
 			//Me manda pid, archivos abiertos, datos de memoria virtual para buscar el archivo.
 		}
-		// case DTB_DESBLOQUEAR:
-		// {
-
-		// 	break;
-		// }
 		case DTB_FAIL:
 		{
 			break;
@@ -215,22 +221,45 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD)
 
         case DTB_BLOQUEAR:
 		{
-			//clock();
+			// Habria que ver si algoritmo es rr o vrr para recibir quantum que queda
+			// 
+			liberar_cpu(socketFD);
+			// METRICAS CLOCK;
 			DTB *dtb = DTB_deserializar(paquete->Payload);
 			dtb = dtb_reemplazar_de_lista(dtb, lista_ejecutando, lista_bloqueados, DTB_BLOQUEADO);
 			break;
     	}
 
-        case PROCESS_TIMEOUT: {
-        	// falta quantum. Chequeo si finaliza o vuelve a listo aca y en succes
-			break;
-        }
-
-        case DTB_EJECUTO: {
+        case PROCESS_TIMEOUT:
+		{
 			liberar_cpu(socketFD);
             DTB* dtb = DTB_deserializar(paquete->Payload);
+			dtb = dtb_reemplazar_de_lista(dtb, lista_ejecutando, lista_listos, DTB_LISTOS);
 			break;
         }
+        case DTB_EJECUTO: // No veo diferencias con Process_timeout
+		{				// repensar si se hace aca el chequeo de finalizo o no dtb o si lo hace cpu
+			liberar_cpu(socketFD);
+            DTB* dtb = DTB_deserializar(paquete->Payload);
+			dtb = dtb_reemplazar_de_lista(dtb, lista_ejecutando, lista_listos, DTB_LISTO);
+			break;
+        }
+		case DTB_FINALIZAR:
+		{
+			liberar_cpu(socketFD);
+            DTB* dtb = DTB_deserializar(paquete->Payload);
+			dtb = dtb_reemplazar_de_lista(dtb, lista_ejecutando, lista_finalizados, DTB_FINALIZADO);
+			break;
+		}
+		case LIBERAR_RECURSO:
+		{
+			break;
+		}
+		case BLOQUEAR_RECURSO:
+		{
+			break;
+		}
+
 	}
 }
 

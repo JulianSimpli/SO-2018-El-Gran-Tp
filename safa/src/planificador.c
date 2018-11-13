@@ -33,27 +33,57 @@ void planificador_corto_plazo()
 {
     while(true)
     {
-        t_cpu* cpu_libre = list_find(lista_cpu, esta_libre_cpu);
-        if(cpu_libre != NULL && !list_is_empty(lista_listos))
+        if(hay_cpu_libre() && !list_is_empty(lista_listos))
         {
-            printf("lista Cpu: %d", list_size(lista_cpu));
-            cpu_libre->estado = CPU_OCUPADA;
-            ejecutar_primer_dtb_listo(cpu_libre);
+            if(!strcmp(ALGORITMO_PLANIFICACION, "FIFO")) planificar_fifo();
+            else if(!strcmp(ALGORITMO_PLANIFICACION, "RR")) planificar_rr();
+            else if(!strcmp(ALGORITMO_PLANIFICACION, "VRR")) planificar_vrr();
+            else if(!strcmp(ALGORITMO_PLANIFICACION, "IOBF")) planificar_iobound();
+            else
+            {
+                printf("No se conoce el algoritmo. Cambielo desde SAFA.config\n");
+                sleep(10);
+            }
         }
-        sleep(1);
+        sleep(2);
     }
+}
+
+void planificar_fifo()
+{
+    ejecutar_primer_dtb_listo();
+}
+void planificar_rr()
+{
+    // rearma cola listo y luego 
+    ejecutar_primer_dtb_listo();
+}
+void planificar_vrr()
+{
+    // rearma cola listo y luego 
+    ejecutar_primer_dtb_listo();
+}
+void planificar_iobound()
+{
+        // rearma cola listo y luego 
+    ejecutar_primer_dtb_listo();
 }
 
 void mover_primero_de_lista1_a_lista2(t_list* lista1, t_list* lista2) {
     DTB* DTB_a_mover = list_remove(lista1, 0);
     list_add(lista2, DTB_a_mover);
-
 }
+
 //Funciones planificador corto plazo
-void ejecutar_primer_dtb_listo(t_cpu* cpu_libre) {
+void ejecutar_primer_dtb_listo() {
+    t_cpu* cpu_libre = list_find(lista_cpu, esta_libre_cpu);
+    printf("cpu a usar: %d", cpu_libre->socket);
+    cpu_libre->estado = CPU_OCUPADA;
+
     DTB* dtb_ejecutar = list_remove(lista_listos, 0);
     DTB_info *info_dtb = info_asociada_a_dtb(dtb_ejecutar);
     info_dtb->socket_cpu = cpu_libre->socket;
+    info_dtb->estado = DTB_EJECUTANDO;
     list_add(lista_ejecutando, dtb_ejecutar);
     
     Paquete* paquete = malloc(sizeof(Paquete));
@@ -63,17 +93,13 @@ void ejecutar_primer_dtb_listo(t_cpu* cpu_libre) {
     switch(dtb_ejecutar->flagInicializacion)
     {
         case 0:
-        {
-        cargar_header(&paquete, tamanio_DTB, ESDTBDUMMY, SAFA);
-        EnviarPaquete(cpu_libre->socket, paquete);
-        break;
-        }
+            cargar_header(&paquete, tamanio_DTB, ESDTBDUMMY, SAFA);
+            EnviarPaquete(cpu_libre->socket, paquete);
+            break;
         case 1:
-        {
-        cargar_header(&paquete, tamanio_DTB, ESDTB, SAFA);
-        EnviarPaquete(cpu_libre->socket, paquete);
-        break;
-        }
+            cargar_header(&paquete, tamanio_DTB, ESDTB, SAFA);
+            EnviarPaquete(cpu_libre->socket, paquete);
+            break;
     }
     free(paquete);
 }
@@ -216,6 +242,10 @@ t_cpu* cpu_con_socket(t_list* lista, int socket) {
 
 bool esta_libre_cpu(void* cpu) {
     return ((t_cpu*)cpu)->estado == CPU_LIBRE;
+}
+
+bool hay_cpu_libre() {
+    return list_any_satisfy(lista_cpu, esta_libre_cpu);
 }
 
 //Funciones booleanas

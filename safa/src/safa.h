@@ -10,7 +10,7 @@
 #define METRICAS "metricas"
 
 //Declaracion de variables globales
-char *IP, *ALGORITMO_PLANIFICACION;
+char *IP;
 int PUERTO, QUANTUM;
 
 t_list *lista_hilos;
