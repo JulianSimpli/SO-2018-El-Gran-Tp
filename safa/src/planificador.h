@@ -37,7 +37,7 @@ t_list *lista_info_dtb;
 t_log *logger;
 
 u_int32_t numero_pid, procesos_en_memoria, procesos_finalizados;
-int MULTIPROGRAMACION; //La carga la config y SAFA al inicializarse
+int MULTIPROGRAMACION, RETARDO_PLANIF; //La carga la config y SAFA al inicializarse
 int socket_diego;
 pthread_t hilo_consola, hilo_plp, hilo_pcp;
 

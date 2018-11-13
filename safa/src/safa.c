@@ -73,14 +73,15 @@ void consola() {
 		printf("operacion es %s\n", lineaSpliteada[0]);
 		parseo_consola(lineaSpliteada[0], lineaSpliteada[1]);
 		free(linea);
-		free(lineaSpliteada[0]);
-		free(lineaSpliteada[1]);
+		if(!lineaSpliteada[0])free(lineaSpliteada[0]);
+		if(!lineaSpliteada[0])free(lineaSpliteada[1]);
 	}
 }
 
 void parseo_consola(char* operacion, char* primerParametro) {
 	int pid = 0;
 	if (string_equals_ignore_case (operacion, EJECUTAR)) {
+		if(primerParametro == NULL) {printf("expected ejecutar <path>\n"); return;}
 		printf("path a ejecutar es %s\n", primerParametro);
 		ejecutar(primerParametro);
 	} else if (string_equals_ignore_case (operacion, STATUS)) {
@@ -93,6 +94,7 @@ void parseo_consola(char* operacion, char* primerParametro) {
 			status();
 		}
 	} else if(string_equals_ignore_case (operacion, FINALIZAR)) {
+		if(primerParametro == NULL) {printf("expected finalizar <pid>\n"); return;}
 		pid = atoi(primerParametro);
 		printf("pid a finalizar es %i\n", pid);
 		finalizar(&pid);

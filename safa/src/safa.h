@@ -11,7 +11,7 @@
 
 //Declaracion de variables globales
 char *IP, *ALGORITMO_PLANIFICACION;
-int PUERTO, RETARDO_PLANIF, QUANTUM;
+int PUERTO, QUANTUM;
 
 t_list *lista_hilos;
 

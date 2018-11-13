@@ -14,12 +14,15 @@ void planificador_largo_plazo()
 
     while(true)
     {
+        //wait(sem_plp)/ el signal lo hacen ejecutar y mensaje de finalizar.
+        // pensar si primitiva finalizar hace signal.
+        sleep(1);
         if(permite_multiprogramacion() && !list_is_empty(lista_nuevos))
         {
             for(int i = 0; i < list_size(lista_nuevos); i++)
             {
                 DTB *dtb_a_cargar = list_get(lista_nuevos, i);
-                if(!dummy_creado(dtb_a_cargar)) desbloquear_dummy(dtb_a_cargar);
+                if(!dummy_creado(dtb_a_cargar) && permite_multiprogramacion()) desbloquear_dummy(dtb_a_cargar);
             }
         }
     }
@@ -30,6 +33,7 @@ void planificador_corto_plazo()
 {
     while(true)
     {
+        sleep(1);
         t_cpu* cpu_libre = list_find(lista_cpu, esta_libre_cpu);
         if(cpu_libre != NULL && !list_is_empty(lista_listos))
         {
@@ -448,9 +452,9 @@ DTB *mover_dtb_de_lista(DTB *dtb, t_list *source, t_list *dest)
 void enviar_finalizar_dam(int pid)
 {
     Paquete *paquete = malloc(sizeof(Paquete));
-    paquete->Payload = malloc(sizeof(pid));
-    memcpy(paquete->Payload, &pid, sizeof(pid));
-    cargar_header(paquete, sizeof(pid), FIN_BLOQUEADO, SAFA);
+    paquete->Payload = malloc(sizeof(u_int32_t));
+    memcpy(paquete->Payload, &pid, sizeof(u_int32_t));
+    cargar_header(&paquete, sizeof(u_int32_t), FIN_BLOQUEADO, SAFA);
     EnviarPaquete(socket_diego, paquete);
     free(paquete);
     printf("Le mande a dam que finalice GDT %d\n", pid);
@@ -459,9 +463,9 @@ void enviar_finalizar_dam(int pid)
 void enviar_finalizar_cpu(int pid, int socket_cpu)
 {
     Paquete *paquete = malloc(sizeof(Paquete));
-    paquete->Payload = malloc(sizeof(pid));
-    memcpy(&paquete->Payload, &pid, sizeof(pid));
-    cargar_header(&paquete,sizeof(pid), FIN_EJECUTANDO, SAFA);
+    paquete->Payload = malloc(sizeof(u_int32_t));
+    memcpy(paquete->Payload, &pid, sizeof(u_int32_t));
+    cargar_header(&paquete, sizeof(u_int32_t), FIN_EJECUTANDO, SAFA);
     EnviarPaquete(socket_cpu, paquete);
     free(paquete);
     printf("Le mande a cpu que finalice GDT %d\n", pid);
