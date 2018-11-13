@@ -16,7 +16,6 @@ void planificador_largo_plazo()
     {
         //wait(sem_plp)/ el signal lo hacen ejecutar y mensaje de finalizar.
         // pensar si primitiva finalizar hace signal.
-        sleep(1);
         if(permite_multiprogramacion() && !list_is_empty(lista_nuevos))
         {
             for(int i = 0; i < list_size(lista_nuevos); i++)
@@ -25,6 +24,7 @@ void planificador_largo_plazo()
                 if(!dummy_creado(dtb_a_cargar) && permite_multiprogramacion()) desbloquear_dummy(dtb_a_cargar);
             }
         }
+        sleep(1);
     }
 }
 
@@ -33,7 +33,6 @@ void planificador_corto_plazo()
 {
     while(true)
     {
-        sleep(1);
         t_cpu* cpu_libre = list_find(lista_cpu, esta_libre_cpu);
         if(cpu_libre != NULL && !list_is_empty(lista_listos))
         {
@@ -41,6 +40,7 @@ void planificador_corto_plazo()
             cpu_libre->estado = CPU_OCUPADA;
             ejecutar_primer_dtb_listo(cpu_libre);
         }
+        sleep(1);
     }
 }
 
@@ -323,9 +323,9 @@ void mostrar_proceso(void *_dtb, void *_info_dtb)
 void mostrar_archivo(void *_archivo)
 {
     ArchivoAbierto *archivo = (ArchivoAbierto *) _archivo;
-    printf( "Directorio: %s, cantidad de lineas: %s\n",
+    printf( "Directorio: %s, %s\n",
             // Agregar si se agregan campos a ArchivoAbierto
-            archivo->path, (archivo->cantLineas) ? ("%i", archivo->cantLineas) : "No fueron cargadas todavia");
+            archivo->path, (archivo->cantLineas) ? ("cantidad de lineas: %i", archivo->cantLineas) : "no cargado todavia");
 }
 
 //Funciones de Consola
