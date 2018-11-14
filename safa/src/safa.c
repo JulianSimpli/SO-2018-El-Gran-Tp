@@ -35,7 +35,7 @@ void llenar_lista_estados()
 }
 
 void obtener_valores_archivo_configuracion() {
-	t_config* arch = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src/SAFA.config");
+	t_config* arch = config_create("/home/utnso/TPSO/tp-2018-2c-Nene-Malloc/safa/src/SAFA.config");
 	IP = "127.0.0.1";
 	PUERTO = config_get_int_value(arch, "PUERTO");
 	ALGORITMO_PLANIFICACION = string_duplicate(config_get_string_value(arch, "ALGORITMO"));
@@ -179,14 +179,36 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			log_error(logger, "Fallo la carga en memoria del %d", pid);
 			break;
 		}
+<<<<<<< 49142a6ba090c5d164282f79036859927fae8549
 		case DTB_SUCCES: // igual que dtb_desbloquear?
 		{	
 			// METRICAS CLOCK
 			break;
 			//Me manda pid, archivos abiertos, datos de memoria virtual para buscar el archivo.
 		}
+=======
+//		case DTB_SUCCES:
+//		{
+//			break;
+//			//Me manda pid, archivos abiertos, datos de memoria virtual para buscar el archivo.
+//		}
+		 case DTB_SUCCES: //DTB_DESBLOQUEAR:
+		 {
+			u_int32_t pid;
+			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
+			DTB_info *info_dtb;
+			t_list *lista_actual;
+			DTB *dtb = buscar_dtb_en_todos_lados(pid, &info_dtb, &lista_actual);
+			info_dtb = info_asociada_a_dtb(dtb);
+			mover_dtb_de_lista (dtb, lista_bloqueados, lista_listos);
+			info_dtb->tiempo_respuesta = medir_tiempo(0, (info_dtb->tiempo_ini), (info_dtb->tiempo_fin));
+			info_dtb_modificar(DTB_LISTO, info_dtb->socket_cpu, info_dtb);
+			break;
+		 }
+>>>>>>> Cambios en planificador.c: Finalizar-Metricas(medir_tiempo) planificador.h y safa.c DTB_SUCCES y DTB_BLOQUEAR
 		case DTB_FAIL:
 		{
+			perror("Error ");
 			break;
 		}
 		case DTB_FINALIZAR:
@@ -221,20 +243,33 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD)
 
         case DTB_BLOQUEAR:
 		{
+<<<<<<< 49142a6ba090c5d164282f79036859927fae8549
 			// Habria que ver si algoritmo es rr o vrr para recibir quantum que queda
 			// 
 			liberar_cpu(socketFD);
 			// METRICAS CLOCK;
+=======
+>>>>>>> Cambios en planificador.c: Finalizar-Metricas(medir_tiempo) planificador.h y safa.c DTB_SUCCES y DTB_BLOQUEAR
 			DTB *dtb = DTB_deserializar(paquete->Payload);
 			dtb = dtb_reemplazar_de_lista(dtb, lista_ejecutando, lista_bloqueados, DTB_BLOQUEADO);
+			DTB_info* info_dtb = info_asociada_a_dtb(dtb);
+			//dtb_info->tiempo_ini=clock(); LLAMAR A LA FUNCION QUE HAGA ESO
+			medir_tiempo(1,(info_dtb->tiempo_ini), (info_dtb->tiempo_fin));
+			info_dtb_modificar(DTB_BLOQUEADO, info_dtb->socket_cpu, info_dtb);
 			break;
     	}
 
+<<<<<<< 49142a6ba090c5d164282f79036859927fae8549
         case PROCESS_TIMEOUT:
 		{
 			liberar_cpu(socketFD);
             DTB* dtb = DTB_deserializar(paquete->Payload);
 			dtb = dtb_reemplazar_de_lista(dtb, lista_ejecutando, lista_listos, DTB_LISTOS);
+=======
+        case PROCESS_TIMEOUT: {
+        	// falta quantum. Chequeo si finaliza o vuelve a listo aca y en succes
+
+>>>>>>> Cambios en planificador.c: Finalizar-Metricas(medir_tiempo) planificador.h y safa.c DTB_SUCCES y DTB_BLOQUEAR
 			break;
         }
         case DTB_EJECUTO: // No veo diferencias con Process_timeout

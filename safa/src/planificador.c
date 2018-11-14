@@ -35,6 +35,7 @@ void planificador_corto_plazo()
     {
         if(hay_cpu_libre() && !list_is_empty(lista_listos))
         {
+<<<<<<< 49142a6ba090c5d164282f79036859927fae8549
             if(!strcmp(ALGORITMO_PLANIFICACION, "FIFO")) planificar_fifo();
             else if(!strcmp(ALGORITMO_PLANIFICACION, "RR")) planificar_rr();
             else if(!strcmp(ALGORITMO_PLANIFICACION, "VRR")) planificar_vrr();
@@ -44,6 +45,11 @@ void planificador_corto_plazo()
                 printf("No se conoce el algoritmo. Cambielo desde SAFA.config\n");
                 sleep(10);
             }
+=======
+            printf("listas de CPUs: %d", list_size(lista_cpu));
+            cpu_libre->estado = CPU_OCUPADA;
+            ejecutar_primer_dtb_listo(cpu_libre);
+>>>>>>> Cambios en planificador.c: Finalizar-Metricas(medir_tiempo) planificador.h y safa.c DTB_SUCCES y DTB_BLOQUEAR
         }
         sleep(2);
     }
@@ -82,9 +88,15 @@ void ejecutar_primer_dtb_listo() {
 
     DTB* dtb_ejecutar = list_remove(lista_listos, 0);
     DTB_info *info_dtb = info_asociada_a_dtb(dtb_ejecutar);
+<<<<<<< 49142a6ba090c5d164282f79036859927fae8549
     info_dtb->socket_cpu = cpu_libre->socket;
     info_dtb->estado = DTB_EJECUTANDO;
+=======
+    //info_dtb->socket_cpu = cpu_libre->socket; Al cpu_socket y al estado lo modifico en la func
+>>>>>>> Cambios en planificador.c: Finalizar-Metricas(medir_tiempo) planificador.h y safa.c DTB_SUCCES y DTB_BLOQUEAR
     list_add(lista_ejecutando, dtb_ejecutar);
+    info_dtb_modificar (DTB_EJECUTANDO, cpu_libre->socket, info_dtb);
+
     
     Paquete* paquete = malloc(sizeof(Paquete));
     int tamanio_DTB = 0;
@@ -244,10 +256,23 @@ bool esta_libre_cpu(void* cpu) {
     return ((t_cpu*)cpu)->estado == CPU_LIBRE;
 }
 
+<<<<<<< 49142a6ba090c5d164282f79036859927fae8549
 bool hay_cpu_libre() {
     return list_any_satisfy(lista_cpu, esta_libre_cpu);
 }
 
+=======
+
+DTB_info* info_dtb_modificar(Estado estado, int socket, DTB_info *info_dtb){
+
+	info_dtb->socket_cpu = socket;
+	info_dtb->estado = estado;
+
+}
+
+
+
+>>>>>>> Cambios en planificador.c: Finalizar-Metricas(medir_tiempo) planificador.h y safa.c DTB_SUCCES y DTB_BLOQUEAR
 //Funciones booleanas
 
 bool permite_multiprogramacion() {
@@ -279,7 +304,7 @@ DTB *buscar_dtb_en_todos_lados(int pid, DTB_info **info_dtb, t_list **lista_actu
         dtb_encontrado = dtb_encuentra_asociado_a_pid(*lista_actual, pid);
         if(dtb_encontrado != NULL)
         {
-            *info_dtb = info_asociada_a_dtb(dtb_encontrado);
+            *info_dtb = info_asociada_a_dtb(dtb_encontrado); //Devuelve el DTB que se guarda localmente en planificador
             break;
         }
     }
@@ -346,7 +371,7 @@ void mostrar_proceso(void *_dtb, void *_info_dtb)
             break;
         }
     }
-    printf("Escriptorio:\n");
+    printf("\nEscriptorio:\n");
     list_iterate(dtb->archivosAbiertos, mostrar_archivo);
 }
 
@@ -372,7 +397,7 @@ void status()
         printf("Cantidad de procesos en Estado %s: %i\n", Estados[i], list_size(lista_mostrar));
         // if(list_size(lista_mostrar) != 0)printf("Informacion asociada a los procesos de la lista:\n");
 	    if (list_size(lista_mostrar) != 0) list_iterate(lista_mostrar, mostrar_proceso_reducido);
-        // Informacion complementaria de cada cola??
+
     }
     return;
 }
@@ -446,6 +471,8 @@ DTB *dtb_reemplazar_de_lista(DTB *dtb, t_list *source, t_list *dest, Estado esta
     DTB_info *info_vieja = info_asociada_a_dtb(dtb_viejo);
     DTB_info *info_dtb = info_asociada_a_dtb(dtb);
     info_dtb->tiempo_respuesta = info_vieja->tiempo_respuesta;
+    info_dtb->tiempo_ini = info_vieja->tiempo_ini;
+    info_dtb->tiempo_fin = info_vieja->tiempo_fin;
     info_dtb->kill = info_vieja->kill;
     info_dtb->estado = estado;
     liberar_dtb(dtb_viejo);
@@ -501,4 +528,45 @@ void enviar_finalizar_cpu(int pid, int socket_cpu)
     printf("Le mande a cpu que finalice GDT %d\n", pid);
 }
 
-void metricas();
+clock_t* t_ini;
+clock_t* t_fin;
+float secs;
+double contador_procesos_bloqueados = 0, t_total = 0;
+float t_rta;
+
+float medir_tiempo(int signal, clock_t* tin_rcv, clock_t* tfin_rcv){
+
+	switch (signal){
+
+	    case 1:
+	    {
+	     t_ini = tin_rcv;
+	     *t_ini = clock();
+	     break; //tiempo al inicio
+	    }
+
+	    case 0:
+	    {
+	     t_ini = tin_rcv;
+	     t_fin = tfin_rcv;
+	     *t_fin = clock();//tiempo al final
+	    secs = ((double) ((*t_fin) - (*t_ini)) / CLOCKS_PER_SEC)*1000;
+	    contador_procesos_bloqueados++;
+	    t_total+=secs;
+	    break;
+	    }
+	    default:
+	    {
+
+	    }
+	  }
+	  return secs;
+	  t_rta = t_total/contador_procesos_bloqueados;
+}
+
+
+
+void metricas(){
+
+	printf("\nEl Tiempo de Respuesta del sistema es: %f milisegundos", t_rta);
+}

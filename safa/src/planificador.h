@@ -10,12 +10,13 @@ typedef enum {
 	CPU_LIBRE, CPU_OCUPADA
 } Estado;
 
-char *Estados[5];
 
 typedef struct DTB_info {
 	u_int32_t gdtPID;
 	Estado estado;
 	int socket_cpu;
+	clock_t* tiempo_ini;
+	clock_t* tiempo_fin;
 	float tiempo_respuesta;
 	bool kill;
 } DTB_info;
@@ -74,6 +75,9 @@ DTB *dtb_reemplazar_de_lista(DTB *dtb, t_list *source, t_list *dest, Estado esta
 
 DTB *buscar_dtb_en_todos_lados(int pid, DTB_info **info_dtb, t_list **lista_actual);
 
+//Funciones auxiliares para modificar Datos DTB
+DTB_info* info_dtb_modificar(Estado estado, int socket, DTB_info *info_dtb);
+
 //Funciones de cpu
 void liberar_cpu(int socket);
 t_cpu* cpu_con_socket(t_list* lista, int socket);
@@ -101,8 +105,8 @@ void gdt_status(int* pid);
 void finalizar(int *pid);
 void manejar_finalizar(int pid, DTB_info *info_dtb, DTB *dtb, t_list *lista_actual);
 void enviar_finalizar_dam(int pid);
-void metricas();
 DTB* buscar_dtb_por_pid (void* pid_recibido, int index );
-
+void metricas();
+float medir_tiempo(int signal, clock_t* tin_rcv, clock_t* tfin_rcv);
 
 #endif /* PLANIFICADOR_H_ */
