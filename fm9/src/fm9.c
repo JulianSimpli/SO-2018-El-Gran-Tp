@@ -2,10 +2,11 @@
 
 
 char *MODO, *IP_FM9;
-int PUERTO_FM9, TAMANIO, MAX_LINEA, TAM_PAGINA, socketElDiego;
-void *ptrStorage;
+int PUERTO_FM9, TAMANIO, MAX_LINEA, TAM_PAGINA, socketElDiego, lineasTotales;
+char** memoria;
 
 t_list* listaHilos;
+
 bool end;
 
 t_log* logger;
@@ -55,48 +56,6 @@ void accion(void* socket) {
 }
 
 /*
-Estructuras a utilizar:
-
-¡DTB! el cual debe contener:
-	id proceso
-	socket
-	tamaño del archivo (cantidad de lineas)
-	inicio del segmento
-	desplazamiento
-(si el proceso se divide en stack, codigo, lo que sea;
-tiene que haber un inicio del segmento y desplazamiento para cada uno)
-
-le estructura que reciba de MDJ al 'abrir' debe contener:
-	un proceso (DTB)
-	y el contenido de la ruta que se mandó a abrir
-(Respecto a mdj tener en cuenta el transfer size)
-
-typedef struct {
-	int socket;
-	int idProceso;
-	t_list* segmentos;
-} procesoSegmentacion;
-
-typedef struct {
-	int nroSegmento;
-	int inicio;
-	int desplazamiento;
-} segmentacion;
-
-typedef struct {
-	void* inicio;
-
-} storage;
-
-typedef struct {
-	t_list* t_segmentosProceso;
-	int tamanio;
-typedef struct {
-	cpu;
-	script;
-} proceso;
-
-en la funcion accion (tener en cuenta siempre transfer size -> buffering):
 while (RecibirPaqueteServidor(socketFD, FM9, &paquete) > 0) {
 	if (!strcmp(paquete.header.emisor, ELDIEGO)) {
 		switch (paquete.header.tipoMensaje) {
@@ -112,9 +71,6 @@ while (RecibirPaqueteServidor(socketFD, FM9, &paquete) > 0) {
 		}
 	}
 }
-
-
-
 */
 
 void consola() {
@@ -134,43 +90,153 @@ void consola() {
 }
 
 int RecibirPaqueteServidorFm9(int socketFD, Emisor receptor, Paquete* paquete) {
- 	paquete->Payload = NULL;
- 	int resul = RecibirDatos(&(paquete->header), socketFD, TAMANIOHEADER);
- 	char* n = Emisores[paquete->header.emisor];
- 	if (resul > 0) { //si no hubo error
- 		if ((paquete->header.tipoMensaje == ESHANDSHAKE) && (paquete->header.emisor == ELDIEGO)) { //vemos si es un handshake
- 			printf("Se establecio conexion con %s\n", n);
- 			EnviarHandshakeELDIEGO(socketFD); // paquete->header.emisor
- 		} else if ((paquete->header.tipoMensaje == ESHANDSHAKE) && (paquete->header.emisor == CPU)) {
- 			printf("Se establecio conexion con %s\n", n);
- 			EnviarHandshake(socketFD, receptor); // paquete->header.emisor
- 		} else if (paquete->header.tamPayload > 0){ //recibimos un payload y lo procesamos (por ej, puede mostrarlo)
- 			paquete->Payload = malloc(paquete->header.tamPayload);
- 			resul = RecibirDatos(paquete->Payload, socketFD, paquete->header.tamPayload);
- 		}
- 	}
- 	return resul;
- }
+	paquete->Payload = NULL;
+	int resul = RecibirDatos(&(paquete->header), socketFD, TAMANIOHEADER);
+	char* n = Emisores[paquete->header.emisor];
+	if (resul > 0) { //si no hubo error
+		if ((paquete->header.tipoMensaje == ESHANDSHAKE) && (paquete->header.emisor == ELDIEGO)) { //vemos si es un handshake
+			printf("Se establecio conexion con %s\n", n);
+			EnviarHandshakeELDIEGO(socketFD); // paquete->header.emisor
+		} else if ((paquete->header.tipoMensaje == ESHANDSHAKE) && (paquete->header.emisor == CPU)) {
+			printf("Se establecio conexion con %s\n", n);
+			EnviarHandshake(socketFD, receptor); // paquete->header.emisor
+		} else if (paquete->header.tamPayload > 0){ //recibimos un payload y lo procesamos (por ej, puede mostrarlo)
+			paquete->Payload = malloc(paquete->header.tamPayload);
+			resul = RecibirDatos(paquete->Payload, socketFD, paquete->header.tamPayload);
+		}
+	}
+	return resul;
+}
 
- void EnviarHandshakeELDIEGO(int socketFD) {
- 	Paquete* paquete = malloc(TAMANIOHEADER + sizeof(MAX_LINEA));
- 	Header header;
- 	header.tipoMensaje = ESHANDSHAKE;
- 	header.tamPayload = sizeof(MAX_LINEA);
- 	header.emisor = FM9;
- 	paquete->header = header;
- 	paquete->Payload = malloc(sizeof(MAX_LINEA));
- 	memcpy(paquete->Payload, &MAX_LINEA, sizeof(u_int32_t));
- 	bool valor_retorno=EnviarPaquete(socketFD, paquete);
- 	free(paquete);
- }
+void EnviarHandshakeELDIEGO(int socketFD) {
+	Paquete* paquete = malloc(TAMANIOHEADER + sizeof(MAX_LINEA));
+	Header header;
+	header.tipoMensaje = ESHANDSHAKE;
+	header.tamPayload = sizeof(MAX_LINEA);
+	header.emisor = FM9;
+	paquete->header = header;
+	paquete->Payload = malloc(sizeof(MAX_LINEA));
+	memcpy(paquete->Payload, &MAX_LINEA, sizeof(u_int32_t));
+	bool valor_retorno=EnviarPaquete(socketFD, paquete);
+	free(paquete);
+}
+
+/*
+typedef struct DTB{
+	u_int32_t gdtPID; // me importa
+	u_int32_t PC; // me importa
+	u_int32_t flagInicializacion;
+	char *pathEscriptorio;
+	t_list *archivosAbiertos; // me importa
+} DTB;
+*/
+
+void asignarMemoriaLineas() {
+	lineasTotales = TAMANIO/MAX_LINEA;
+	memoria = (char**) malloc(lineasTotales * sizeof(char*));
+	for(int i = 0; i < lineasTotales; i++) {
+		memoria[i] = (char*) malloc(MAX_LINEA);
+		strcpy(memoria[i], "NaN");
+	}
+}
+
+int cantidadLineasLibresMemoria() {
+	int contador = 0;
+	for(int i = 0; i < lineasTotales; i++){
+		if(!strcmp(memoria[i], "NaN")){
+			contador++;
+		}
+	}
+	return contador;
+}
+
+//devuelve el nro de linea en el que empiezan los espacios libres consecutivos
+int lineasLibresConsecutivasMemoria(int lineasAGuardar) {
+	int contador = 0;
+	for(int i = 0; i < lineasTotales; i++){
+		if(!strcmp(memoria[i], "NaN")){
+			contador++;
+		} else {
+			contador = 0;
+		}
+		if(contador == lineasAGuardar){
+			return (i-contador+1);
+		}
+	}
+	return -1;
+}
+
+int primerLineaVaciaMemoria() {
+	for(int i = 0; i < lineasTotales; i++){
+		if(!strcmp(memoria[i], "NaN")){
+			return i;
+		}
+	}
+	return -1;
+}
+
+void ejemploCargarArchivoAMemoria() {
+	//recibo el archivo en string(?), cantidad de lineas (o las cuento yo), un id del archivo
+	//y el id del proceso que lo abrió
+	//------------
+	int idProc = 1;
+	char* idArch = "path";
+	char* archivo = "primer linea\nsegunda linea\ntercera linea";
+	int cantidadLineas = 3;
+	//-----------
+	//separo el string en lineas separando por \n
+	char** arrayLineas = string_n_split(archivo, cantidadLineas, "\n");
+	printf("\nguardo un archivo que contiene las siguientes lineas:\n%s\n%s\n%s\n", arrayLineas[0], arrayLineas[1], arrayLineas[2]);
+	//hay espacio en memoria?
+	int lineasLibres = lineasLibresConsecutivasMemoria(cantidadLineas);
+	if (lineasLibres>=0) {
+		//inicializo estructuras
+		ProcesoArchivo* procesoArchivo = malloc(sizeof(procesoArchivo));
+		t_list* segmentos;
+		segmentos = list_create();
+		SegmentoArchivo* unSegmentoArchivo = malloc(sizeof(SegmentoArchivo));
+		t_list* lineasArchivo;
+		lineasArchivo = list_create();
+		unSegmentoArchivo->idArchivo = malloc(strlen(idArch) + 1);
+		//persistencia de datos
+		strcpy(unSegmentoArchivo->idArchivo, idArch);
+		for (int x = 0; x < cantidadLineas; x++) {
+			list_add(lineasArchivo, arrayLineas[x]);
+		}
+		//guardo las lineas de un archivo-segmento en una lista
+		unSegmentoArchivo->lineas = lineasArchivo;
+		procesoArchivo->idProceso = idProc;
+		list_add(segmentos, unSegmentoArchivo);
+		procesoArchivo->segmentos = segmentos;
+		//hasta acá debería tener guardado un id de proceso con su lista de segmentos
+		//cuya lista de segmentos posee 1 elemento el cual tiene un id de archivo y su lista de lineas
+		//me falta agregarle el inicio de la ubicacion en memoria real de cada archivo
+		//cargo a memoria real cada segmento
+		unSegmentoArchivo->inicio = lineasLibres;
+		int linea = 0;
+		for(int x = lineasLibres; x < (cantidadLineas+lineasLibres); x++) {
+			strcpy(memoria[x], arrayLineas[linea]);
+			linea++;
+		}
+	}
+}
+
+void imprimirMemoria(){
+	for(int i = 0; i < lineasTotales; i++) {
+		printf("\nposicion de memoria: linea %d, dato: %s", i, memoria[i]);
+	}
+	printf("\ncantidad lineas libres de memoria: %d\n", cantidadLineasLibresMemoria());
+}
 
 int main() {
 	crearLogger();
 	log_info(logger, "Probando FM9.log");
 	obtenerValoresArchivoConfiguracion();
 	imprimirArchivoConfiguracion();
-	//ptrStorage = malloc(TAMANIO);
+	asignarMemoriaLineas();
+	imprimirMemoria();
+	ejemploCargarArchivoAMemoria();
+	imprimirMemoria();
 	ServidorConcurrente(IP_FM9, PUERTO_FM9, FM9, &listaHilos, &end, accion);
 	pthread_t hiloConsola; //un hilo para la consola
 	pthread_create(&hiloConsola, NULL, (void*) consola, NULL);
