@@ -33,7 +33,7 @@ void planificador_corto_plazo()
 {
     while(true)
     {
-        if(hay_cpu_libre() && !list_is_empty(lista_listos))
+        if(hay_cpu_libre(lista_cpu) && !list_is_empty(lista_listos))
         {
             if(!strcmp(ALGORITMO_PLANIFICACION, "FIFO")) planificar_fifo();
             else if(!strcmp(ALGORITMO_PLANIFICACION, "RR")) planificar_rr();
@@ -76,16 +76,16 @@ void mover_primero_de_lista1_a_lista2(t_list* lista1, t_list* lista2) {
 
 //Funciones planificador corto plazo
 void ejecutar_primer_dtb_listo() {
+	DTB_info *info_dtb;
     t_cpu* cpu_libre = list_find(lista_cpu, esta_libre_cpu);
     printf("cpu a usar: %d", cpu_libre->socket);
     cpu_libre->estado = CPU_OCUPADA;
 
     DTB* dtb_ejecutar = list_remove(lista_listos, 0);
-    dtb_remueve_y_actualiza(dtb, );
+    //dtb_remueve_y_actualiza(dtb, ); COMPLETAR
     info_dtb->socket_cpu = cpu_libre->socket;
     info_dtb->estado = DTB_EJECUTANDO;
-    DTB_info *info_dtb = info_asociada_a_pid(dtb_ejecutar->gdtPID);
-    info_dtb_modificar(info_dtb, DTB_EJECUTANDO, cpu_libre->socket);
+    info_dtb = info_asociada_a_pid(dtb_ejecutar->gdtPID);
     list_add(lista_ejecutando, dtb_ejecutar);
     info_dtb_modificar (DTB_EJECUTANDO, cpu_libre->socket, info_dtb);
 
@@ -146,10 +146,10 @@ DTB *crear_dtb(int pid, char* path, int flag_inicializacion)
 	return dtb_nuevo;
 }
 
-DTB *dtb_remueve_y_actualiza(DTB *dtb, t_lits *source, t_list *dest, u_int32_t PC, t_list *archivosAbiertos, Estado estado, int socket)
+DTB *dtb_remueve_y_actualiza(DTB *dtb, t_list *source, t_list *dest, u_int32_t PC, t_list *archivosAbiertos, Estado estado, int socket)
 {
-    DTB *dtb = dtb_remueve(source, dtb);
-    DTB_info *info_dtb = info_asociada_a_dtb(dtb);
+    DTB* dtb_obtenido = dtb_remueve(source, dtb);
+    DTB_info *info_dtb = info_asociada_a_dtb(dtb_obtenido);
     dtb->PC = PC;
     dtb->archivosAbiertos = archivosAbiertos;
     info_dtb->estado = estado;
@@ -159,16 +159,19 @@ DTB *dtb_remueve_y_actualiza(DTB *dtb, t_lits *source, t_list *dest, u_int32_t P
 }
 DTB *dtb_modificar_completo(DTB *dtb, u_int32_t PC, t_list *archivosAbiertos, Estado estado, int socket)
 {
-    dtb_modificar(dtb, PC, archivosAbiertos);
+    DTB* dtb_modificar(dtb, PC, archivosAbiertos);
     DTB_info *info_dtb = info_asociada_a_dtb(dtb->gdtPID);
     info_dtb = info_dtb_modificar(estado, socket, info_dtb);
 }
+
+
 DTB *dtb_modificar(DTB *dtb, u_int32_t PC, t_list* archivosAbiertos)
 {
 
 }
 
-DTB_info* info_dtb_modificar(DTB_info *info_dtb, Estado estado, int socket){
+
+DTB_info* info_dtb_modificar(Estado estado, int socket, DTB_info *info_dtb){
 
 	info_dtb->socket_cpu = socket;
 	info_dtb->estado = estado;
@@ -233,7 +236,7 @@ DTB_info *info_asociada_a_dtb(DTB* dtb)
     return list_find(lista_info_dtb, compara_con_info);
 }
 
-DTB_info *info_asociada_a_pid(int pid)
+DTB_info *info_asociada_a_pid(int pid)   //No hace lo mismo que la de arriba? COMPLETAR
 {
     bool compara_con_info(void *info_dtb)
     {
@@ -281,12 +284,16 @@ t_cpu* cpu_con_socket(t_list* lista, int socket) {
     return list_find(lista, compara_cpu);
 }
 
-bool esta_libre_cpu(void* cpu) {
-    return ((t_cpu*)cpu)->estado == CPU_LIBRE;
+bool esta_libre_cpu (void* cpu) {
+	t_cpu* cpu_recv = (t_cpu*) cpu;
+    return (cpu_recv->estado == CPU_LIBRE);
 }
 
-bool hay_cpu_libre() {
-    return list_any_satisfy(lista_cpu, esta_libre_cpu);
+bool hay_cpu_libre(t_cpu* lista_cpu) {
+	bool buscar_cpu_libre(void* cpu) {
+	    return esta_libre_cpu (cpu);
+	}
+    return list_any_satisfy(lista_cpu, buscar_cpu_libre);
 }
 
 //Funciones booleanas
@@ -461,18 +468,18 @@ void manejar_finalizar(int pid, DTB_info *info_dtb, DTB *dtb, t_list *lista_actu
             enviar_finalizar_dam(pid);
             break;
         }
-        case DTB_NUEVO:
-        {
-            printf("El GDT %d esta en nuevos\n", pid);
-            if(dummy_listo(dtb))
-            {
-                bloquear_dummy(lista_listos);
-                dtb_finalizar_desde(dtb, lista_nuevos);
-            }
-            else if(dummy_ejecutando(dtb)) enviar_finalizar_dam(pid);
-            else finalizar(dtb->gdtPID);
-            break;
-        }
+//        case DTB_NUEVO:
+//        {
+//            printf("El GDT %d esta en nuevos\n", pid);
+//            if(dummy_listo(dtb))
+//            {
+//                bloquear_dummy(lista_listos, pid);
+//                dtb_finalizar_desde(dtb, lista_nuevos);
+//            }
+//            else if(dummy_ejecutando(dtb)) enviar_finalizar_dam(pid);
+//            else finalizar(dtb->gdtPID);
+//            break;
+//        }
         case DTB_FINALIZADO:
         {
             printf("El GDT %d ya fue finalizado\n", pid);

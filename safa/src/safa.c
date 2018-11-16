@@ -35,7 +35,7 @@ void llenar_lista_estados()
 }
 
 void obtener_valores_archivo_configuracion() {
-	t_config* arch = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src/SAFA.config");
+	t_config* arch = config_create("/home/utnso/TPSO/tp-2018-2c-Nene-Malloc/safa/src/SAFA.config");
 	IP = "127.0.0.1";
 	PUERTO = config_get_int_value(arch, "PUERTO");
 	ALGORITMO_PLANIFICACION = string_duplicate(config_get_string_value(arch, "ALGORITMO"));
@@ -85,7 +85,7 @@ void parseo_consola(char* operacion, char* primerParametro) {
 		if(primerParametro == NULL)
 		{
 			printf("expected ejecutar <path>\n");
-			return
+
 		}
 		printf("path a ejecutar es %s\n", primerParametro);
 		ejecutar(primerParametro);
@@ -171,7 +171,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			u_int32_t pid;
 			memcpy(&pid, paquete->Payload, sizeof(u_int32_t));
 			log_info(logger, "%d fue cargado en memoria", pid);
-			if(((DTB_info *)info_asociada_a_pid(&pid))->kill)
+			if(((DTB_info *)info_asociada_a_pid(pid))==kill)
 			{
 				enviar_finalizar_dam(&pid);
 				break;
@@ -185,7 +185,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		{
 			u_int32_t pid;
 			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
-			bloquear_dummy(lista_ejecutando, &pid);
+			bloquear_dummy(lista_ejecutando, pid);
 			log_error(logger, "Fallo la carga en memoria del %d", pid);
 			break;
 		}
@@ -262,7 +262,7 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD)
 
 			liberar_cpu(socketFD);
             DTB* dtb = DTB_deserializar(paquete->Payload);
-			dtb = dtb_reemplazar_de_lista(dtb, lista_ejecutando, lista_listos, DTB_LISTOS);
+			dtb = dtb_reemplazar_de_lista(dtb, lista_ejecutando, lista_listos, DTB_LISTO);
         }
         case DTB_EJECUTO: // No veo diferencias con Process_timeout
 		{				// repensar si se hace aca el chequeo de finalizo o no dtb o si lo hace cpu
@@ -278,14 +278,14 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD)
 			dtb = dtb_reemplazar_de_lista(dtb, lista_ejecutando, lista_finalizados, DTB_FINALIZADO);
 			break;
 		}
-		case LIBERAR_RECURSO:
-		{
-			break;
-		}
-		case BLOQUEAR_RECURSO:
-		{
-			break;
-		}
+//		case LIBERAR_RECURSO:  COMPLETAR
+//		{
+//			break;
+//		}
+//		case BLOQUEAR_RECURSO: COMPLETAR
+//		{
+//			break;
+//		}
 
 	}
 }

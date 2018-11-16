@@ -63,27 +63,28 @@ DTB *crear_dtb(int pid, char *path, int flag_inicializacion);
 void liberar_dtb(void *dtb);
 void liberar_info(void *dtb);
 void desbloquear_dummy(DTB* dtb_nuevo);
-void bloquear_dummy(int pid);
+void bloquear_dummy(t_list* lista, int pid);
 void notificar_al_plp(int pid);
 DTB *dtb_encuentra_asociado_a_pid(t_list* lista, int pid);
 DTB *dtb_remueve_asociado_a_pid(t_list* lista, int pid);
 DTB *dtb_remueve(t_list *lista, DTB* dtb);
 bool coincide_pid(int pid, void* DTB);
 DTB_info *info_asociada_a_dtb(DTB *dtb);
+DTB_info *info_asociada_a_pid(int pid);
 bool coincide_pid_info(int pid, void *info_dtb);
 DTB *dtb_reemplazar_de_lista(DTB *dtb, t_list *source, t_list *dest, Estado estado);
 
 DTB *buscar_dtb_en_todos_lados(int pid, DTB_info **info_dtb, t_list **lista_actual);
 
 //Funciones auxiliares para modificar Datos DTB
-DTB_info* info_dtb_modificar(Estado estado, int socket, DTB_info *info_dtb);
+DTB_info* info_dtb_modificar(Estado estado, int socket, DTB_info *info_dtb); //Hace falta PC??
 
 //Funciones de cpu
 void liberar_cpu(int socket);
 t_cpu* cpu_con_socket(t_list* lista, int socket);
 bool coincide_socket(int socket, void* cpu);
 bool esta_libre_cpu(void* cpu);
-t_cpu *cpu_libre();
+bool hay_cpu_libre(t_cpu* lista_cpu);
 
 //Funciones booleanas
 bool permite_multiprogramacion();
