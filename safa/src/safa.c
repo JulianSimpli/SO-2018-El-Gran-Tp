@@ -35,7 +35,7 @@ void llenar_lista_estados()
 }
 
 void obtener_valores_archivo_configuracion() {
-	t_config* arch = config_create("/home/utnso/TPSO/tp-2018-2c-Nene-Malloc/safa/src/SAFA.config");
+	t_config* arch = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src/SAFA.config");
 	IP = "127.0.0.1";
 	PUERTO = config_get_int_value(arch, "PUERTO");
 	ALGORITMO_PLANIFICACION = string_duplicate(config_get_string_value(arch, "ALGORITMO"));
@@ -79,7 +79,7 @@ void consola() {
 }
 
 void parseo_consola(char* operacion, char* primerParametro) {
-	int pid = 0;
+	u_int32_t pid = 0;
 	if (string_equals_ignore_case (operacion, EJECUTAR))
 	{
 		if(primerParametro == NULL)
@@ -95,7 +95,7 @@ void parseo_consola(char* operacion, char* primerParametro) {
 		{
 			pid = atoi(primerParametro);
 			printf("pid a mostrar status es %i\n", pid);
-			gdt_status(&pid);
+			gdt_status(pid);
 		} else
 		{
 			printf("status no trajo parametros. Se mostraran estados de las colas\n");
@@ -111,7 +111,7 @@ void parseo_consola(char* operacion, char* primerParametro) {
 
 		pid = atoi(primerParametro);
 		printf("pid a finalizar es %i\n", pid);
-		finalizar(&pid);
+		finalizar(pid);
 	} else if(string_equals_ignore_case (operacion, METRICAS))
 	{
 		if (primerParametro != NULL)
@@ -171,9 +171,10 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			u_int32_t pid;
 			memcpy(&pid, paquete->Payload, sizeof(u_int32_t));
 			log_info(logger, "%d fue cargado en memoria", pid);
-			if(((DTB_info *)info_asociada_a_pid(pid))==kill)
+			DTB_info *info_dtb = info_asociada_a_pid(pid);
+			if(info_dtb->kill)
 			{
-				enviar_finalizar_dam(&pid);
+				enviar_finalizar_dam(pid);
 				break;
 			}
 			pasaje_a_ready(&pid);
@@ -200,11 +201,10 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
 			DTB_info *info_dtb;
 			t_list *lista_actual;
-			DTB *dtb = buscar_dtb_en_todos_lados(pid, &info_dtb, &lista_actual);
-			info_dtb = info_asociada_a_dtb(dtb);
-			mover_dtb_de_lista (dtb, lista_bloqueados, lista_listos);
+			DTB *dtb = dtb_buscar_en_todos_lados(pid, &info_dtb, &lista_actual);
+			mover_dtb_de_lista(dtb, lista_bloqueados, lista_listos);
 			info_dtb->tiempo_respuesta = medir_tiempo(0, (info_dtb->tiempo_ini), (info_dtb->tiempo_fin));
-			info_dtb_modificar(DTB_LISTO, info_dtb->socket_cpu, info_dtb);
+			info_dtb_actualizar(DTB_LISTO, info_dtb->socket_cpu, info_dtb);
 			break;
 		 }
 		case DTB_FAIL:
@@ -218,7 +218,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
 			DTB_info *info_dtb;
 			t_list *lista_actual;
-			DTB *dtb = buscar_dtb_en_todos_lados(pid, &info_dtb, &lista_actual);
+			DTB *dtb = dtb_buscar_en_todos_lados(pid, &info_dtb, &lista_actual);
 			if(esta_en_memoria(info_dtb)) procesos_en_memoria--;
 			dtb_finalizar_desde(dtb, lista_actual);
             // en que momento liberar_dtb(dtb);
@@ -249,43 +249,43 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD)
 			liberar_cpu(socketFD);
 			// METRICAS CLOCK;
 			DTB *dtb = DTB_deserializar(paquete->Payload);
-			dtb = dtb_reemplazar_de_lista(dtb, lista_ejecutando, lista_bloqueados, DTB_BLOQUEADO);
-			DTB_info* info_dtb = info_asociada_a_dtb(dtb);
+			dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, DTB_BLOQUEADO, socketFD);
+			DTB_info* info_dtb = info_asociada_a_pid(dtb->gdtPID);
 			//dtb_info->tiempo_ini=clock(); LLAMAR A LA FUNCION QUE HAGA ESO
 			medir_tiempo(1,(info_dtb->tiempo_ini), (info_dtb->tiempo_fin));
-			info_dtb_modificar(DTB_BLOQUEADO, info_dtb->socket_cpu, info_dtb);
+			info_dtb_actualizar(DTB_BLOQUEADO, info_dtb->socket_cpu, info_dtb);
 			break;
     	}
 
         case PROCESS_TIMEOUT:
-		{ //        	// falta quantum. Chequeo si finaliza o vuelve a listo aca y en succes
+		{ // falta quantum. Chequeo si finaliza o vuelve a listo aca y en succes
 
 			liberar_cpu(socketFD);
             DTB* dtb = DTB_deserializar(paquete->Payload);
-			dtb = dtb_reemplazar_de_lista(dtb, lista_ejecutando, lista_listos, DTB_LISTO);
+			dtb_actualizar(dtb, lista_ejecutando, lista_listos, DTB_LISTO, socketFD);
         }
         case DTB_EJECUTO: // No veo diferencias con Process_timeout
 		{				// repensar si se hace aca el chequeo de finalizo o no dtb o si lo hace cpu
 			liberar_cpu(socketFD);
             DTB* dtb = DTB_deserializar(paquete->Payload);
-			dtb = dtb_reemplazar_de_lista(dtb, lista_ejecutando, lista_listos, DTB_LISTO);
+			dtb_actualizar(dtb, lista_ejecutando, lista_listos, DTB_LISTO, socketFD);
 			break;
         }
 		case DTB_FINALIZAR:
 		{
 			liberar_cpu(socketFD);
             DTB* dtb = DTB_deserializar(paquete->Payload);
-			dtb = dtb_reemplazar_de_lista(dtb, lista_ejecutando, lista_finalizados, DTB_FINALIZADO);
+			dtb_actualizar(dtb, lista_ejecutando, lista_finalizados, DTB_FINALIZADO, socketFD);
 			break;
 		}
-//		case LIBERAR_RECURSO:  COMPLETAR
-//		{
-//			break;
-//		}
-//		case BLOQUEAR_RECURSO: COMPLETAR
-//		{
-//			break;
-//		}
+		case WAIT:
+		{
+			break;
+		}
+		case SIGNAL:
+		{
+			break;
+		}
 
 	}
 }

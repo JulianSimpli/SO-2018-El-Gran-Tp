@@ -47,67 +47,87 @@ pthread_t hilo_consola, hilo_plp, hilo_pcp;
 //Hilo planificador largo plazo
 void planificador_largo_plazo();
 
-void mover_primero_de_lista1_a_lista2(t_list* lista1, t_list* lista2);
-DTB *mover_dtb_de_lista(DTB *dtb, t_list *source, t_list *dest);
+bool permite_multiprogramacion();
+bool dummy_creado(DTB *dtb);
+
+void pasaje_a_ready(u_int32_t *pid);
+void notificar_al_plp(u_int32_t pid);
+
 
 //Hilo planificador corto plazo
 void planificador_corto_plazo();
-void ejecutar_primer_dtb_listo();
 
-//Colas
-void dtb_finalizar_desde(DTB *dtb, t_list *source);
-void pasaje_a_ready(int *pid);
+void ejecutar_primer_dtb_listo();
+void planificar_fifo();
+void planificar_rr();
+void planificar_vrr();
+void planificar_iobound();
+
 
 //Funciones de DTB
-DTB *crear_dtb(int pid, char *path, int flag_inicializacion);
-void liberar_dtb(void *dtb);
-void liberar_info(void *dtb);
-void desbloquear_dummy(DTB* dtb_nuevo);
-void bloquear_dummy(t_list* lista, int pid);
-void notificar_al_plp(int pid);
-DTB *dtb_encuentra_asociado_a_pid(t_list* lista, int pid);
-DTB *dtb_remueve_asociado_a_pid(t_list* lista, int pid);
-DTB *dtb_remueve(t_list *lista, DTB* dtb);
-bool coincide_pid(int pid, void* DTB);
-DTB_info *info_asociada_a_dtb(DTB *dtb);
-DTB_info *info_asociada_a_pid(int pid);
-bool coincide_pid_info(int pid, void *info_dtb);
-DTB *dtb_reemplazar_de_lista(DTB *dtb, t_list *source, t_list *dest, Estado estado);
+DTB *dtb_crear(u_int32_t pid, char *path, int flag_inicializacion);
 
-DTB *buscar_dtb_en_todos_lados(int pid, DTB_info **info_dtb, t_list **lista_actual);
+void dtb_liberar(void *dtb);
+void info_liberar(void *dtb);
 
-//Funciones auxiliares para modificar Datos DTB
-DTB_info* info_dtb_modificar(Estado estado, int socket, DTB_info *info_dtb); //Hace falta PC??
+DTB *dtb_actualizar(DTB *dtb, t_list *source, t_list *dest, Estado estado, int socket);
+DTB_info* info_dtb_actualizar(Estado estado, int socket, DTB_info *info_dtb);
+
+
+// Busquedas
+DTB *dtb_encuentra(t_list* lista, u_int32_t pid, u_int32_t flag);
+DTB *dtb_remueve(t_list* lista, u_int32_t pid, u_int32_t flag);
+DTB *dtb_buscar_en_todos_lados(u_int32_t pid, DTB_info **info_dtb, t_list **lista_actual);
+bool dtb_coincide_pid(void *dtb, u_int32_t pid, u_int32_t flag);
+
+DTB_info *info_asociada_a_pid(u_int32_t pid);
+bool info_coincide_pid(u_int32_t pid, void *info_dtb);
+
 
 //Funciones de cpu
 void liberar_cpu(int socket);
 t_cpu* cpu_con_socket(t_list* lista, int socket);
 bool coincide_socket(int socket, void* cpu);
 bool esta_libre_cpu(void* cpu);
-bool hay_cpu_libre(t_cpu* lista_cpu);
+bool hay_cpu_libre();
+
 
 //Funciones booleanas
-bool permite_multiprogramacion();
 bool esta_en_memoria(DTB_info *info_dtb);
-bool dummy_creado(void *_dtb);
 
-//
-void dtb_imprimir_basico(DTB *dtb, DTB_info *info_dtb);
-void dtb_imprimir_polenta(DTB *dtb, DTB_info *info_dtb);
-void mostrar_procesos(t_list* lista_procesos);
-void mostrar_proceso_reducido(void *_dtb);
-void mostrar_proceso(void *_dtb, void *_info_dtb);
-void mostrar_archivo(void *_archivo);
+
+//Funciones Dummy
+void desbloquear_dummy(DTB* dtb_nuevo);
+void bloquear_dummy(t_list* lista, u_int32_t pid);
+
 
 //Funciones de Consola
+//Ejecutar
 void ejecutar(char* path);
+
+//Status
 void status();
-void gdt_status(int* pid);
-void finalizar(int *pid);
-void manejar_finalizar(int pid, DTB_info *info_dtb, DTB *dtb, t_list *lista_actual);
-void enviar_finalizar_dam(int pid);
-DTB* buscar_dtb_por_pid (void* pid_recibido, int index );
+void gdt_status(u_int32_t pid);
+void mostrar_proceso(void *_dtb);
+void mostrar_archivo(void *_archivo, int index);
+void dtb_imprimir_basico(void *_dtb);
+void dtb_imprimir_polenta(void *_dtb);
+
+//Finalizar
+void finalizar(u_int32_t pid);
+void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *lista_actual);
+void enviar_finalizar_dam(u_int32_t pid);
+void enviar_finalizar_cpu(u_int32_t pid, int socket);
+
+//Metricas
 void metricas();
 float medir_tiempo(int signal, clock_t* tin_rcv, clock_t* tfin_rcv);
 
 #endif /* PLANIFICADOR_H_ */
+
+// Probablemente dejen de usarse
+DTB *dtb_reemplazar_de_lista(DTB *dtb_nuevo, t_list *source, t_list *dest, Estado estado);
+DTB *mover_dtb_de_lista(DTB *dtb, t_list *source, t_list *dest);
+void mover_primero_de_lista1_a_lista2(t_list* lista1, t_list* lista2);
+void dtb_finalizar_desde(DTB *dtb, t_list *source);
+void dummy_finalizar(DTB *dtb);
