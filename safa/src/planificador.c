@@ -35,7 +35,6 @@ void planificador_corto_plazo()
     {
         if(hay_cpu_libre() && !list_is_empty(lista_listos))
         {
-<<<<<<< 49142a6ba090c5d164282f79036859927fae8549
             if(!strcmp(ALGORITMO_PLANIFICACION, "FIFO")) planificar_fifo();
             else if(!strcmp(ALGORITMO_PLANIFICACION, "RR")) planificar_rr();
             else if(!strcmp(ALGORITMO_PLANIFICACION, "VRR")) planificar_vrr();
@@ -45,11 +44,6 @@ void planificador_corto_plazo()
                 printf("No se conoce el algoritmo. Cambielo desde SAFA.config\n");
                 sleep(10);
             }
-=======
-            printf("listas de CPUs: %d", list_size(lista_cpu));
-            cpu_libre->estado = CPU_OCUPADA;
-            ejecutar_primer_dtb_listo(cpu_libre);
->>>>>>> Cambios en planificador.c: Finalizar-Metricas(medir_tiempo) planificador.h y safa.c DTB_SUCCES y DTB_BLOQUEAR
         }
         sleep(2);
     }
@@ -87,13 +81,11 @@ void ejecutar_primer_dtb_listo() {
     cpu_libre->estado = CPU_OCUPADA;
 
     DTB* dtb_ejecutar = list_remove(lista_listos, 0);
-    DTB_info *info_dtb = info_asociada_a_dtb(dtb_ejecutar);
-<<<<<<< 49142a6ba090c5d164282f79036859927fae8549
+    dtb_remueve_y_actualiza(dtb, );
     info_dtb->socket_cpu = cpu_libre->socket;
     info_dtb->estado = DTB_EJECUTANDO;
-=======
-    //info_dtb->socket_cpu = cpu_libre->socket; Al cpu_socket y al estado lo modifico en la func
->>>>>>> Cambios en planificador.c: Finalizar-Metricas(medir_tiempo) planificador.h y safa.c DTB_SUCCES y DTB_BLOQUEAR
+    DTB_info *info_dtb = info_asociada_a_pid(dtb_ejecutar->gdtPID);
+    info_dtb_modificar(info_dtb, DTB_EJECUTANDO, cpu_libre->socket);
     list_add(lista_ejecutando, dtb_ejecutar);
     info_dtb_modificar (DTB_EJECUTANDO, cpu_libre->socket, info_dtb);
 
@@ -154,6 +146,34 @@ DTB *crear_dtb(int pid, char* path, int flag_inicializacion)
 	return dtb_nuevo;
 }
 
+DTB *dtb_remueve_y_actualiza(DTB *dtb, t_lits *source, t_list *dest, u_int32_t PC, t_list *archivosAbiertos, Estado estado, int socket)
+{
+    DTB *dtb = dtb_remueve(source, dtb);
+    DTB_info *info_dtb = info_asociada_a_dtb(dtb);
+    dtb->PC = PC;
+    dtb->archivosAbiertos = archivosAbiertos;
+    info_dtb->estado = estado;
+    info_dtb->socket_cpu = socket;
+    list_add(dest, dtb);
+    return dtb;
+}
+DTB *dtb_modificar_completo(DTB *dtb, u_int32_t PC, t_list *archivosAbiertos, Estado estado, int socket)
+{
+    dtb_modificar(dtb, PC, archivosAbiertos);
+    DTB_info *info_dtb = info_asociada_a_dtb(dtb->gdtPID);
+    info_dtb = info_dtb_modificar(estado, socket, info_dtb);
+}
+DTB *dtb_modificar(DTB *dtb, u_int32_t PC, t_list* archivosAbiertos)
+{
+
+}
+
+DTB_info* info_dtb_modificar(DTB_info *info_dtb, Estado estado, int socket){
+
+	info_dtb->socket_cpu = socket;
+	info_dtb->estado = estado;
+}
+
 void liberar_dtb(void *dtb)
 {
     if (((DTB *)dtb)->flagInicializacion == 1) liberar_info(dtb);
@@ -171,7 +191,7 @@ void liberar_info(void *dtb)
     list_remove_and_destroy_by_condition(lista_info_dtb, coincide_info, free);
 }
 
-void bloquear_dummy(int pid)
+void bloquear_dummy(t_list *lista, int pid)
 {
     bool compara_dummy(void *dtb)
     {
@@ -209,6 +229,15 @@ DTB_info *info_asociada_a_dtb(DTB* dtb)
     bool compara_con_info(void *info_dtb)
     {
         return coincide_pid_info(dtb->gdtPID, info_dtb);
+    }
+    return list_find(lista_info_dtb, compara_con_info);
+}
+
+DTB_info *info_asociada_a_pid(int pid)
+{
+    bool compara_con_info(void *info_dtb)
+    {
+        return coincide_pid_info(pid, info_dtb);
     }
     return list_find(lista_info_dtb, compara_con_info);
 }
@@ -256,23 +285,10 @@ bool esta_libre_cpu(void* cpu) {
     return ((t_cpu*)cpu)->estado == CPU_LIBRE;
 }
 
-<<<<<<< 49142a6ba090c5d164282f79036859927fae8549
 bool hay_cpu_libre() {
     return list_any_satisfy(lista_cpu, esta_libre_cpu);
 }
 
-=======
-
-DTB_info* info_dtb_modificar(Estado estado, int socket, DTB_info *info_dtb){
-
-	info_dtb->socket_cpu = socket;
-	info_dtb->estado = estado;
-
-}
-
-
-
->>>>>>> Cambios en planificador.c: Finalizar-Metricas(medir_tiempo) planificador.h y safa.c DTB_SUCCES y DTB_BLOQUEAR
 //Funciones booleanas
 
 bool permite_multiprogramacion() {
@@ -304,7 +320,7 @@ DTB *buscar_dtb_en_todos_lados(int pid, DTB_info **info_dtb, t_list **lista_actu
         dtb_encontrado = dtb_encuentra_asociado_a_pid(*lista_actual, pid);
         if(dtb_encontrado != NULL)
         {
-            *info_dtb = info_asociada_a_dtb(dtb_encontrado); //Devuelve el DTB que se guarda localmente en planificador
+            *info_dtb = info_asociada_a_pid(dtb_encontrado->gdtPID); //Devuelve el DTB que se guarda localmente en planificador
             break;
         }
     }
@@ -448,8 +464,13 @@ void manejar_finalizar(int pid, DTB_info *info_dtb, DTB *dtb, t_list *lista_actu
         case DTB_NUEVO:
         {
             printf("El GDT %d esta en nuevos\n", pid);
-            if(dummy_creado(dtb)) enviar_finalizar_dam(pid);
-            else dtb_finalizar_desde(dtb, lista_nuevos);
+            if(dummy_listo(dtb))
+            {
+                bloquear_dummy(lista_listos);
+                dtb_finalizar_desde(dtb, lista_nuevos);
+            }
+            else if(dummy_ejecutando(dtb)) enviar_finalizar_dam(pid);
+            else finalizar(dtb->gdtPID);
             break;
         }
         case DTB_FINALIZADO:
@@ -465,6 +486,10 @@ void manejar_finalizar(int pid, DTB_info *info_dtb, DTB *dtb, t_list *lista_actu
     }
 }
 
+void dummy_finalizar(dtb) {
+    DTB *dummy = dtb_remueve(lista_ejecutando, dtb);
+    liberar_dtb(dummy);
+}
 DTB *dtb_reemplazar_de_lista(DTB *dtb, t_list *source, t_list *dest, Estado estado)
 {
     DTB *dtb_viejo = dtb_remueve(source, dtb);
@@ -484,14 +509,14 @@ DTB *dtb_reemplazar_de_lista(DTB *dtb, t_list *source, t_list *dest, Estado esta
 
 void pasaje_a_ready(int *pid)
 {
-    bloquear_dummy(*pid);
+    bloquear_dummy(lista_ejecutando, *pid);
     notificar_al_plp(*pid);
     log_info(logger, "%d pasa a lista de procesos listos", pid);
 }
 
 void dtb_finalizar_desde(DTB *dtb, t_list *source)
 {
-    DTB_info *info_dtb = info_asociada_a_dtb(dtb);
+    DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
     info_dtb->estado = DTB_FINALIZADO;
     info_dtb->kill = true;
     dtb->PC = ((ArchivoAbierto *)DTB_obtener_escriptorio(dtb))->cantLineas;
@@ -563,8 +588,6 @@ float medir_tiempo(int signal, clock_t* tin_rcv, clock_t* tfin_rcv){
 	  return secs;
 	  t_rta = t_total/contador_procesos_bloqueados;
 }
-
-
 
 void metricas(){
 

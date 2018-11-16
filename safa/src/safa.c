@@ -35,7 +35,7 @@ void llenar_lista_estados()
 }
 
 void obtener_valores_archivo_configuracion() {
-	t_config* arch = config_create("/home/utnso/TPSO/tp-2018-2c-Nene-Malloc/safa/src/SAFA.config");
+	t_config* arch = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src/SAFA.config");
 	IP = "127.0.0.1";
 	PUERTO = config_get_int_value(arch, "PUERTO");
 	ALGORITMO_PLANIFICACION = string_duplicate(config_get_string_value(arch, "ALGORITMO"));
@@ -82,7 +82,11 @@ void parseo_consola(char* operacion, char* primerParametro) {
 	int pid = 0;
 	if (string_equals_ignore_case (operacion, EJECUTAR))
 	{
-		if(primerParametro == NULL) {printf("expected ejecutar <path>\n"); return;}
+		if(primerParametro == NULL)
+		{
+			printf("expected ejecutar <path>\n");
+			return
+		}
 		printf("path a ejecutar es %s\n", primerParametro);
 		ejecutar(primerParametro);
 	} else if (string_equals_ignore_case (operacion, STATUS))
@@ -160,12 +164,18 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			enviar_handshake_diego(socketFD);
 			break;
 		}
+
 		case DUMMY_SUCCES:
 		{
 			// Mensaje contiene pid, posicion en memoria, largo path, cantidad lineas
 			u_int32_t pid;
 			memcpy(&pid, paquete->Payload, sizeof(u_int32_t));
 			log_info(logger, "%d fue cargado en memoria", pid);
+			if(((DTB_info *)info_asociada_a_pid(&pid))->kill)
+			{
+				enviar_finalizar_dam(&pid);
+				break;
+			}
 			pasaje_a_ready(&pid);
 			liberar_cpu(socketFD);
 			log_info(logger, "Cpu %d liberada", socketFD);
@@ -175,20 +185,12 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		{
 			u_int32_t pid;
 			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
-			bloquear_dummy(&pid);
+			bloquear_dummy(lista_ejecutando, &pid);
 			log_error(logger, "Fallo la carga en memoria del %d", pid);
 			break;
 		}
-<<<<<<< 49142a6ba090c5d164282f79036859927fae8549
-		case DTB_SUCCES: // igual que dtb_desbloquear?
-		{	
-			// METRICAS CLOCK
-			break;
-			//Me manda pid, archivos abiertos, datos de memoria virtual para buscar el archivo.
-		}
-=======
 //		case DTB_SUCCES:
-//		{
+//		{	METRICAS CLOCK
 //			break;
 //			//Me manda pid, archivos abiertos, datos de memoria virtual para buscar el archivo.
 //		}
@@ -205,7 +207,6 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			info_dtb_modificar(DTB_LISTO, info_dtb->socket_cpu, info_dtb);
 			break;
 		 }
->>>>>>> Cambios en planificador.c: Finalizar-Metricas(medir_tiempo) planificador.h y safa.c DTB_SUCCES y DTB_BLOQUEAR
 		case DTB_FAIL:
 		{
 			perror("Error ");
@@ -243,13 +244,10 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD)
 
         case DTB_BLOQUEAR:
 		{
-<<<<<<< 49142a6ba090c5d164282f79036859927fae8549
 			// Habria que ver si algoritmo es rr o vrr para recibir quantum que queda
 			// 
 			liberar_cpu(socketFD);
 			// METRICAS CLOCK;
-=======
->>>>>>> Cambios en planificador.c: Finalizar-Metricas(medir_tiempo) planificador.h y safa.c DTB_SUCCES y DTB_BLOQUEAR
 			DTB *dtb = DTB_deserializar(paquete->Payload);
 			dtb = dtb_reemplazar_de_lista(dtb, lista_ejecutando, lista_bloqueados, DTB_BLOQUEADO);
 			DTB_info* info_dtb = info_asociada_a_dtb(dtb);
@@ -259,18 +257,12 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD)
 			break;
     	}
 
-<<<<<<< 49142a6ba090c5d164282f79036859927fae8549
         case PROCESS_TIMEOUT:
-		{
+		{ //        	// falta quantum. Chequeo si finaliza o vuelve a listo aca y en succes
+
 			liberar_cpu(socketFD);
             DTB* dtb = DTB_deserializar(paquete->Payload);
 			dtb = dtb_reemplazar_de_lista(dtb, lista_ejecutando, lista_listos, DTB_LISTOS);
-=======
-        case PROCESS_TIMEOUT: {
-        	// falta quantum. Chequeo si finaliza o vuelve a listo aca y en succes
-
->>>>>>> Cambios en planificador.c: Finalizar-Metricas(medir_tiempo) planificador.h y safa.c DTB_SUCCES y DTB_BLOQUEAR
-			break;
         }
         case DTB_EJECUTO: // No veo diferencias con Process_timeout
 		{				// repensar si se hace aca el chequeo de finalizo o no dtb o si lo hace cpu
