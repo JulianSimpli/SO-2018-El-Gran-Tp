@@ -100,7 +100,7 @@ context(test_dtb) {
 		it("Puede copiar datos staticos que vienen en payload") {
 			DTB *dtb = malloc(sizeof(DTB));
 			int offset = 0;
-			//Puedo consumir los 5 primeros int de una vez 
+			//Puedo consumir los 3 primeros int de una vez 
 			DTB_cargar_estaticos(dtb, payload, &offset);
 			should_int(dtb->gdtPID) be equal to(1);
 			should_int(dtb->PC) be equal to(2);

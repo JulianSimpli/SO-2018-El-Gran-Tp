@@ -1,6 +1,21 @@
 
 #include "dtb.h"
 
+void *DTB_serializar_estaticos(DTB *dtb, int *desplazamiento)
+{
+    void *serializado_ints = malloc(sizeof(u_int32_t) * 3);
+    int tamanio = sizeof(u_int32_t);
+
+    memcpy(serializado_ints, &dtb->gdtPID, tamanio);
+    *desplazamiento += tamanio;
+    memcpy(serializado_ints + *desplazamiento, &dtb->PC, tamanio);
+    *desplazamiento += tamanio;
+    memcpy(serializado_ints + *desplazamiento, &dtb->flagInicializacion, tamanio);
+    *desplazamiento += tamanio;
+    
+    return serializado_ints;
+}
+
 void *DTB_serializar_archivo(ArchivoAbierto *archivo, int *desplazamiento)
 {
     int tamanio = sizeof(u_int32_t);
@@ -43,15 +58,12 @@ void *DTB_serializar_lista(t_list *archivos_abiertos, int *tamanio_total)
 
 void *DTB_serializar(DTB *dtb, int *tamanio_dtb)
 {
-    void *payload = malloc(sizeof(DTB));
+    void *payload;
     int desplazamiento = 0;
     int tamanio = sizeof(u_int32_t);
-    memcpy(payload, &dtb->gdtPID, tamanio);
-    desplazamiento += tamanio;
-    memcpy(payload + desplazamiento, &dtb->PC, tamanio);
-    desplazamiento += tamanio;
-    memcpy(payload + desplazamiento, &dtb->flagInicializacion, tamanio);
-    desplazamiento += tamanio;
+
+    payload = DTB_serializar_estaticos(dtb, &desplazamiento);
+    payload = realloc(payload, sizeof(void *));
 
     //La lista va estar vacia solo en el caso del dummy ahora
     if (dtb->archivosAbiertos == NULL)

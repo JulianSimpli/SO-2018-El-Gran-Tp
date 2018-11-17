@@ -19,6 +19,9 @@ typedef struct {
 } ArchivoAbierto;
 
 //Funciones
+
+void *DTB_serializar_estaticos(DTB *dtb, int *desplazamiento);
+
 void *DTB_serializar_archivo(ArchivoAbierto *archivo, int *desplazamiento);
 
 void *DTB_serializar_lista(t_list *archivos_abiertos, int *tamanio_total);

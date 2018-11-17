@@ -28,6 +28,9 @@ context(test_dtb) {
 			list_add(una_lista, otro_archivo);
 
 			un_dtb = malloc(sizeof(DTB));
+			un_dtb->gdtPID = 1;
+			un_dtb->PC = 10;
+			un_dtb->flagInicializacion = 1;
 
 			un_dtb->archivosAbiertos = una_lista;
 		} end
@@ -39,6 +42,20 @@ context(test_dtb) {
 			free(un_dtb);
 		} end
 
+		it("Puede serializar 3 ints") {
+			int tamanio_serializado = 0;
+			void *serializado = DTB_serializar_estaticos(un_dtb, &tamanio_serializado);
+			should_int(tamanio_serializado) be equal to (12);
+
+			int offset = 0;
+			DTB *dtb = malloc(sizeof(DTB));
+			DTB_cargar_estaticos(dtb, serializado, &offset);
+			should_int(offset) be equal to (12);
+			should_int(dtb->gdtPID) be equal to (1);
+			should_int(dtb->PC) be equal to (10);
+			should_int(dtb->flagInicializacion) be equal to (1);
+			free(dtb);
+		} end
 		it("Puede serializar archivo") {
 			int tamanio_serializado = 0;
 			void *serializado = DTB_serializar_archivo(un_archivo, &tamanio_serializado);
