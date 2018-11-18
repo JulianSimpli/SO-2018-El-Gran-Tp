@@ -25,7 +25,7 @@ typedef enum {
 	VALIDAR_ARCHIVO, CREAR_ARCHIVO, OBTENER_DATOS, GUARDAR_DATOS, BORRAR_ARCHIVO, // Mensajes MDJ
 	DTB_EJECUTO, DTB_BLOQUEAR, PROCESS_TIMEOUT, 						 		// Emisor: CPU, Receptor: SAFA
 	DUMMY_SUCCES, DUMMY_FAIL, DTB_SUCCES, DTB_FAIL,							 	// Emisor: Diego, Receptor: SAFA
-	ESDTBDUMMY, ESDTB															// Emisor: SAFA, Receptor: CPU												
+	ESDTBDUMMY, ESDTB, FINALIZAR, CAMBIO_CONFIG															// Emisor: SAFA, Receptor: CPU												
 	} Tipo;													
 
 typedef struct {
