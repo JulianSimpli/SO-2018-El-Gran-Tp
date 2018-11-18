@@ -22,7 +22,7 @@ void crear_listas()
     lista_finalizados = list_create();
 	lista_estados = list_create();
 	lista_info_dtb = list_create();
-	printf("listas creadas\n");
+	lista_recursos_global = list_create();
 }
 
 void llenar_lista_estados()
@@ -164,7 +164,6 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			enviar_handshake_diego(socketFD);
 			break;
 		}
-
 		case DUMMY_SUCCES:
 		{
 			// Mensaje contiene pid, posicion en memoria, largo path, cantidad lineas
@@ -249,11 +248,10 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD)
 			liberar_cpu(socketFD);
 			// METRICAS CLOCK;
 			DTB *dtb = DTB_deserializar(paquete->Payload);
-			dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, DTB_BLOQUEADO, socketFD);
+			dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, dtb->PC, DTB_BLOQUEADO, socketFD);
 			DTB_info* info_dtb = info_asociada_a_pid(dtb->gdtPID);
 			//dtb_info->tiempo_ini=clock(); LLAMAR A LA FUNCION QUE HAGA ESO
 			medir_tiempo(1,(info_dtb->tiempo_ini), (info_dtb->tiempo_fin));
-			info_dtb_actualizar(DTB_BLOQUEADO, info_dtb->socket_cpu, info_dtb);
 			break;
     	}
 
@@ -262,20 +260,20 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD)
 
 			liberar_cpu(socketFD);
             DTB* dtb = DTB_deserializar(paquete->Payload);
-			dtb_actualizar(dtb, lista_ejecutando, lista_listos, DTB_LISTO, socketFD);
+			dtb_actualizar(dtb, lista_ejecutando, lista_listos, dtb->PC, DTB_LISTO, socketFD);
         }
         case DTB_EJECUTO: // No veo diferencias con Process_timeout
 		{				// repensar si se hace aca el chequeo de finalizo o no dtb o si lo hace cpu
 			liberar_cpu(socketFD);
             DTB* dtb = DTB_deserializar(paquete->Payload);
-			dtb_actualizar(dtb, lista_ejecutando, lista_listos, DTB_LISTO, socketFD);
+			dtb_actualizar(dtb, lista_ejecutando, lista_listos, dtb->PC, DTB_LISTO, socketFD);
 			break;
         }
 		case DTB_FINALIZAR:
 		{
 			liberar_cpu(socketFD);
             DTB* dtb = DTB_deserializar(paquete->Payload);
-			dtb_actualizar(dtb, lista_ejecutando, lista_finalizados, DTB_FINALIZADO, socketFD);
+			dtb_actualizar(dtb, lista_ejecutando, lista_finalizados, dtb->PC, DTB_FINALIZADO, socketFD);
 			break;
 		}
 		case WAIT:
@@ -290,22 +288,94 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD)
 	}
 }
 
+t_recurso *recurso_crear(char *id_recurso, int valor_inicial)
+{
+	t_recurso *recurso = malloc(sizeof(t_recurso));
+	recurso->id = malloc(strlen(id_recurso) + 1);
+	strcpy(recurso->id, id_recurso);
+	recurso->semaforo = valor_inicial;
+	recurso->pid_bloqueados = list_create();
+
+	list_add(lista_recursos_global, recurso);
+
+	return recurso;
+}
+
+void recurso_liberar(t_recurso *recurso)
+{
+	free(recurso->id);
+	list_destroy_and_destroy_elements(recurso->pid_bloqueados, free);
+	free(recurso);
+}
+
+bool coincide_id(void *recurso, char *id)
+{
+	return !strcmp(((t_recurso *)recurso)->id, id);
+}
+
+t_recurso *recurso_encontrar(char* id_recurso)
+{
+	bool comparar_id(void *recurso)
+	{
+		return coincide_id(recurso, id_recurso);
+	}
+
+	return list_find(lista_recursos_global, comparar_id);
+}
+
+void *string_serializar(char *string, int *desplazamiento)
+{
+	u_int32_t len_string = strlen(string);
+	void *payload = malloc(sizeof(len_string) + len_string);
+
+	memcpy(payload + *desplazamiento, &len_string, sizeof(len_string));
+	*desplazamiento += sizeof(len_string);
+	memcpy(payload + *desplazamiento, string, len_string);
+	*desplazamiento += len_string;
+
+	return payload;
+}
+
+char *string_deserializar(void *data, int *desplazamiento)
+{         
+	u_int32_t len_string = 0;
+	memcpy(&len_string, data + *desplazamiento, sizeof(len_string));
+	*desplazamiento += sizeof(len_string);
+	
+	char *string = malloc(len_string + 1);
+	memcpy(string, data + *desplazamiento, len_string);
+	*(string+len_string) = '\0';
+	*desplazamiento = *desplazamiento + len_string + 1;
+
+	return string;
+}
+
 void *handshake_cpu_serializar(int *tamanio_payload)
 {
-	void *payload = malloc(sizeof(QUANTUM));
+	void *payload = malloc(sizeof(u_int32_t));
 	int desplazamiento = 0;
-	int tamanio = sizeof(u_int32_t);
-	memcpy(payload, &QUANTUM, tamanio);
-	desplazamiento += tamanio;
 
-	u_int32_t len_algoritmo = strlen(ALGORITMO_PLANIFICACION);
-	payload = realloc(payload, desplazamiento + tamanio);
-	memcpy(payload + desplazamiento, &len_algoritmo, tamanio);
-	desplazamiento += tamanio;
+	memcpy(payload, &QUANTUM, sizeof(u_int32_t));
+	desplazamiento += sizeof(u_int32_t);
 
-	payload = realloc(payload, desplazamiento + len_algoritmo);
-	memcpy(payload + desplazamiento, ALGORITMO_PLANIFICACION, len_algoritmo);
-	desplazamiento += len_algoritmo;
+	int tamanio_serializado = 0;
+	void *algoritmo_serializado = string_serializar(ALGORITMO_PLANIFICACION, &tamanio_serializado);
+	payload = realloc(payload, desplazamiento + tamanio_serializado);
+
+	memcpy(payload + desplazamiento, algoritmo_serializado, tamanio_serializado);
+	desplazamiento += tamanio_serializado;
+	free(algoritmo_serializado); // Esto es correcto?
+
+	// Esto era lo viejo. No lo borro por si rompe todo string_serializar();
+
+	// u_int32_t len_algoritmo = strlen(ALGORITMO_PLANIFICACION);
+	// payload = realloc(payload, desplazamiento + tamanio);
+	// memcpy(payload + desplazamiento, &len_algoritmo, tamanio);
+	// desplazamiento += tamanio;
+
+	// payload = realloc(payload, desplazamiento + len_algoritmo);
+	// memcpy(payload + desplazamiento, ALGORITMO_PLANIFICACION, len_algoritmo);
+	// desplazamiento += len_algoritmo;
 
 	*tamanio_payload = desplazamiento;
 	return payload;

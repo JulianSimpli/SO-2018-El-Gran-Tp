@@ -46,7 +46,7 @@ void planificador_corto_plazo()
                 sleep(10);
             }
         }
-        sleep(2);
+        sleep(1);
     }
 }
 
@@ -77,7 +77,7 @@ void ejecutar_primer_dtb_listo() {
     cpu_libre->estado = CPU_OCUPADA;
 
     DTB *dtb_exec = list_remove(lista_listos, 0);
-    dtb_actualizar(dtb_exec, lista_listos, lista_ejecutando, DTB_EJECUTANDO, cpu_libre->socket);
+    dtb_actualizar(dtb_exec, lista_listos, lista_ejecutando, dtb_exec->PC, DTB_EJECUTANDO, cpu_libre->socket);
     
     Paquete* paquete = malloc(sizeof(Paquete));
     int tamanio_DTB = 0;
@@ -85,16 +85,20 @@ void ejecutar_primer_dtb_listo() {
 
     switch(dtb_exec->flagInicializacion)
     {
-        case 0:
+        case DUMMY:
+        {
             cargar_header(&paquete, tamanio_DTB, ESDTBDUMMY, SAFA);
             EnviarPaquete(cpu_libre->socket, paquete);
             printf("Dummy %d ejecutando en cpu %d\n", dtb_exec->gdtPID, cpu_libre->socket);
             break;
-        case 1:
+        }
+        case GDT:
+        { 
             cargar_header(&paquete, tamanio_DTB, ESDTB, SAFA);
             EnviarPaquete(cpu_libre->socket, paquete);
             printf("GDT %d ejecutando en cpu %d\n", dtb_exec->gdtPID, cpu_libre->socket);
             break;
+        }
     }
     free(paquete);
 }
@@ -102,26 +106,23 @@ void ejecutar_primer_dtb_listo() {
 //Funciones asociadas a DTB
 DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
 {
-	DTB* dtb_nuevo = malloc(sizeof(DTB));
+	DTB *dtb_nuevo = malloc(sizeof(DTB));
     dtb_nuevo->flagInicializacion = flag_inicializacion;
     dtb_nuevo->PC = 0;
     switch(flag_inicializacion)
     {
-        case 0:
+        case DUMMY:
+        {
             dtb_nuevo->gdtPID = pid;
             break;
-        case 1:
+        }
+        case GDT:
+        {
             dtb_nuevo->gdtPID = numero_pid;
             numero_pid++;
-
-            DTB_info *info_dtb = malloc(sizeof(DTB_info));
-            info_dtb->gdtPID = dtb_nuevo->gdtPID;
-            info_dtb->estado = DTB_NUEVO;
-            info_dtb->socket_cpu = 0;
-            info_dtb->tiempo_respuesta = 0;
-            info_dtb->kill = false;
-            list_add(lista_info_dtb, info_dtb);
+            info_dtb_crear(dtb_nuevo->gdtPID);
             break;
+        }
         default:
             printf("flag_inicializacion invalida");
     }
@@ -132,12 +133,29 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
 	return dtb_nuevo;
 }
 
-DTB *dtb_actualizar(DTB *dtb, t_list *source, t_list *dest, Estado estado, int socket)
+DTB_info *info_dtb_crear(u_int32_t pid)
+{
+    DTB_info *info_dtb = malloc(sizeof(DTB_info));
+    info_dtb->gdtPID = pid;
+    info_dtb->estado = DTB_NUEVO;
+    info_dtb->socket_cpu = 0;
+    info_dtb->tiempo_respuesta = 0;
+    info_dtb->kill = false;
+    info_dtb->recursos = list_create();
+    //*info_dtb->tiempo_ini
+    //*info_dtb->tiempo_fin
+    list_add(lista_info_dtb, info_dtb);
+
+    return info_dtb;
+}
+
+DTB *dtb_actualizar(DTB *dtb, t_list *source, t_list *dest, u_int32_t pc, Estado estado, int socket)
 {
     if(dtb_encuentra(source, dtb->gdtPID, dtb->flagInicializacion) != NULL)
         dtb_remueve(source, dtb->gdtPID, dtb->flagInicializacion);
 
     list_add(dest, dtb);
+    dtb->PC = pc;
 
     DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
     info_dtb_actualizar(estado, socket, info_dtb);
@@ -301,31 +319,39 @@ void dtb_imprimir_basico(void *_dtb)
 
     switch(dtb->flagInicializacion)
     {
-        case 0:
+        case DUMMY:
+        {
             printf("DTB Dummy asociado a GDT %d\n", dtb->gdtPID);
             break;
-        case 1:
+        }
+        case GDT:
         {
             ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
             printf( "PID: %i\n"
-                    "Archivos Abiertos: %i\n",
-                    dtb->gdtPID, list_size(dtb->archivosAbiertos));
+                    "Escriptorio: %s%s\n",
+                    dtb->gdtPID, escriptorio->path,
+                    (escriptorio->cantLineas) ? (", cantidad de lineas: %d", escriptorio->cantLineas) : "");
             break;
         }
     }
 }
 
 void dtb_imprimir_polenta(void *_dtb)
+// Agregar lista de recursos.
 {
     DTB *dtb = (DTB *)_dtb;
     DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
-    printf( "Program Counter: %i\n"
+    dtb_imprimir_basico(dtb);
+    printf( "Estado: %s\n"
+            "Program Counter: %i\n"
             "Ultima CPU: %i\n"
             "Tiempo de respuesta: %f\n"
-            "Archivos Abiertos: %i\n"
-            "Proceso finalizado por usuario: %s\n",
-            dtb->PC, info_dtb->socket_cpu, info_dtb->tiempo_respuesta, list_size(dtb->archivosAbiertos),
-            (info_dtb->kill) ? "si" : "no");
+            "Proceso finalizado por usuario: %s\n"
+            "Archivos Abiertos: %i\n",
+            Estados[info_dtb->estado], dtb->PC, info_dtb->socket_cpu,
+            info_dtb->tiempo_respuesta,
+            (info_dtb->kill) ? "si" : "no",
+            list_size(dtb->archivosAbiertos) - 1);
 }
 
 void mostrar_proceso(void *_dtb)
@@ -342,13 +368,12 @@ void mostrar_proceso(void *_dtb)
         }
         default:
         {
-            dtb_imprimir_basico(dtb);
-            printf("Estado: %s\n", Estados[info_dtb->estado]);
             dtb_imprimir_polenta(dtb);
             break;
         }
     }
-    for(int i = 0; i < list_size(dtb->archivosAbiertos); i++)
+
+    for(int i = 1; i < list_size(dtb->archivosAbiertos); i++)
     {
         ArchivoAbierto *archivo = list_get(dtb->archivosAbiertos, i);
         mostrar_archivo(archivo, i);
@@ -358,11 +383,11 @@ void mostrar_proceso(void *_dtb)
 void mostrar_archivo(void *_archivo, int index) // queda en void *_archivo por si volvemos a list_iterate
 {
     ArchivoAbierto *archivo = (ArchivoAbierto *) _archivo;
-    printf( "%s Directorio: %s, %s\n",
+    printf( "Archivo %d:\n"
+            "Directorio: %s, cantidad de lineas:%s\n",
             // Agregar si se agregan campos a ArchivoAbierto
-            (index) ? ("Archivo %d:", index) : ("Escriptorio:"),
-            archivo->path,
-            (archivo->cantLineas) ? ("cantidad de lineas: %i", archivo->cantLineas) : "no cargado todavia.");
+            index,
+            archivo->path, (archivo->cantLineas) ? (", cantidad de lineas: %i", archivo->cantLineas) : "No cargadas todavia");
 }
 
 //Funciones de Consola
@@ -413,31 +438,43 @@ void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *list
     switch(info_dtb->estado)
     {
         case DTB_NUEVO:
+        {
             printf("El GDT %d esta en nuevos\n", pid);
             if(dtb_encuentra(lista_listos, pid, 0))
             {
                 bloquear_dummy(lista_listos, pid);
-                dtb_actualizar(dtb, lista_actual, lista_finalizados, DTB_FINALIZADO, info_dtb->socket_cpu);
+                dtb_actualizar(dtb, lista_actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
             }
             break;
+        }
         case DTB_LISTO:
+        {
             printf("El GDT %d esta listo\n", pid);
             enviar_finalizar_dam(pid);
             break;
+        }
         case DTB_EJECUTANDO:
+        {
             printf("El GDT %d esta ejecutando\n", pid);
             enviar_finalizar_cpu(pid, info_dtb->socket_cpu);
             break;
+        }
         case DTB_BLOQUEADO:
+        {
             printf("El GDT %d esta bloqueado\n", pid);
             enviar_finalizar_dam(pid);
             break;
+        }
         case DTB_FINALIZADO:
+        {
             printf("El GDT %d ya fue finalizado\n", pid);
             break;
+        }
         default:
+        {
             printf("El proceso %d no esta en ninguna cola\n", pid);
             break;
+        }
     }
     printf("El proceso de PID %d se ha movido a la cola de Finalizados\n", dtb->gdtPID);
     //loggear_finalizacion(dtb, info_dtb);

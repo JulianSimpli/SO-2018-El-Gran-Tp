@@ -1,6 +1,9 @@
 #ifndef PLANIFICADOR_H_
 #define PLANIFICADOR_H_
 
+#define GDT 1
+#define DUMMY 0
+
 #include "../../Bibliotecas/dtb.h"
 #include "../../Bibliotecas/sockets.h"
 #include "../../Bibliotecas/helper.h"
@@ -15,16 +18,23 @@ typedef struct DTB_info {
 	u_int32_t gdtPID;
 	Estado estado;
 	int socket_cpu;
-	clock_t* tiempo_ini;
-	clock_t* tiempo_fin;
+	clock_t *tiempo_ini;
+	clock_t *tiempo_fin;
 	float tiempo_respuesta;
 	bool kill;
+	t_list *recursos;
 } DTB_info;
 
 typedef struct {
 	int socket;
     Estado estado;
 }__attribute__((packed)) t_cpu;
+
+typedef struct {
+	char *id;
+	u_int32_t semaforo;
+	t_list *pid_bloqueados;
+}__attribute__((packed)) t_recurso;
 
 t_list *lista_cpu;
 t_list *lista_nuevos;
@@ -38,7 +48,7 @@ t_list *lista_info_dtb;
 t_log *logger;
 
 u_int32_t numero_pid, procesos_en_memoria, procesos_finalizados;
-int MULTIPROGRAMACION, RETARDO_PLANIF; //La carga la config y SAFA al inicializarse
+u_int32_t MULTIPROGRAMACION, RETARDO_PLANIF; //La carga la config y SAFA al inicializarse
 char *ALGORITMO_PLANIFICACION;
 int socket_diego;
 pthread_t hilo_consola, hilo_plp, hilo_pcp;
@@ -66,11 +76,12 @@ void planificar_iobound();
 
 //Funciones de DTB
 DTB *dtb_crear(u_int32_t pid, char *path, int flag_inicializacion);
+DTB_info *info_dtb_crear(u_int32_t pid);
 
 void dtb_liberar(void *dtb);
 void info_liberar(void *dtb);
 
-DTB *dtb_actualizar(DTB *dtb, t_list *source, t_list *dest, Estado estado, int socket);
+DTB *dtb_actualizar(DTB *dtb, t_list *source, t_list *dest, u_int32_t pc, Estado estado, int socket);
 DTB_info* info_dtb_actualizar(Estado estado, int socket, DTB_info *info_dtb);
 
 
