@@ -39,7 +39,7 @@ context(Recursos_safa)
             char *string = malloc(len_string + 1);
             memcpy(string, data + *desplazamiento, len_string);
             *(string+len_string) = '\0';
-            *desplazamiento = *desplazamiento + len_string + 1;
+            *desplazamiento = *desplazamiento + len_string;
 
             return string;
         }
@@ -57,10 +57,11 @@ context(Recursos_safa)
             return recurso;
         }
 
-        void recurso_liberar(t_recurso *recurso)
+        void recurso_liberar(void *_recurso)
         {
+            t_recurso *recurso = (t_recurso *)_recurso;
             free(recurso->id);
-            list_destroy_and_destroy_elements(recurso->pid_bloqueados, free);
+            list_destroy(recurso->pid_bloqueados);
             free(recurso);
         }
 
@@ -132,7 +133,7 @@ context(Recursos_safa)
 
             int desp2 = 0;
             char *deserializado = string_deserializar(payload, &desp2);
-            should_int(desp2) be equal to (10);
+            should_int(desp2) be equal to (9);
             should_string(deserializado) be equal to ("Kappa");
             
             free(payload);

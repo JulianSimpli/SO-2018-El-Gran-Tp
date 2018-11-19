@@ -5,8 +5,8 @@
 #define GDT 1
 #define DUMMY 0
 
-// A partir de 225 empiezan funciones de recursos.
-// A partir de linea 290 empiezan las funciones a testear.
+// A partir de 232 empiezan funciones de recursos.
+// A partir de linea 296 empiezan las funciones a testear.
 
 u_int32_t pid = 0;
 u_int32_t pc = 0;
@@ -59,7 +59,7 @@ typedef struct {
 
 context(wait_signal_recursos)
 {
-    describe("Mensajes de cpu wait y signal")
+    describe("Manejo de wait y signal")
     {
         t_list *lista_recursos_global;
         t_list *lista_nuevos;
@@ -71,6 +71,8 @@ context(wait_signal_recursos)
         t_recurso *recurso1;
         Paquete *paquete_wait;
         Paquete *paquete2_wait;
+        Paquete *paquete_signal;
+        Paquete *paquete2_signal;
 
         DTB *dtb;
 
@@ -271,8 +273,9 @@ context(wait_signal_recursos)
             return recurso;
         }
 
-        void recurso_liberar(t_recurso *recurso)
+        void recurso_liberar(void *_recurso)
         {
+            t_recurso *recurso = (t_recurso *)_recurso;
             free(recurso->id);
             list_destroy(recurso->pid_bloqueados);
             free(recurso);
@@ -327,12 +330,11 @@ context(wait_signal_recursos)
 
         DTB *dtb_signal(t_recurso *recurso, int socket)
         {
-            u_int32_t pid = list_remove(recurso->pid_bloqueados, 0);
-            DTB *dtb = dtb_encuentra(lista_bloqueados, pid, 1);
+            u_int32_t *pid = list_remove(recurso->pid_bloqueados, 0);
+            DTB *dtb = dtb_encuentra(lista_bloqueados, *pid, GDT);
 
-            dtb_actualizar(dtb, lista_bloqueados, lista_listos, dtb->PC, DTB_LISTO, socket);
-            recurso->semaforo--;
-            recurso_asignar_a_pid(recurso, pid);
+            dtb_actualizar(dtb, lista_bloqueados, lista_listos, dtb->PC , DTB_LISTO, 0);
+            recurso_asignar_a_pid(recurso, dtb->gdtPID);
 
             return dtb;
         }
@@ -405,7 +407,7 @@ context(wait_signal_recursos)
                     // u_int32_t pc;
                     t_recurso *recurso = recibir_recurso(paquete->Payload, &pid, &pc);
                     //dtb asociado a pid, y a wait le paso como parametro dtb->gdtPID porque tiene que ser dato persistido en memoria
-                    // si no, se va a borrar cuando salga del bloque
+                    // si no, se va a borrar cuando salga del bloque. Lo mismo en signal.
                     wait(recurso, pid, pc, socketFD);
                     break;
                 }
@@ -414,7 +416,7 @@ context(wait_signal_recursos)
                     // u_int32_t pid;
                     // u_int32_t pc;
                     t_recurso *recurso = recibir_recurso(paquete->Payload, &pid, &pc);
-                    //signal(&recurso, pid, pc, socketFD);
+                    signal(recurso, pid, pc, socketFD);
                     break;
                 }
             }
@@ -472,29 +474,54 @@ context(wait_signal_recursos)
 
         Paquete *paquete_signal_mock()
         {
-            u_int32_t pc = 15;
+            u_int32_t pc = 10;
             u_int32_t pid = dtb->gdtPID;
-            char *id_recurso = "rec_existente";
+            char *id_recurso = "rec_nuevo";
 
-            paquete2_wait = malloc(sizeof(Paquete));
+            paquete_signal = malloc(sizeof(Paquete));
 
             int tam_string = 0;
-            paquete2_wait->Payload = string_serializar(id_recurso, &tam_string);
+            paquete_signal->Payload = string_serializar(id_recurso, &tam_string);
 
             int tam_pid_y_pc = 0;
             void *pc_y_pid = serializar_pid_y_pc(pid, pc, &tam_pid_y_pc);
             int tam_total = tam_string + tam_pid_y_pc;
 
-            paquete2_wait->Payload = realloc(paquete2_wait->Payload, tam_total);
-            memcpy(paquete2_wait->Payload + tam_string, pc_y_pid, tam_pid_y_pc); 
+            paquete_signal->Payload = realloc(paquete_signal->Payload, tam_total);
+            memcpy(paquete_signal->Payload + tam_string, pc_y_pid, tam_pid_y_pc); 
             free(pc_y_pid);
 
-            paquete2_wait->header = cargar_header(tam_total, WAIT, CPU);
+            paquete_signal->header = cargar_header(tam_total, SIGNAL, CPU);
 
             //EnviarPaquete();
             //free(paquete);
         }
         
+        Paquete *paquete2_signal_mock()
+        {
+            u_int32_t pc = 15;
+            u_int32_t pid = dtb->gdtPID;
+            char *id_recurso = "rec_existente";
+
+            paquete2_signal = malloc(sizeof(Paquete));
+
+            int tam_string = 0;
+            paquete2_signal->Payload = string_serializar(id_recurso, &tam_string);
+
+            int tam_pid_y_pc = 0;
+            void *pc_y_pid = serializar_pid_y_pc(pid, pc, &tam_pid_y_pc);
+            int tam_total = tam_string + tam_pid_y_pc;
+
+            paquete2_signal->Payload = realloc(paquete2_signal->Payload, tam_total);
+            memcpy(paquete2_signal->Payload + tam_string, pc_y_pid, tam_pid_y_pc); 
+            free(pc_y_pid);
+
+            paquete2_signal->header = cargar_header(tam_total, SIGNAL, CPU);
+
+            //EnviarPaquete();
+            //free(paquete);
+        }
+
         void dtb_mock()
         {
             dtb = dtb_crear(1, "path/a.txt", GDT); // GDT es la flag
@@ -516,6 +543,8 @@ context(wait_signal_recursos)
             recurso1 = recurso_crear("rec_existente", 1);
             paquete_wait_mock();
             paquete2_wait_mock();
+            paquete_signal_mock();
+            paquete2_signal_mock();
         }
         end
         
@@ -577,38 +606,122 @@ context(wait_signal_recursos)
         }
         end
 
-        it("WAIT asigna recurso a pid, si semaforo es >0")
+        it("WAIT asigna recurso a pid si semaforo es >0")
         {
-            should_int(recurso1->semaforo) be equal to (1);
-            should_string(recurso1->id) be equal to ("rec_existente");
-            should_int(list_size(recurso1->pid_bloqueados)) be equal to (0);
-
             DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
+            should_string(recurso1->id) be equal to ("rec_existente");
+            
+            should_int(recurso1->semaforo) be equal to (1);
+            should_int(list_size(recurso1->pid_bloqueados)) be equal to (0);
             should_int(list_size(info_dtb->recursos)) be equal to (0);
+
             wait(recurso1, dtb->gdtPID, 10, 1);
+
+            should_int(recurso1->semaforo) be equal to (0);
+            should_int(list_size(recurso1->pid_bloqueados)) be equal to (0);
             should_int(list_size(info_dtb->recursos)) be equal to (1);
+
             char *id_rec = list_get(info_dtb->recursos, 0);
             should_string(id_rec) be equal to ("rec_existente");   
         }
         end
 
-        it("WAIT bloquea a pid, si semaforo es <=0")
+        it("WAIT bloquea a pid si semaforo es <=0")
         {
+            DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
+
+            should_int(info_dtb->estado) be equal to (DTB_EJECUTANDO);
+            should_int(list_size(lista_bloqueados)) be equal to (0);
+
             should_int(list_size(recurso1->pid_bloqueados)) be equal to (0);
+            should_int(recurso1->semaforo) be equal to (1);
+
             wait(recurso1, dtb->gdtPID, 10, 1);
             should_int(list_size(recurso1->pid_bloqueados)) be equal to (0);
+            should_int(recurso1->semaforo) be equal to (0);
+
             wait(recurso1, dtb->gdtPID, 11, 1);
             should_int(list_size(recurso1->pid_bloqueados)) be equal to (1);
+            should_int(recurso1->semaforo) be equal to (-1);
             
-            DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
             should_int(info_dtb->estado) be equal to (DTB_BLOQUEADO);
             should_int(list_size(lista_bloqueados)) be equal to (1);
         }
         end
 
-        it("Crea/recibe bien el paquete de salida/llegada de SIGNAL")
+        it("Crea/recibe bien el paquete de salida/llegada de SIGNAL de recurso nuevo. Deja al semaforo en 2.")
         {
-            should_bool(false) be truthy;
+            should_int(list_size(lista_recursos_global)) be equal to (1);
+            test_manejar_paquetes_CPU(paquete_signal, 1);
+
+            should_int(list_size(lista_recursos_global)) be equal to (2);
+            t_recurso *rec_nuevo = list_get(lista_recursos_global, 1);
+            should_string(rec_nuevo->id) be equal to ("rec_nuevo");
+            should_int(rec_nuevo->semaforo) be equal to (2);
+            should_int(list_size(rec_nuevo->pid_bloqueados)) be equal to (0);
+
+            should_int(pc) be equal to (10);
+            should_int(pid) be equal to (dtb->gdtPID);
+
+            free(paquete_signal);        
+        }
+        end
+
+        it("Crea/recibe bien el paquete de salida/llegada de SIGNAL de recurso existente. Deja al semaforo en 2.")
+        {
+            should_int(list_size(lista_recursos_global)) be equal to (1);
+            test_manejar_paquetes_CPU(paquete2_signal, 1);
+
+            should_int(list_size(lista_recursos_global)) be equal to (1);
+            t_recurso *rec_viejo = list_get(lista_recursos_global, 0);
+            should_string(rec_viejo->id) be equal to ("rec_existente");
+            should_int(rec_viejo->semaforo) be equal to (2);
+            should_int(list_size(rec_viejo->pid_bloqueados)) be equal to (0);
+
+            should_int(pc) be equal to (15);
+            should_int(pid) be equal to (dtb->gdtPID);
+
+            free(paquete2_signal);
+        }
+        end
+
+        it("SIGNAL suma 1 si semaforo es >= 0")
+        {
+            should_int(recurso1->semaforo) be equal to (1);
+            signal(recurso1, dtb->gdtPID, 10, 1);
+            should_int(recurso1->semaforo) be equal to (2);
+        }
+        end
+
+        it("SIGNAL desbloquea pid si semaforo es < 0 (Test completo con wait y paquetes)")
+        {
+            test_manejar_paquetes_CPU(paquete_wait, 1);
+            test_manejar_paquetes_CPU(paquete_wait, 1);
+            t_recurso *recurso = list_get(lista_recursos_global, 1);
+            DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
+
+            should_int(list_size(lista_listos)) be equal to (0);
+            should_int(list_size(lista_bloqueados)) be equal to (1);
+            DTB *dtbA = list_get(lista_bloqueados, 0);
+            should_int(dtbA->gdtPID) be equal to (dtb->gdtPID);
+            should_int(info_dtb->estado) be equal to (DTB_BLOQUEADO);
+
+            should_int(recurso->semaforo) be equal to (-1);         // Es -1 porque esta bloqueando 1 proceso
+            should_int(list_size(recurso->pid_bloqueados)) be equal to (1);
+
+            test_manejar_paquetes_CPU(paquete_signal, 1);
+
+            should_int(recurso->semaforo) be equal to (0);          // Es 0 porque tiene 0 procesos bloqueados/0 instancias disponibles
+            should_int(list_size(recurso->pid_bloqueados)) be equal to (0);
+
+            DTB *dtbB = list_get(lista_listos, 0);
+            should_int(dtbB->gdtPID) be equal to (dtb->gdtPID);
+            should_int(info_dtb->estado) be equal to (DTB_LISTO);
+            should_int(list_size(lista_listos)) be equal to (1);
+            should_int(list_size(lista_bloqueados)) be equal to (0);
+
+            free(paquete_wait);
+            free(paquete_signal);
         }
         end
     }

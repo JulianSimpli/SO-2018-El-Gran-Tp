@@ -39,11 +39,19 @@ void enviar_handshake_diego(int socketFD);
 
 //Recursos
 t_recurso *recurso_crear(char *id_recurso, int valor_inicial);
-void recurso_liberar(t_recurso *recurso);
+void recurso_liberar(void *_recurso);
 
 bool coincide_id(void *recurso, char *id);
 t_recurso *recurso_encontrar(char* id_recurso);
 
+t_recurso *recurso_recibir(void *payload, int *pid, int *pc);
+void recurso_signal(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket);
+void recurso_wait(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket);
+DTB *dtb_bloquear(u_int32_t pid, u_int32_t pc, int socket);
+DTB *dtb_signal(t_recurso *recurso, int socket);
+void recurso_asignar_a_pid(t_recurso *recurso, u_int32_t pid);
+void seguir_ejecutando(u_int32_t pid, u_int32_t pc, int socket);
+void *serializar_pid_y_pc(u_int32_t pid, u_int32_t pc, int *tam_pid_y_pc);
 
 //Estas van a para a otro lado
 void *string_serializar(char *string, int *desplazamiento);

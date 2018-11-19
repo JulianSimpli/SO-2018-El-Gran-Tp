@@ -278,14 +278,149 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD)
 		}
 		case WAIT:
 		{
+			u_int32_t pid = 0;
+			u_int32_t pc;
+			t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc);
+			//dtb asociado a pid, y a wait le paso como parametro dtb->gdtPID porque tiene que ser dato persistido en memoria
+			// si no, se va a borrar cuando salga del bloque. Lo mismo en signal.
+			recurso_wait(recurso, pid, pc, socketFD);
 			break;
 		}
 		case SIGNAL:
 		{
+			u_int32_t pid = 0;
+			u_int32_t pc = 0;
+			t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc);
+			recurso_signal(recurso, pid, pc, socketFD);
 			break;
 		}
-
 	}
+}
+
+void *serializar_pid_y_pc(u_int32_t pid, u_int32_t pc, int *tam_pid_y_pc)
+{
+	void *payload = malloc(sizeof(u_int32_t) * 2);
+
+	memcpy(payload + *tam_pid_y_pc, &pid, sizeof(u_int32_t));
+	*tam_pid_y_pc += sizeof(u_int32_t);
+	memcpy(payload + *tam_pid_y_pc, &pc, sizeof(u_int32_t));
+	*tam_pid_y_pc += sizeof(u_int32_t);
+
+	return payload;
+}
+
+void seguir_ejecutando(u_int32_t pid, u_int32_t pc, int socket)
+{
+	Paquete *paquete = malloc(sizeof(Paquete));
+	int tamanio_payload = 0;
+	paquete->Payload = serializar_pid_y_pc(pid, pc, &tamanio_payload);
+	paquete->header = cargar_header(tamanio_payload, SIGASIGA, SAFA);
+	
+	EnviarPaquete(socket, paquete);
+	free(paquete->Payload);
+	free(paquete);
+}
+
+void recurso_asignar_a_pid(t_recurso *recurso, u_int32_t pid)
+{
+	DTB_info *info_dtb = info_asociada_a_pid(pid);
+	list_add(info_dtb->recursos, recurso->id);
+}
+
+DTB *dtb_signal(t_recurso *recurso, int socket)
+{
+	u_int32_t *pid = list_remove(recurso->pid_bloqueados, 0);
+	DTB *dtb = dtb_encuentra(lista_bloqueados, *pid, GDT);
+
+	dtb_actualizar(dtb, lista_bloqueados, lista_listos, dtb->PC , DTB_LISTO, 0);
+	recurso_asignar_a_pid(recurso, dtb->gdtPID);
+
+	return dtb;
+}
+
+DTB *dtb_bloquear(u_int32_t pid, u_int32_t pc, int socket)
+{
+	Paquete *paquete = malloc(sizeof(Paquete));
+	int tamanio_payload = 0;
+	paquete->Payload = serializar_pid_y_pc(pid, pc, &tamanio_payload);
+	paquete->header = cargar_header(tamanio_payload, ROJADIRECTA, SAFA);
+
+	EnviarPaquete(socket, paquete);
+	free(paquete);
+
+	DTB *dtb = dtb_encuentra(lista_ejecutando, pid, 1);
+	dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, pc, DTB_BLOQUEADO, socket);
+
+	return dtb;
+}
+
+void recurso_wait(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket)
+{
+	recurso->semaforo--;
+	if(recurso->semaforo < 0)
+	{
+		list_add(recurso->pid_bloqueados, &pid);
+		dtb_bloquear(pid, pc, socket);
+	}
+	else
+	{
+		recurso_asignar_a_pid(recurso, pid);
+		seguir_ejecutando(pid, pc, socket);
+	}
+}
+
+void recurso_signal(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket)
+{
+	recurso->semaforo++;
+	if(recurso->semaforo <= 0)
+	{
+		dtb_signal(recurso, socket);
+		seguir_ejecutando(pid, pc, socket);
+	}
+	else seguir_ejecutando(pid, pc, socket);
+}
+
+t_recurso *recurso_recibir(void *payload, int *pid, int *pc)
+{
+	int desplazamiento = 0;
+	char *id_recurso = string_deserializar(payload, &desplazamiento);
+
+	memcpy(pid, payload + desplazamiento, sizeof(u_int32_t));
+	desplazamiento += sizeof(u_int32_t);
+	memcpy(pc, payload + desplazamiento, sizeof(u_int32_t));
+	desplazamiento += sizeof(u_int32_t);
+
+	t_recurso *recurso = recurso_encontrar(id_recurso);
+	if (recurso == NULL) recurso = recurso_crear(id_recurso, 1);
+
+	return recurso;
+}
+
+void *string_serializar(char *string, int *desplazamiento)
+{
+	u_int32_t len_string = strlen(string);
+	void *serializado = malloc(sizeof(len_string) + len_string);
+
+	memcpy(serializado + *desplazamiento, &len_string, sizeof(len_string));
+	*desplazamiento += sizeof(len_string);
+	memcpy(serializado + *desplazamiento, string, len_string);
+	*desplazamiento += len_string;
+
+	return serializado;
+}
+
+char *string_deserializar(void *data, int *desplazamiento)
+{         
+	u_int32_t len_string = 0;
+	memcpy(&len_string, data + *desplazamiento, sizeof(len_string));
+	*desplazamiento += sizeof(len_string);
+	
+	char *string = malloc(len_string + 1);
+	memcpy(string, data + *desplazamiento, len_string);
+	*(string+len_string) = '\0';
+	*desplazamiento = *desplazamiento + len_string;
+
+	return string;
 }
 
 t_recurso *recurso_crear(char *id_recurso, int valor_inicial)
@@ -301,10 +436,11 @@ t_recurso *recurso_crear(char *id_recurso, int valor_inicial)
 	return recurso;
 }
 
-void recurso_liberar(t_recurso *recurso)
+void recurso_liberar(void *_recurso)
 {
+	t_recurso *recurso = (t_recurso *)_recurso;
 	free(recurso->id);
-	list_destroy_and_destroy_elements(recurso->pid_bloqueados, free);
+	list_destroy(recurso->pid_bloqueados);
 	free(recurso);
 }
 
@@ -323,32 +459,6 @@ t_recurso *recurso_encontrar(char* id_recurso)
 	return list_find(lista_recursos_global, comparar_id);
 }
 
-void *string_serializar(char *string, int *desplazamiento)
-{
-	u_int32_t len_string = strlen(string);
-	void *payload = malloc(sizeof(len_string) + len_string);
-
-	memcpy(payload + *desplazamiento, &len_string, sizeof(len_string));
-	*desplazamiento += sizeof(len_string);
-	memcpy(payload + *desplazamiento, string, len_string);
-	*desplazamiento += len_string;
-
-	return payload;
-}
-
-char *string_deserializar(void *data, int *desplazamiento)
-{         
-	u_int32_t len_string = 0;
-	memcpy(&len_string, data + *desplazamiento, sizeof(len_string));
-	*desplazamiento += sizeof(len_string);
-	
-	char *string = malloc(len_string + 1);
-	memcpy(string, data + *desplazamiento, len_string);
-	*(string+len_string) = '\0';
-	*desplazamiento = *desplazamiento + len_string;
-
-	return string;
-}
 
 void *handshake_cpu_serializar(int *tamanio_payload)
 {
@@ -398,7 +508,8 @@ void enviar_handshake_diego(int socketFD) {
 	free(paquete);
 }
 
-int main(void) {
+int main(void)
+{
 	crear_logger();
 	inicializar_variables();
 	obtener_valores_archivo_configuracion();
@@ -416,5 +527,6 @@ int main(void) {
 	pthread_join(hilo_consola, NULL);
     pthread_join(hilo_pcp, NULL);
     pthread_join(hilo_plp, NULL);
+
 	return EXIT_SUCCESS;
 }
