@@ -324,7 +324,7 @@ void seguir_ejecutando(u_int32_t pid, u_int32_t pc, int socket)
 void recurso_asignar_a_pid(t_recurso *recurso, u_int32_t pid)
 {
 	DTB_info *info_dtb = info_asociada_a_pid(pid);
-	list_add(info_dtb->recursos, recurso->id);
+	list_add(info_dtb->recursos, recurso);
 }
 
 DTB *dtb_signal(t_recurso *recurso, int socket)

@@ -325,7 +325,7 @@ context(wait_signal_recursos)
         void recurso_asignar_a_pid(t_recurso *recurso, u_int32_t pid)
         {
             DTB_info *info_dtb = info_asociada_a_pid(pid);
-            list_add(info_dtb->recursos, recurso->id);
+            list_add(info_dtb->recursos, recurso);
         }
 
         DTB *dtb_signal(t_recurso *recurso, int socket)
@@ -621,8 +621,8 @@ context(wait_signal_recursos)
             should_int(list_size(recurso1->pid_bloqueados)) be equal to (0);
             should_int(list_size(info_dtb->recursos)) be equal to (1);
 
-            char *id_rec = list_get(info_dtb->recursos, 0);
-            should_string(id_rec) be equal to ("rec_existente");   
+            t_recurso *recurso = list_get(info_dtb->recursos, 0);
+            should_string(recurso->id) be equal to ("rec_existente");   
         }
         end
 
