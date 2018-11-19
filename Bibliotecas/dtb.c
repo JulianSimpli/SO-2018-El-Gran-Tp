@@ -146,7 +146,7 @@ ArchivoAbierto *_DTB_crear_archivo(int cant_lineas, char *path)
 {
     ArchivoAbierto *archivo = malloc(sizeof(ArchivoAbierto));
     archivo->cantLineas = cant_lineas;
-    archivo->path = malloc(strlen(path));
+    archivo->path = malloc(strlen(path)+1);
     strcpy(archivo->path, path);
     return archivo;
 }

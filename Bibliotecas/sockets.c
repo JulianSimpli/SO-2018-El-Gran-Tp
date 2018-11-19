@@ -259,10 +259,12 @@ int RecibirPaqueteCliente(int socketFD, Emisor receptor, Paquete* paquete) {
 	return resul;
 }
 
-void cargar_header(Paquete** paquete, int tamanio_payload, Tipo tipo_mensaje, Emisor emisor)
-{
+Header cargar_header(int tamanio_payload, Tipo tipo_mensaje, Emisor emisor)
+{   
 	Header header;
-	(*paquete)->header.tamPayload = tamanio_payload;
-	(*paquete)->header.tipoMensaje = tipo_mensaje;
-	(*paquete)->header.emisor = emisor;
+	header.tamPayload = tamanio_payload;
+	header.tipoMensaje = tipo_mensaje;
+	header.emisor = emisor;
+
+	return header;
 }

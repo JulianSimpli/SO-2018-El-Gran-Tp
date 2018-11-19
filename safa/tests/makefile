@@ -1,13 +1,7 @@
 LIBS = -lcommons -lcspecs
 TESTS_PATH = /home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/tests 
 
-all:
-	gcc test_plp.c -I$(TESTS_PATH) -o plp $(LIBS) 
-	gcc test_mutex.c -I$(TESTS_PATH) -o mutex $(LIBS)
-	gcc test_handshakes.c -I$(TESTS_PATH) -o handshakes $(LIBS)
-	gcc test_msg_success.c -I$(TESTS_PATH) -o success $(LIBS)
-	gcc test_ejecutar.c -I$(TESTS_PATH) -o ejecutar $(LIBS)
-	gcc test_finalizar.c -I$(TESTS_PATH) -o finalizar $(LIBS)
+all: plp mutex handshakes success ejecutar finalizar recursos
 
 plp:
 	gcc test_plp.c -I$(TESTS_PATH) -o plp $(LIBS) 
@@ -27,6 +21,12 @@ ejecutar:
 finalizar:
 	gcc test_finalizar.c -I$(TESTS_PATH) -o finalizar $(LIBS)
 
+recursos:
+	gcc test_recursos.c -I$(TESTS_PATH) -o recursos $(LIBS)
+
+sigwait:
+	gcc test_sigwait.c -I$(TESTS_PATH) -o sigwait $(LIBS)
+
 clean:
 	-rm -f *.o
-	-rm -f plp mutex handshakes success ejecutar finalizar
+	-rm -f plp mutex handshakes success ejecutar finalizar recursos sigwait

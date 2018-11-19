@@ -42,12 +42,37 @@ context(test_mensajes_safa) {
     describe("Mensajes de entrada a SAFA") {
         Paquete *handshake_cpu;
         Paquete *handshake_diego;
-        // sem_t mutex_handshake_diego;
-        // sem_t mutex_handshake_cpu;
         t_list *lista_cpu;
         char mensaje_diego[20];
         int quantum;
         char *algoritmo;
+
+        void *string_serializar(char *string, int *desplazamiento)
+        {
+            u_int32_t len_string = strlen(string);
+            void *payload = malloc(sizeof(len_string) + len_string);
+
+            memcpy(payload + *desplazamiento, &len_string, sizeof(len_string));
+            *desplazamiento += sizeof(len_string);
+            memcpy(payload + *desplazamiento, string, len_string);
+            *desplazamiento += len_string;
+
+            return payload;
+        }
+
+        char *string_deserializar(void *data, int *desplazamiento)
+        {         
+            u_int32_t len_string = 0;
+            memcpy(&len_string, data + *desplazamiento, sizeof(len_string));
+            *desplazamiento += sizeof(len_string);
+            
+            char *string = malloc(len_string + 1);
+            memcpy(string, data + *desplazamiento, len_string);
+            *(string+len_string) = '\0';
+            *desplazamiento = *desplazamiento + len_string + 1;
+
+            return string;
+        }
 
         void cargar_header(Paquete** paquete, int tamanio_payload, Tipo tipo_mensaje, Emisor emisor)
         {
@@ -60,49 +85,59 @@ context(test_mensajes_safa) {
         void mock_handshake_cpu()
         {
             handshake_cpu = malloc(sizeof(Paquete));
-            // handshake_cpu->header.tipoMensaje = ESHANDSHAKE;
-            // handshake_cpu->header.tamPayload = 0;
-            // handshake_cpu->header.emisor = CPU;
             cargar_header(&handshake_cpu, 0, ESHANDSHAKE, CPU);
         }
 
         void mock_handshake_diego()
         {
             handshake_diego = malloc(sizeof(Paquete));
-            // handshake_diego->header.tipoMensaje = ESHANDSHAKE;
-            // handshake_diego->header.tamPayload = 0;
-            // handshake_diego->header.emisor = ELDIEGO;
             cargar_header(&handshake_diego, 0, ESHANDSHAKE, ELDIEGO);
         }
 
+        // leer_config_safa puede usar string_deserializar;
+        // Actualice el paquete que manda SAFA. Ahora no tenes que sumar sizeof(u_int32_t) porque no recibis RETARDO_PLANIFICACION
         void leer_config_safa(Paquete * paquete)
 		{
-			memcpy(&quantum, paquete->Payload + sizeof(u_int32_t), sizeof(u_int32_t));
-			int len = 0;
-			memcpy(&len, paquete->Payload + sizeof(u_int32_t) * 2, sizeof(u_int32_t));
-			algoritmo = malloc(len + 1);
-			memcpy(algoritmo, paquete->Payload + sizeof(u_int32_t) * 3, len);
-			algoritmo[len] = '\0';
+            int desplazamiento = 0;
+			memcpy(&quantum, paquete->Payload /*+ sizeof(u_int32_t)*/, sizeof(u_int32_t));
+            desplazamiento += sizeof(u_int32_t);
+            algoritmo = string_deserializar(paquete->Payload, &desplazamiento);
+
+            // Esto era lo viejo. Lo dejo comentado por si string_deserializar() rompe todo.
+
+			// int len = 0;
+			// memcpy(&len, paquete->Payload + sizeof(u_int32_t) * 2, sizeof(u_int32_t));
+			// algoritmo = malloc(len + 1);
+			// memcpy(algoritmo, paquete->Payload + sizeof(u_int32_t) * 3, len);
+			// algoritmo[len] = '\0';
 		}
 
         void *handshake_cpu_serializar(int *tamanio_payload)
         {
-            void *payload = malloc(sizeof(RETARDO_PLANIF) + sizeof(QUANTUM));
+            void *payload = malloc(sizeof(u_int32_t));
             int desplazamiento = 0;
-            int tamanio = sizeof(u_int32_t);
-            memcpy(payload, &RETARDO_PLANIF, tamanio);
-            desplazamiento += tamanio;
-            memcpy(payload + desplazamiento, &QUANTUM, tamanio);
-            desplazamiento += tamanio;
 
-            u_int32_t len_algoritmo = strlen(ALGORITMO_PLANIFICACION);
-            payload = realloc(payload, desplazamiento + tamanio);
-            memcpy(payload + desplazamiento, &len_algoritmo, tamanio);
-            desplazamiento += tamanio;
+            memcpy(payload, &QUANTUM, sizeof(u_int32_t));
+            desplazamiento += sizeof(u_int32_t);
 
-            payload = realloc(payload, desplazamiento + len_algoritmo);
-            memcpy(payload + desplazamiento, ALGORITMO_PLANIFICACION, len_algoritmo);
-            desplazamiento += len_algoritmo;
+            int tamanio_serializado = 0;
+            void *algoritmo_serializado = string_serializar(ALGORITMO_PLANIFICACION, &tamanio_serializado);
+            payload = realloc(payload, desplazamiento + tamanio_serializado);
+
+            memcpy(payload + desplazamiento, algoritmo_serializado, tamanio_serializado);
+            desplazamiento += tamanio_serializado;
+            free(algoritmo_serializado); // Esto es correcto?
+
+            // Esto era lo viejo. No lo borro por si rompe todo string_serializar();
+
+            // u_int32_t len_algoritmo = strlen(ALGORITMO_PLANIFICACION);
+            // payload = realloc(payload, desplazamiento + tamanio);
+            // memcpy(payload + desplazamiento, &len_algoritmo, tamanio);
+            // desplazamiento += tamanio;
+
+            // payload = realloc(payload, desplazamiento + len_algoritmo);
+            // memcpy(payload + desplazamiento, ALGORITMO_PLANIFICACION, len_algoritmo);
+            // desplazamiento += len_algoritmo;
 
             *tamanio_payload = desplazamiento;
             return payload;
@@ -210,8 +245,8 @@ context(test_mensajes_safa) {
 
             should_int(paquete->header.tipoMensaje) be equal to (ESHANDSHAKE);
             should_int(paquete->header.emisor) be equal to (SAFA);
-            should_int(paquete->header.tamPayload) be equal to (14);
-            // 14 Bytes = 4 de retardo_planificacion, 4 de quantum, 4 del len_algoritmo y 2 de algoritmo ("rr").
+            should_int(paquete->header.tamPayload) be equal to (10);
+            // 10 Bytes = 4 de quantum, 4 del len_algoritmo y 2 de algoritmo ("rr").
 
             leer_config_safa(paquete);
             should_int(quantum) be equal to (3);
@@ -233,13 +268,6 @@ context(test_mensajes_safa) {
             should_int(paquete->header.tipoMensaje) be equal to (ESHANDSHAKE);
 
             free(paquete);
-        }
-        end
-        it("Despues de hacer handshake con cpu y diego sigue la ejecucion del programa")
-        {
-            // sem_wait(&mutex_handshake_cpu);
-            // sem_wait(&mutex_handshake_diego);
-            should_bool(false) be truthy;
         }
         end
     }

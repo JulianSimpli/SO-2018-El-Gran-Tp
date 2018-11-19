@@ -10,34 +10,50 @@
 #define METRICAS "metricas"
 
 //Declaracion de variables globales
-char *IP, *ALGORITMO_PLANIFICACION;
-int PUERTO, RETARDO_PLANIF, QUANTUM;
+char *IP;
+u_int32_t PUERTO, QUANTUM;
 
 t_list *lista_hilos;
-t_list *lista_cpu;
+t_list *lista_recursos_global;
 
 bool end;
 
 sem_t mutex_handshake_diego;
 sem_t mutex_handshake_cpu;
 
-t_log *logger;
-
 // Declaracion de funciones
-void crearLogger();
-void inicializarVariables();
+void crear_logger();
+void inicializar_variables();
 void crear_listas();
 void llenar_lista_estados();
-void obtenerValoresArchivoConfiguracion();
-void imprimirArchivoConfiguracion();
+void obtener_valores_archivo_configuracion();
+void imprimir_archivo_configuracion();
 void consola();
-void parseoConsola(char* operacion, char* primerParametro);
+void parseo_consola(char* operacion, char* primerParametro);
 void accion(void* socket);
-void manejar_paquetes_diego(Paquete *paquete, int *socketFD);
-void manejar_paquetes_CPU(Paquete *paquete, int *socketFD);
+void manejar_paquetes_diego(Paquete *paquete, int socketFD);
+void manejar_paquetes_CPU(Paquete *paquete, int socketFD);
 void *handshake_cpu_serializar(int *tamanio_payload);
 void enviar_handshake_cpu(int socketFD);
 void enviar_handshake_diego(int socketFD);
+
+//Recursos
+t_recurso *recurso_crear(char *id_recurso, int valor_inicial);
+void recurso_liberar(void *_recurso);
+
+bool coincide_id(void *recurso, char *id);
+t_recurso *recurso_encontrar(char* id_recurso);
+
+t_recurso *recurso_recibir(void *payload, int *pid, int *pc);
+void recurso_signal(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket);
+void recurso_wait(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket);
+DTB *dtb_bloquear(u_int32_t pid, u_int32_t pc, int socket);
+void seguir_ejecutando(u_int32_t pid, u_int32_t pc, int socket);
+void *serializar_pid_y_pc(u_int32_t pid, u_int32_t pc, int *tam_pid_y_pc);
+
+//Estas van a para a otro lado
+void *string_serializar(char *string, int *desplazamiento);
+char *string_deserializar(void *data, int *desplazamiento);
 
 #endif /* SAFA_H_ */
 
