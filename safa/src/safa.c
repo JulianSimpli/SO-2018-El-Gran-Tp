@@ -345,7 +345,7 @@ char *string_deserializar(void *data, int *desplazamiento)
 	char *string = malloc(len_string + 1);
 	memcpy(string, data + *desplazamiento, len_string);
 	*(string+len_string) = '\0';
-	*desplazamiento = *desplazamiento + len_string + 1;
+	*desplazamiento = *desplazamiento + len_string;
 
 	return string;
 }
@@ -385,14 +385,14 @@ void enviar_handshake_cpu(int socketFD) {
 	int tamanio_payload = 0;
 	Paquete* paquete = malloc(sizeof(Paquete));
 	paquete->Payload = handshake_cpu_serializar(&tamanio_payload);
-	cargar_header(&paquete, tamanio_payload, ESHANDSHAKE, SAFA);
+	paquete->header = cargar_header(tamanio_payload, ESHANDSHAKE, SAFA);
 	EnviarPaquete(socketFD, paquete);
 	free(paquete);
 }
 
 void enviar_handshake_diego(int socketFD) {
 	Paquete* paquete = malloc(sizeof(Paquete));
-	cargar_header(&paquete, 0, ESHANDSHAKE, SAFA);
+	paquete->header = cargar_header(0, ESHANDSHAKE, SAFA);
 
 	EnviarPaquete(socketFD, paquete);
 	free(paquete);

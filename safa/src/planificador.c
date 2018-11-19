@@ -87,14 +87,14 @@ void ejecutar_primer_dtb_listo() {
     {
         case DUMMY:
         {
-            cargar_header(&paquete, tamanio_DTB, ESDTBDUMMY, SAFA);
+            paquete->header = cargar_header(tamanio_DTB, ESDTBDUMMY, SAFA);
             EnviarPaquete(cpu_libre->socket, paquete);
             printf("Dummy %d ejecutando en cpu %d\n", dtb_exec->gdtPID, cpu_libre->socket);
             break;
         }
         case GDT:
         { 
-            cargar_header(&paquete, tamanio_DTB, ESDTB, SAFA);
+            paquete->header = cargar_header(tamanio_DTB, ESDTB, SAFA);
             EnviarPaquete(cpu_libre->socket, paquete);
             printf("GDT %d ejecutando en cpu %d\n", dtb_exec->gdtPID, cpu_libre->socket);
             break;
@@ -109,11 +109,15 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
 	DTB *dtb_nuevo = malloc(sizeof(DTB));
     dtb_nuevo->flagInicializacion = flag_inicializacion;
     dtb_nuevo->PC = 0;
+    dtb_nuevo->archivosAbiertos = list_create();
+    DTB_agregar_archivo(dtb_nuevo, 0, path);
+
     switch(flag_inicializacion)
     {
         case DUMMY:
         {
             dtb_nuevo->gdtPID = pid;
+            list_add(lista_listos, dtb_nuevo);
             break;
         }
         case GDT:
@@ -121,14 +125,12 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
             dtb_nuevo->gdtPID = numero_pid;
             numero_pid++;
             info_dtb_crear(dtb_nuevo->gdtPID);
+            list_add(lista_nuevos, dtb_nuevo);
             break;
         }
         default:
             printf("flag_inicializacion invalida");
     }
-
-    dtb_nuevo->archivosAbiertos = list_create();
-    DTB_agregar_archivo(dtb_nuevo, 0, path);
 
 	return dtb_nuevo;
 }
@@ -177,7 +179,7 @@ DTB_info* info_dtb_actualizar(Estado estado, int socket, DTB_info *info_dtb)
 
 void dtb_liberar(void *dtb)
 {
-    if (((DTB *)dtb)->flagInicializacion == 1)
+    if (((DTB *)dtb)->flagInicializacion == GDT)
         info_liberar(dtb);
     list_clean_and_destroy_elements(((DTB *)dtb)->archivosAbiertos, liberar_archivo_abierto);
     free(dtb);
@@ -197,7 +199,7 @@ void bloquear_dummy(t_list *lista, u_int32_t pid)
 {
     bool compara_dummy(void *dtb)
     {
-        return dtb_coincide_pid(dtb, pid, 0);
+        return dtb_coincide_pid(dtb, pid, DUMMY);
     }
     list_remove_and_destroy_by_condition(lista, compara_dummy, dtb_liberar);
 }
@@ -205,8 +207,7 @@ void bloquear_dummy(t_list *lista, u_int32_t pid)
 void desbloquear_dummy(DTB* dtb_nuevo)
 {
     ArchivoAbierto* escriptorio = DTB_obtener_escriptorio(dtb_nuevo);
-    DTB *dtb_dummy = dtb_crear(dtb_nuevo->gdtPID, escriptorio->path, 0);
-    list_add(lista_listos, dtb_dummy);
+    DTB *dtb_dummy = dtb_crear(dtb_nuevo->gdtPID, escriptorio->path, DUMMY);
 }
 
 void notificar_al_plp(u_int32_t pid)
@@ -291,7 +292,7 @@ bool esta_en_memoria(DTB_info *info_dtb)
 
 bool dummy_creado(DTB *dtb)
 {
-    return (dtb_encuentra(lista_listos, dtb->gdtPID, 0) != NULL) || (dtb_encuentra(lista_ejecutando, dtb->gdtPID, 0) != NULL);
+    return (dtb_encuentra(lista_listos, dtb->gdtPID, DUMMY) != NULL) || (dtb_encuentra(lista_ejecutando, dtb->gdtPID, DUMMY) != NULL);
 }
 
 //
@@ -392,8 +393,7 @@ void mostrar_archivo(void *_archivo, int index) // queda en void *_archivo por s
 
 //Funciones de Consola
 void ejecutar(char* path) {
-	DTB* dtb_nuevo = dtb_crear(0, path, 1);
-	list_add(lista_nuevos, dtb_nuevo);
+	DTB* dtb_nuevo = dtb_crear(0, path, GDT);
 }
 
 void status()
@@ -440,7 +440,7 @@ void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *list
         case DTB_NUEVO:
         {
             printf("El GDT %d esta en nuevos\n", pid);
-            if(dtb_encuentra(lista_listos, pid, 0))
+            if(dtb_encuentra(lista_listos, pid, DUMMY))
             {
                 bloquear_dummy(lista_listos, pid);
                 dtb_actualizar(dtb, lista_actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
@@ -492,7 +492,7 @@ void enviar_finalizar_dam(u_int32_t pid)
     Paquete *paquete = malloc(sizeof(Paquete));
     paquete->Payload = malloc(sizeof(u_int32_t));
     memcpy(paquete->Payload, &pid, sizeof(u_int32_t));
-    cargar_header(&paquete, sizeof(u_int32_t), FIN_BLOQUEADO, SAFA);
+    paquete->header = cargar_header(sizeof(u_int32_t), FIN_BLOQUEADO, SAFA);
     EnviarPaquete(socket_diego, paquete);
     free(paquete);
     printf("Le mande a dam que finalice GDT %d\n", pid);
@@ -503,7 +503,7 @@ void enviar_finalizar_cpu(u_int32_t pid, int socket_cpu)
     Paquete *paquete = malloc(sizeof(Paquete));
     paquete->Payload = malloc(sizeof(u_int32_t));
     memcpy(paquete->Payload, &pid, sizeof(u_int32_t));
-    cargar_header(&paquete, sizeof(u_int32_t), FIN_EJECUTANDO, SAFA);
+    paquete->header = cargar_header(sizeof(u_int32_t), FIN_EJECUTANDO, SAFA);
     EnviarPaquete(socket_cpu, paquete);
     free(paquete);
     printf("Le mande a cpu que finalice GDT %d\n", pid);
@@ -589,6 +589,6 @@ DTB *mover_dtb_de_lista(DTB *dtb, t_list *source, t_list *dest)
 }
 
 void dummy_finalizar(DTB *dtb) {
-    DTB *dummy = dtb_remueve(lista_ejecutando, dtb->gdtPID, 0);
+    DTB *dummy = dtb_remueve(lista_ejecutando, dtb->gdtPID, DUMMY);
     dtb_liberar(dummy);
 }

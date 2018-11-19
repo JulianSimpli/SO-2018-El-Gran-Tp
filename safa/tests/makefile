@@ -24,6 +24,9 @@ finalizar:
 recursos:
 	gcc test_recursos.c -I$(TESTS_PATH) -o recursos $(LIBS)
 
+sigwait:
+	gcc test_sigwait.c -I$(TESTS_PATH) -o sigwait $(LIBS)
+
 clean:
 	-rm -f *.o
-	-rm -f plp mutex handshakes success ejecutar finalizar recursos
+	-rm -f plp mutex handshakes success ejecutar finalizar recursos sigwait
