@@ -173,6 +173,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			DTB_info *info_dtb = info_asociada_a_pid(pid);
 			if(info_dtb->kill)
 			{
+				list_iterate(info_dtb->recursos, forzar_signal);
 				enviar_finalizar_dam(pid);
 				break;
 			}
@@ -194,13 +195,19 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 //			break;
 //			//Me manda pid, archivos abiertos, datos de memoria virtual para buscar el archivo.
 //		}
-		 case DTB_SUCCES: //DTB_DESBLOQUEAR:
+		 case DTB_SUCCES: //DTB_DESBLOQUEAR? Hay que usar dtb_actualizar. Lo puede buscar en bloqueados directamente.
 		 {
 			u_int32_t pid;
 			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
 			DTB_info *info_dtb;
 			t_list *lista_actual;
 			DTB *dtb = dtb_buscar_en_todos_lados(pid, &info_dtb, &lista_actual);
+			if(info_dtb->kill)
+			{
+				list_iterate(info_dtb->recursos, forzar_signal);
+				enviar_finalizar_dam(pid);
+				break;
+			}
 			mover_dtb_de_lista(dtb, lista_bloqueados, lista_listos);
 			info_dtb->tiempo_respuesta = medir_tiempo(0, (info_dtb->tiempo_ini), (info_dtb->tiempo_fin));
 			info_dtb_actualizar(DTB_LISTO, info_dtb->socket_cpu, info_dtb);
@@ -263,16 +270,18 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD)
 			dtb_actualizar(dtb, lista_ejecutando, lista_listos, dtb->PC, DTB_LISTO, socketFD);
         }
         case DTB_EJECUTO: // No veo diferencias con Process_timeout
-		{				// repensar si se hace aca el chequeo de finalizo o no dtb o si lo hace cpu
+		{
 			liberar_cpu(socketFD);
             DTB* dtb = DTB_deserializar(paquete->Payload);
 			dtb_actualizar(dtb, lista_ejecutando, lista_listos, dtb->PC, DTB_LISTO, socketFD);
+			enviar_finalizar_dam(dtb->gdtPID);
 			break;
         }
 		case DTB_FINALIZAR:
 		{
 			liberar_cpu(socketFD);
             DTB* dtb = DTB_deserializar(paquete->Payload);
+			list_iterate(info_dtb->recursos, forzar_signal);
 			dtb_actualizar(dtb, lista_ejecutando, lista_finalizados, dtb->PC, DTB_FINALIZADO, socketFD);
 			break;
 		}
@@ -321,23 +330,6 @@ void seguir_ejecutando(u_int32_t pid, u_int32_t pc, int socket)
 	free(paquete);
 }
 
-void recurso_asignar_a_pid(t_recurso *recurso, u_int32_t pid)
-{
-	DTB_info *info_dtb = info_asociada_a_pid(pid);
-	list_add(info_dtb->recursos, recurso);
-}
-
-DTB *dtb_signal(t_recurso *recurso, int socket)
-{
-	u_int32_t *pid = list_remove(recurso->pid_bloqueados, 0);
-	DTB *dtb = dtb_encuentra(lista_bloqueados, *pid, GDT);
-
-	dtb_actualizar(dtb, lista_bloqueados, lista_listos, dtb->PC , DTB_LISTO, 0);
-	recurso_asignar_a_pid(recurso, dtb->gdtPID);
-
-	return dtb;
-}
-
 DTB *dtb_bloquear(u_int32_t pid, u_int32_t pc, int socket)
 {
 	Paquete *paquete = malloc(sizeof(Paquete));
@@ -374,7 +366,7 @@ void recurso_signal(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket)
 	recurso->semaforo++;
 	if(recurso->semaforo <= 0)
 	{
-		dtb_signal(recurso, socket);
+		dtb_signal(recurso);
 		seguir_ejecutando(pid, pc, socket);
 	}
 	else seguir_ejecutando(pid, pc, socket);

@@ -328,15 +328,17 @@ context(wait_signal_recursos)
             list_add(info_dtb->recursos, recurso);
         }
 
-        DTB *dtb_signal(t_recurso *recurso, int socket)
+        void dtb_signal(t_recurso *recurso)
         {
             u_int32_t *pid = list_remove(recurso->pid_bloqueados, 0);
+
+            if (pid != NULL)
+            {
+            DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
             DTB *dtb = dtb_encuentra(lista_bloqueados, *pid, GDT);
-
-            dtb_actualizar(dtb, lista_bloqueados, lista_listos, dtb->PC , DTB_LISTO, 0);
+            dtb_actualizar(dtb, lista_bloqueados, lista_listos, dtb->PC , DTB_LISTO, info_dtb->socket_cpu);
             recurso_asignar_a_pid(recurso, dtb->gdtPID);
-
-            return dtb;
+            }
         }
 
         DTB *dtb_bloquear(u_int32_t pid, u_int32_t pc, int socket)
@@ -375,7 +377,7 @@ context(wait_signal_recursos)
             recurso->semaforo++;
             if(recurso->semaforo <= 0)
             {
-                dtb_signal(recurso, socket);
+                dtb_signal(recurso);
                 seguir_ejecutando(pid, pc, socket);
             }
             else seguir_ejecutando(pid, pc, socket);

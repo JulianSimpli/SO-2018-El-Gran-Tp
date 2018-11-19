@@ -129,6 +129,9 @@ void finalizar(u_int32_t pid);
 void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *lista_actual);
 void enviar_finalizar_dam(u_int32_t pid);
 void enviar_finalizar_cpu(u_int32_t pid, int socket);
+void forzar_signal(void *_recurso);
+void dtb_signal(t_recurso *recurso);
+void recurso_asignar_a_pid(t_recurso *recurso, u_int32_t pid);
 
 //Metricas
 void metricas();

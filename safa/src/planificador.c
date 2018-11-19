@@ -450,6 +450,7 @@ void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *list
         case DTB_LISTO:
         {
             printf("El GDT %d esta listo\n", pid);
+            list_iterate(info_dtb->recursos, forzar_signal);
             enviar_finalizar_dam(pid);
             break;
         }
@@ -462,6 +463,7 @@ void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *list
         case DTB_BLOQUEADO:
         {
             printf("El GDT %d esta bloqueado\n", pid);
+            list_iterate(info_dtb->recursos, forzar_signal);
             enviar_finalizar_dam(pid);
             break;
         }
@@ -507,6 +509,32 @@ void enviar_finalizar_cpu(u_int32_t pid, int socket_cpu)
     EnviarPaquete(socket_cpu, paquete);
     free(paquete);
     printf("Le mande a cpu que finalice GDT %d\n", pid);
+}
+
+void forzar_signal(void *_recurso)
+{
+    t_recurso *recurso = (t_recurso *)_recurso;
+    dtb_signal(recurso);
+}
+
+void dtb_signal(t_recurso *recurso)
+{
+	u_int32_t *pid = list_remove(recurso->pid_bloqueados, 0);
+
+	if (pid != NULL)
+	{
+	DTB *dtb = dtb_encuentra(lista_bloqueados, *pid, GDT);
+	DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
+	dtb_actualizar(dtb, lista_bloqueados, lista_listos, dtb->PC , DTB_LISTO, info_dtb->socket_cpu);
+	recurso_asignar_a_pid(recurso, dtb->gdtPID);
+	}
+}
+
+
+void recurso_asignar_a_pid(t_recurso *recurso, u_int32_t pid)
+{
+	DTB_info *info_dtb = info_asociada_a_pid(pid);
+	list_add(info_dtb->recursos, recurso);
 }
 
 clock_t* t_ini;

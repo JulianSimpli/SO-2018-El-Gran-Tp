@@ -48,8 +48,6 @@ t_recurso *recurso_recibir(void *payload, int *pid, int *pc);
 void recurso_signal(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket);
 void recurso_wait(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket);
 DTB *dtb_bloquear(u_int32_t pid, u_int32_t pc, int socket);
-DTB *dtb_signal(t_recurso *recurso, int socket);
-void recurso_asignar_a_pid(t_recurso *recurso, u_int32_t pid);
 void seguir_ejecutando(u_int32_t pid, u_int32_t pc, int socket);
 void *serializar_pid_y_pc(u_int32_t pid, u_int32_t pc, int *tam_pid_y_pc);
 
