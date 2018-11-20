@@ -46,6 +46,7 @@ t_list *lista_estados;
 t_list *lista_info_dtb;
 
 t_log *logger;
+t_log* logger_fin;
 
 u_int32_t numero_pid, procesos_en_memoria, procesos_finalizados;
 u_int32_t MULTIPROGRAMACION, RETARDO_PLANIF; //La carga la config y SAFA al inicializarse
@@ -129,6 +130,8 @@ void finalizar(u_int32_t pid);
 void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *lista_actual);
 void enviar_finalizar_dam(u_int32_t pid);
 void enviar_finalizar_cpu(u_int32_t pid, int socket);
+void loggear_finalizacion(DTB* dtb, DTB_info* info_dtb);
+
 void forzar_signal(void *_recurso);
 void dtb_signal(t_recurso *recurso);
 void recurso_asignar_a_pid(t_recurso *recurso, u_int32_t pid);
