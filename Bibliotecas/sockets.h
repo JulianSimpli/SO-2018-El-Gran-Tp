@@ -21,21 +21,13 @@ char* Emisores[5];
 typedef enum {CPU, FM9, ELDIEGO, MDJ, SAFA} Emisor;
 
 typedef enum {
-<<<<<<< HEAD
 	ESHANDSHAKE, ESSTRING, ESDATOS, SUCCESS, ERROR,								   // Mensajes generales
 	VALIDAR_ARCHIVO, CREAR_ARCHIVO, OBTENER_DATOS, GUARDAR_DATOS, BORRAR_ARCHIVO, // Mensajes MDJ
 	NUEVA_PRIMITIVA,															 // Emisor: CPU, Receptor:FM9	
-	DTB_EJECUTO, DTB_BLOQUEAR, PROCESS_TIMEOUT, QUANTUM_FALTANTE, 						 		// Emisor: CPU, Receptor: SAFA
-	DUMMY_SUCCES, DUMMY_FAIL, DTB_SUCCES, DTB_FAIL,							 	// Emisor: Diego, Receptor: SAFA
-	ESDTBDUMMY, ESDTB, FINALIZAR, CAMBIO_CONFIG															// Emisor: SAFA, Receptor: CPU												
-=======
-	ESHANDSHAKE, ESSTRING, ESDATOS, SUCCESS, ERROR,								   		   // Mensajes generales
-	VALIDAR_ARCHIVO, CREAR_ARCHIVO, OBTENER_DATOS, GUARDAR_DATOS, BORRAR_ARCHIVO, 		  // Mensajes MDJ
-	DTB_EJECUTO, DTB_BLOQUEAR, PROCESS_TIMEOUT, WAIT, SIGNAL, 		 					 // Emisor: CPU, Receptor: SAFA
-	DUMMY_SUCCES, DUMMY_FAIL, DTB_SUCCES, DTB_FAIL, DTB_FINALIZAR,  			 		// Emisor: Diego, Receptor: SAFA
-	ESDTBDUMMY, ESDTB, FIN_EJECUTANDO, ROJADIRECTA, SIGASIGA,						   // Emisor: SAFA, Receptor: CPU
-	FIN_BLOQUEADO 													  		  		  // Emisor: SAFA, Receptor: Diego												
->>>>>>> safa
+	DTB_EJECUTO, DTB_BLOQUEAR, PROCESS_TIMEOUT, QUANTUM_FALTANTE, WAIT, SIGNAL,	// Emisor: CPU, Receptor: SAFA
+	DUMMY_SUCCES, DUMMY_FAIL, DTB_SUCCES, DTB_FAIL,	DTB_FINALIZAR,			 	// Emisor: Diego, Receptor: SAFA
+	ESDTBDUMMY, ESDTB, FINALIZAR, CAMBIO_CONFIG, ROJADIRECTA, SIGASIGA,			// Emisor: SAFA, Receptor: CPU
+	FIN_BLOQUEADO																// Emisor: SAFA, Receptor: DIEGO
 	} Tipo;													
 
 typedef struct {
