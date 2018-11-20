@@ -5,6 +5,12 @@ void crear_logger() {
 	logger = log_create("safa.log", "safa", true, LOG_LEVEL_INFO);
 }
 
+
+void crear_logger_finalizados (){
+	logger_fin = log_create ("Archivos Finalizados.log", "safa", true, LOG_LEVEL_INFO);
+}
+
+
 void inicializar_variables() {
 	crear_listas();
 	llenar_lista_estados();
@@ -94,7 +100,7 @@ void parseo_consola(char* operacion, char* primerParametro) {
 		if (primerParametro != NULL)
 		{
 			pid = atoi(primerParametro);
-			printf("pid a mostrar status es %i\n", pid);
+			printf("Mostrar status de proceso con PID %i\n", pid);
 			gdt_status(pid);
 		} else
 		{
@@ -169,14 +175,11 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			// Mensaje contiene pid, posicion en memoria, largo path, cantidad lineas
 			u_int32_t pid;
 			memcpy(&pid, paquete->Payload, sizeof(u_int32_t));
-			log_info(logger, "%d fue cargado en memoria", pid);
+			log_info(logger, "Proceso con PID %d fue cargado en memoria", pid);
+			DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
 			DTB_info *info_dtb = info_asociada_a_pid(pid);
-			if(info_dtb->kill)
-			{
-				list_iterate(info_dtb->recursos, forzar_signal);
-				enviar_finalizar_dam(pid);
+			if(verificar_si_murio(dtb, lista_nuevos))
 				break;
-			}
 			pasaje_a_ready(&pid);
 			liberar_cpu(socketFD);
 			log_info(logger, "Cpu %d liberada", socketFD);
@@ -195,24 +198,25 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 //			break;
 //			//Me manda pid, archivos abiertos, datos de memoria virtual para buscar el archivo.
 //		}
-		 case DTB_SUCCES: //DTB_DESBLOQUEAR? Hay que usar dtb_actualizar. Lo puede buscar en bloqueados directamente.
-		 {
+		case DTB_SUCCES: //DTB_DESBLOQUEAR?
+		{
 			u_int32_t pid;
 			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
-			DTB_info *info_dtb;
-			t_list *lista_actual;
-			DTB *dtb = dtb_buscar_en_todos_lados(pid, &info_dtb, &lista_actual);
-			if(info_dtb->kill)
-			{
-				list_iterate(info_dtb->recursos, forzar_signal);
-				enviar_finalizar_dam(pid);
+
+			// DTB_info *info_dtb;
+			// t_list *lista_actual;
+			// DTB *dtb = dtb_buscar_en_todos_lados(pid, &info_dtb, &lista_actual);
+			// Hay que usar dtb_actualizar. Lo puede buscar en bloqueados directamente.
+			// En algun caso no estaria en bloqueados?
+
+			DTB *dtb = dtb_encuentra(lista_bloqueados, pid, GDT);
+			DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
+			if(verificar_si_murio(dtb, lista_bloqueados))
 				break;
-			}
-			mover_dtb_de_lista(dtb, lista_bloqueados, lista_listos);
+			dtb_actualizar(dtb, lista_bloqueados, lista_listos, dtb->PC, DTB_BLOQUEADO, info_dtb->socket_cpu);
 			info_dtb->tiempo_respuesta = medir_tiempo(0, (info_dtb->tiempo_ini), (info_dtb->tiempo_fin));
-			info_dtb_actualizar(DTB_LISTO, info_dtb->socket_cpu, info_dtb);
 			break;
-		 }
+		}
 		case DTB_FAIL:
 		{
 			perror("Error ");
@@ -227,7 +231,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			DTB *dtb = dtb_buscar_en_todos_lados(pid, &info_dtb, &lista_actual);
 			if(esta_en_memoria(info_dtb)) procesos_en_memoria--;
 			dtb_finalizar_desde(dtb, lista_actual);
-            // en que momento liberar_dtb(dtb);
+			free(dtb);
 		}
 	}
 }
@@ -251,7 +255,7 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD)
         case DTB_BLOQUEAR:
 		{
 			// Habria que ver si algoritmo es rr o vrr para recibir quantum que queda
-			// 
+
 			liberar_cpu(socketFD);
 			// METRICAS CLOCK;
 			DTB *dtb = DTB_deserializar(paquete->Payload);
@@ -263,32 +267,38 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD)
     	}
 
         case PROCESS_TIMEOUT:
-		{ // falta quantum. Chequeo si finaliza o vuelve a listo aca y en succes
-
+		{
 			liberar_cpu(socketFD);
             DTB* dtb = DTB_deserializar(paquete->Payload);
 			dtb_actualizar(dtb, lista_ejecutando, lista_listos, dtb->PC, DTB_LISTO, socketFD);
+			break;
         }
         case DTB_EJECUTO: // No veo diferencias con Process_timeout
 		{
-			liberar_cpu(socketFD);
             DTB* dtb = DTB_deserializar(paquete->Payload);
+			DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
+			if(verificar_si_murio(dtb, lista_ejecutando))
+				break;
+
+			liberar_cpu(socketFD);
 			dtb_actualizar(dtb, lista_ejecutando, lista_listos, dtb->PC, DTB_LISTO, socketFD);
-			enviar_finalizar_dam(dtb->gdtPID);
 			break;
         }
-		case DTB_FINALIZAR:
+		case DTB_FINALIZAR: //Aca es cuando el dtb finaliza "normalmente"
 		{
 			liberar_cpu(socketFD);
             DTB* dtb = DTB_deserializar(paquete->Payload);
-			list_iterate(info_dtb->recursos, forzar_signal);
+			DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
 			dtb_actualizar(dtb, lista_ejecutando, lista_finalizados, dtb->PC, DTB_FINALIZADO, socketFD);
+	        loggear_finalizacion(dtb, info_dtb);
+			list_iterate(info_dtb->recursos, forzar_signal);
+			enviar_finalizar_dam(dtb->gdtPID);
 			break;
 		}
 		case WAIT:
 		{
 			u_int32_t pid = 0;
-			u_int32_t pc;
+			u_int32_t pc = 0;
 			t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc);
 			//dtb asociado a pid, y a wait le paso como parametro dtb->gdtPID porque tiene que ser dato persistido en memoria
 			// si no, se va a borrar cuando salga del bloque. Lo mismo en signal.
@@ -304,6 +314,21 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD)
 			break;
 		}
 	}
+}
+
+bool verificar_si_murio(DTB *dtb, t_list *lista_origen)
+{
+	DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
+	
+	if(info_dtb->kill)
+	{
+		loggear_finalizacion(dtb, info_dtb);
+		list_iterate(info_dtb->recursos, forzar_signal);
+		dtb_actualizar(dtb, lista_origen, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
+		enviar_finalizar_dam(dtb->gdtPID);
+	}
+
+	return info_dtb->kill;
 }
 
 void *serializar_pid_y_pc(u_int32_t pid, u_int32_t pc, int *tam_pid_y_pc)
@@ -339,6 +364,7 @@ DTB *dtb_bloquear(u_int32_t pid, u_int32_t pc, int socket)
 
 	EnviarPaquete(socket, paquete);
 	free(paquete);
+	free(paquete->Payload);
 
 	DTB *dtb = dtb_encuentra(lista_ejecutando, pid, 1);
 	dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, pc, DTB_BLOQUEADO, socket);
@@ -468,17 +494,6 @@ void *handshake_cpu_serializar(int *tamanio_payload)
 	desplazamiento += tamanio_serializado;
 	free(algoritmo_serializado); // Esto es correcto?
 
-	// Esto era lo viejo. No lo borro por si rompe todo string_serializar();
-
-	// u_int32_t len_algoritmo = strlen(ALGORITMO_PLANIFICACION);
-	// payload = realloc(payload, desplazamiento + tamanio);
-	// memcpy(payload + desplazamiento, &len_algoritmo, tamanio);
-	// desplazamiento += tamanio;
-
-	// payload = realloc(payload, desplazamiento + len_algoritmo);
-	// memcpy(payload + desplazamiento, ALGORITMO_PLANIFICACION, len_algoritmo);
-	// desplazamiento += len_algoritmo;
-
 	*tamanio_payload = desplazamiento;
 	return payload;
 }
@@ -503,10 +518,15 @@ void enviar_handshake_diego(int socketFD) {
 int main(void)
 {
 	crear_logger();
+	crear_logger_finalizados();
 	inicializar_variables();
 	obtener_valores_archivo_configuracion();
 	imprimir_archivo_configuracion();
-	log_info(logger, "Probando SAFA.log");
+	log_info(logger, "Iniciando SAFA.log");
+	log_info(logger_fin, "***INFORMACION DE ARCHIVOS FINALIZADOS***");
+	clock_t t = clock();
+	clock_t t2 = clock();
+	char* estado_1 = "EJECUTANDO";
 
     pthread_create(&hilo_consola, NULL, (void*) consola, NULL);
 
