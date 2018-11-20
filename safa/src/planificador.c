@@ -328,9 +328,11 @@ void dtb_imprimir_basico(void *_dtb)
         {
             ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
             printf( "PID: %i\n"
-                    "Escriptorio: %s%s\n",
-                    dtb->gdtPID, escriptorio->path,
-                    (escriptorio->cantLineas) ? (", cantidad de lineas: %d", escriptorio->cantLineas) : "");
+                    "Escriptorio: %s",
+                    dtb->gdtPID, escriptorio->path);
+            if (escriptorio->cantLineas)
+                printf(", cantidad de lineas: %d", escriptorio->cantLineas);
+            printf("\n");
             break;
         }
     }
@@ -384,10 +386,14 @@ void mostrar_archivo(void *_archivo, int index) // queda en void *_archivo por s
 {
     ArchivoAbierto *archivo = (ArchivoAbierto *) _archivo;
     printf( "Archivo %d:\n"
-            "Directorio: %s, cantidad de lineas:%s\n",
+            "Directorio: %s",
             // Agregar si se agregan campos a ArchivoAbierto
-            index,
-            archivo->path, (archivo->cantLineas) ? (", cantidad de lineas: %i", archivo->cantLineas) : "No cargadas todavia");
+            index, archivo->path);
+    if (archivo->cantLineas) 
+        printf(", cantidad de lineas: %i", archivo->cantLineas);
+    else 
+        printf(", No cargadas todavia");
+    printf("\n");
 }
 
 //Funciones de Consola

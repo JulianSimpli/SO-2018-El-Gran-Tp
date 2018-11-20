@@ -1,7 +1,8 @@
 #include "safa.h"
 
 /*Creación de Logger*/
-void crear_logger() {
+void crear_logger()
+{
 	logger = log_create("safa.log", "safa", true, LOG_LEVEL_INFO);
 }
 
@@ -14,18 +15,18 @@ void crear_logger_finalizados (){
 void inicializar_variables() {
 	crear_listas();
 	llenar_lista_estados();
-    sem_init(&mutex_handshake_diego, 0, 0);
-    sem_init(&mutex_handshake_cpu, 0, 0);
+	sem_init(&mutex_handshake_diego, 0, 0);
+	sem_init(&mutex_handshake_cpu, 0, 0);
 }
 
 void crear_listas()
 {
 	lista_cpu = list_create();
-    lista_nuevos = list_create();
-    lista_listos = list_create();
-    lista_ejecutando = list_create();
-    lista_bloqueados = list_create();
-    lista_finalizados = list_create();
+	lista_nuevos = list_create();
+	lista_listos = list_create();
+	lista_ejecutando = list_create();
+	lista_bloqueados = list_create();
+	lista_finalizados = list_create();
 	lista_estados = list_create();
 	lista_info_dtb = list_create();
 	lista_recursos_global = list_create();
@@ -40,8 +41,9 @@ void llenar_lista_estados()
 	list_add_in_index(lista_estados, 4, lista_finalizados);
 }
 
-void obtener_valores_archivo_configuracion() {
-	t_config* arch = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src/SAFA.config");
+void obtener_valores_archivo_configuracion()
+{
+	t_config *arch = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src/SAFA.config");
 	IP = "127.0.0.1";
 	PUERTO = config_get_int_value(arch, "PUERTO");
 	ALGORITMO_PLANIFICACION = string_duplicate(config_get_string_value(arch, "ALGORITMO"));
@@ -51,18 +53,20 @@ void obtener_valores_archivo_configuracion() {
 	config_destroy(arch);
 }
 
-void imprimir_archivo_configuracion() {
+void imprimir_archivo_configuracion()
+{
 	printf("Configuración:\n"
-			"IP=%s\n"
-			"PUERTO=%d\n"
-			"ALGORITMO_PLANIFICACION=%s\n"
-			"QUANTUM=%d\n"
-			"MULTIPROGRAMACION=%d\n"
-			"RETARDO_PLANIF=%d\n",
-			IP, PUERTO, ALGORITMO_PLANIFICACION, QUANTUM, MULTIPROGRAMACION, RETARDO_PLANIF);
+	       "IP=%s\n"
+	       "PUERTO=%d\n"
+	       "ALGORITMO_PLANIFICACION=%s\n"
+	       "QUANTUM=%d\n"
+	       "MULTIPROGRAMACION=%d\n"
+	       "RETARDO_PLANIF=%d\n",
+	       IP, PUERTO, ALGORITMO_PLANIFICACION, QUANTUM, MULTIPROGRAMACION, RETARDO_PLANIF);
 }
 
-void consola() {
+void consola()
+{
 	printf("Esperando que conecte el diego y al menos 1 CPU\nSAFA esta en estado corrupto\n");
 	log_info(logger, "Esperando que conecte el diego y al menos 1 CPU. SAFA esta en estado corrupto\n");
 	// sem_wait(&mutex_handshake_diego);
@@ -71,45 +75,53 @@ void consola() {
 	log_info(logger, "Se conectaron Diego y 1 CPU. SAFA esta en estado operativo");
 
 	char *linea;
-	while (true) {
+	while (true)
+	{
 		linea = readline(">> ");
-		if (linea) add_history(linea);
-		char** lineaSpliteada = string_split(linea," ");
-		if(lineaSpliteada[0] == NULL) continue;
+		if (linea)
+			add_history(linea);
+		char **lineaSpliteada = string_split(linea, " ");
+		if (lineaSpliteada[0] == NULL)
+			continue;
 		printf("operacion es %s\n", lineaSpliteada[0]);
 		parseo_consola(lineaSpliteada[0], lineaSpliteada[1]);
 		free(linea);
-		if(!lineaSpliteada[0])free(lineaSpliteada[0]);
-		if(!lineaSpliteada[0])free(lineaSpliteada[1]);
+		if (!lineaSpliteada[0])
+			free(lineaSpliteada[0]);
+		if (!lineaSpliteada[0])
+			free(lineaSpliteada[1]);
 	}
 }
 
-void parseo_consola(char* operacion, char* primerParametro) {
+void parseo_consola(char *operacion, char *primerParametro)
+{
 	u_int32_t pid = 0;
-	if (string_equals_ignore_case (operacion, EJECUTAR))
+	if (string_equals_ignore_case(operacion, EJECUTAR))
 	{
-		if(primerParametro == NULL)
+		if (primerParametro == NULL)
 		{
 			printf("expected ejecutar <path>\n");
-
 		}
 		printf("path a ejecutar es %s\n", primerParametro);
 		ejecutar(primerParametro);
-	} else if (string_equals_ignore_case (operacion, STATUS))
+	}
+	else if (string_equals_ignore_case(operacion, STATUS))
 	{
 		if (primerParametro != NULL)
 		{
 			pid = atoi(primerParametro);
 			printf("Mostrar status de proceso con PID %i\n", pid);
 			gdt_status(pid);
-		} else
+		}
+		else
 		{
 			printf("status no trajo parametros. Se mostraran estados de las colas\n");
 			status();
 		}
-	} else if(string_equals_ignore_case (operacion, FINALIZAR))
+	}
+	else if (string_equals_ignore_case(operacion, FINALIZAR))
 	{
-		if(primerParametro == NULL)
+		if (primerParametro == NULL)
 		{
 			printf("expected finalizar <pid>\n");
 			return;
@@ -118,43 +130,51 @@ void parseo_consola(char* operacion, char* primerParametro) {
 		pid = atoi(primerParametro);
 		printf("pid a finalizar es %i\n", pid);
 		finalizar(pid);
-	} else if(string_equals_ignore_case (operacion, METRICAS))
+	}
+	else if (string_equals_ignore_case(operacion, METRICAS))
 	{
 		if (primerParametro != NULL)
 		{
 			pid = atoi(primerParametro);
 			printf("pid a mostrar metricas es %i\n", pid);
 			//mostrarMetricasDe(pid);
-		} else printf("metricas no trajo parametros. Solo se muestran estadisticas del sistema\n");
+		}
+		else
+			printf("metricas no trajo parametros. Solo se muestran estadisticas del sistema\n");
 		//mostrarMetricasDelSistema();
-	} else printf("No se conoce la operacion\n");
+	}
+	else
+		printf("No se conoce la operacion\n");
 }
 
-void accion(void* socket)
+void accion(void *socket)
 {
-	int socketFD = *(int*) socket;
+	int socketFD = *(int *)socket;
 	Paquete paquete;
 	// void* datos;
 	//while que recibe paquetes que envian a safa, de qué socket y el paquete mismo
 	//el socket del cliente conectado lo obtiene con la funcion servidorConcurrente en el main
 	while (RecibirPaqueteServidorSafa(socketFD, SAFA, &paquete) > 0)
 	{
-		switch(paquete.header.emisor)
+
+		log_info(logger, "Emisor: %i", paquete.header.emisor);
+		switch (paquete.header.emisor)
 		{
-			case ELDIEGO:
-			{
-				manejar_paquetes_diego(&paquete, socketFD);
-				break;
-			}
-			case CPU:
-			{
-				manejar_paquetes_CPU(&paquete, socketFD);
-				break;
-			}
+		case ELDIEGO:
+		{
+			manejar_paquetes_diego(&paquete, socketFD);
+			break;
+		}
+		case CPU:
+		{
+			manejar_paquetes_CPU(&paquete, socketFD);
+			break;
+		}
 		}
 	}
 	// Caso desconexion cpu
-	if (paquete.Payload != NULL) free(paquete.Payload);
+	if (paquete.Payload != NULL)
+		free(paquete.Payload);
 	close(socketFD);
 }
 
@@ -187,10 +207,8 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		}
 		case DUMMY_FAIL:
 		{
-			u_int32_t pid;
-			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
-			bloquear_dummy(lista_ejecutando, pid);
-			log_error(logger, "Fallo la carga en memoria del %d", pid);
+			list_iterate(info_dtb->recursos, forzar_signal);
+			enviar_finalizar_dam(pid);
 			break;
 		}
 //		case DTB_SUCCES:
@@ -219,7 +237,8 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		}
 		case DTB_FAIL:
 		{
-			perror("Error ");
+			list_iterate(info_dtb->recursos, forzar_signal);
+			enviar_finalizar_dam(pid);
 			break;
 		}
 		case DTB_FINALIZAR:
@@ -236,21 +255,21 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 	}
 }
 
-void manejar_paquetes_CPU(Paquete* paquete, int socketFD)
+void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 {
 	switch (paquete->header.tipoMensaje)
 	{
-		case ESHANDSHAKE:
-		{
-			t_cpu *cpu_nuevo = malloc(sizeof(t_cpu));
-			cpu_nuevo->socket = socketFD;
-            cpu_nuevo->estado = CPU_LIBRE;
-			list_add(lista_cpu, cpu_nuevo);
-			log_info(logger, "llegada cpu con id %i", cpu_nuevo->socket);
-            sem_post(&mutex_handshake_cpu);
-			enviar_handshake_cpu(socketFD);
-			break;
-		}
+	case ESHANDSHAKE:
+	{
+		t_cpu *cpu_nuevo = malloc(sizeof(t_cpu));
+		cpu_nuevo->socket = socketFD;
+		cpu_nuevo->estado = CPU_LIBRE;
+		list_add(lista_cpu, cpu_nuevo);
+		log_info(logger, "llegada cpu con id %i", cpu_nuevo->socket);
+		sem_post(&mutex_handshake_cpu);
+		enviar_handshake_cpu(socketFD);
+		break;
+	}
 
         case DTB_BLOQUEAR:
 		{
@@ -349,7 +368,7 @@ void seguir_ejecutando(u_int32_t pid, u_int32_t pc, int socket)
 	int tamanio_payload = 0;
 	paquete->Payload = serializar_pid_y_pc(pid, pc, &tamanio_payload);
 	paquete->header = cargar_header(tamanio_payload, SIGASIGA, SAFA);
-	
+
 	EnviarPaquete(socket, paquete);
 	free(paquete->Payload);
 	free(paquete);
@@ -375,7 +394,7 @@ DTB *dtb_bloquear(u_int32_t pid, u_int32_t pc, int socket)
 void recurso_wait(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket)
 {
 	recurso->semaforo--;
-	if(recurso->semaforo < 0)
+	if (recurso->semaforo < 0)
 	{
 		list_add(recurso->pid_bloqueados, &pid);
 		dtb_bloquear(pid, pc, socket);
@@ -390,12 +409,13 @@ void recurso_wait(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket)
 void recurso_signal(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket)
 {
 	recurso->semaforo++;
-	if(recurso->semaforo <= 0)
+	if (recurso->semaforo <= 0)
 	{
 		dtb_signal(recurso);
 		seguir_ejecutando(pid, pc, socket);
 	}
-	else seguir_ejecutando(pid, pc, socket);
+	else
+		seguir_ejecutando(pid, pc, socket);
 }
 
 t_recurso *recurso_recibir(void *payload, int *pid, int *pc)
@@ -409,7 +429,8 @@ t_recurso *recurso_recibir(void *payload, int *pid, int *pc)
 	desplazamiento += sizeof(u_int32_t);
 
 	t_recurso *recurso = recurso_encontrar(id_recurso);
-	if (recurso == NULL) recurso = recurso_crear(id_recurso, 1);
+	if (recurso == NULL)
+		recurso = recurso_crear(id_recurso, 1);
 
 	return recurso;
 }
@@ -428,14 +449,14 @@ void *string_serializar(char *string, int *desplazamiento)
 }
 
 char *string_deserializar(void *data, int *desplazamiento)
-{         
+{
 	u_int32_t len_string = 0;
 	memcpy(&len_string, data + *desplazamiento, sizeof(len_string));
 	*desplazamiento += sizeof(len_string);
-	
+
 	char *string = malloc(len_string + 1);
 	memcpy(string, data + *desplazamiento, len_string);
-	*(string+len_string) = '\0';
+	*(string + len_string) = '\0';
 	*desplazamiento = *desplazamiento + len_string;
 
 	return string;
@@ -467,7 +488,7 @@ bool coincide_id(void *recurso, char *id)
 	return !strcmp(((t_recurso *)recurso)->id, id);
 }
 
-t_recurso *recurso_encontrar(char* id_recurso)
+t_recurso *recurso_encontrar(char *id_recurso)
 {
 	bool comparar_id(void *recurso)
 	{
@@ -476,7 +497,6 @@ t_recurso *recurso_encontrar(char* id_recurso)
 
 	return list_find(lista_recursos_global, comparar_id);
 }
-
 
 void *handshake_cpu_serializar(int *tamanio_payload)
 {
@@ -498,17 +518,19 @@ void *handshake_cpu_serializar(int *tamanio_payload)
 	return payload;
 }
 
-void enviar_handshake_cpu(int socketFD) {
+void enviar_handshake_cpu(int socketFD)
+{
 	int tamanio_payload = 0;
-	Paquete* paquete = malloc(sizeof(Paquete));
+	Paquete *paquete = malloc(sizeof(Paquete));
 	paquete->Payload = handshake_cpu_serializar(&tamanio_payload);
 	paquete->header = cargar_header(tamanio_payload, ESHANDSHAKE, SAFA);
 	EnviarPaquete(socketFD, paquete);
 	free(paquete);
 }
 
-void enviar_handshake_diego(int socketFD) {
-	Paquete* paquete = malloc(sizeof(Paquete));
+void enviar_handshake_diego(int socketFD)
+{
+	Paquete *paquete = malloc(sizeof(Paquete));
 	paquete->header = cargar_header(0, ESHANDSHAKE, SAFA);
 
 	EnviarPaquete(socketFD, paquete);
@@ -528,17 +550,17 @@ int main(void)
 	clock_t t2 = clock();
 	char* estado_1 = "EJECUTANDO";
 
-    pthread_create(&hilo_consola, NULL, (void*) consola, NULL);
+	pthread_create(&hilo_consola, NULL, (void *)consola, NULL);
 
-    pthread_create(&hilo_plp, NULL, (void*) planificador_largo_plazo, NULL);
+	pthread_create(&hilo_plp, NULL, (void *)planificador_largo_plazo, NULL);
 
-    pthread_create(&hilo_pcp, NULL, (void*) planificador_corto_plazo, NULL);
+	pthread_create(&hilo_pcp, NULL, (void *)planificador_corto_plazo, NULL);
 
-    ServidorConcurrente(IP, PUERTO, SAFA, &lista_hilos, &end, accion);
+	ServidorConcurrente(IP, PUERTO, SAFA, &lista_hilos, &end, accion);
 
 	pthread_join(hilo_consola, NULL);
-    pthread_join(hilo_pcp, NULL);
-    pthread_join(hilo_plp, NULL);
+	pthread_join(hilo_pcp, NULL);
+	pthread_join(hilo_plp, NULL);
 
 	return EXIT_SUCCESS;
 }

@@ -20,20 +20,21 @@
 t_log * logger;
 t_config* config;
 int tamanio_linea;
+int transfer_size;
 
 #define IP "127.0.0.1"
 #define PUERTO "8080"
 
 // Comunes de carga
-void leer_config(char *path);
+void leer_config();
 void inicializar_log(char *program);
 void inicializar(char **argv);
 void handshake(int, int);
-void enviar_mensaje(Mensaje mensaje);
 int escuchar_conexiones();
 int crear_socket_mdj();
 int ligar_socket();
 int recibir_todo(Paquete *paquete, int socketFD, uint32_t cantARecibir);
+int recibir_partes(void *paquete, int socketFD, u_int32_t cant_a_recibir);
 
 // Finalmente, los prototipos de las funciones que vamos a implementar
 void configure_logger();
@@ -46,24 +47,12 @@ int handshake_mdj();
 int handshake_safa();
 int crear_socket_safa();
 
-void enviar_mensaje(Mensaje mensaje){
-
-	log_debug(logger, "Voy a enviar el mensaje del tipo %d", mensaje.paquete.header.tipoMensaje);
-
-	int mensaje_enviado = send(mensaje.socket, &mensaje.paquete, sizeof(Paquete), 0);
-
-	if(mensaje_enviado < 0){
-		log_error(logger, "No pudo enviar el mensaje");
-	}
-}
-
 void handshake(int socket, int emisor) {
 	Mensaje *mensaje = malloc(sizeof(Mensaje));
 	mensaje->socket = socket;
 	mensaje->paquete.header.tipoMensaje = ESHANDSHAKE;
 	mensaje->paquete.header.tamPayload = 0;
 	mensaje->paquete.header.emisor = emisor;
-    enviar_mensaje(*mensaje);
 }
 
 int connect_to_server(char * ip, char * port) {
@@ -146,18 +135,6 @@ int crear_socket_mdj() {
 	char * ip_mdj = config_get_string_value(config, "IP_MDJ");
 
 	return connect_to_server(ip_mdj,puerto_mdj);
-}
-
-Mensaje * recibir_mensaje(int conexion){
-        Mensaje *buffer =(Mensaje *) malloc(sizeof(Mensaje));
-        read(conexion,buffer,sizeof(Mensaje));
-
-        if (buffer == NULL){
-            log_error(logger,"Error en la lectura del Mensaje");
-			exit_gracefully(2);
-        }
-
-        return buffer;
 }
 
 void _exit_with_error(int socket, char* error_msg, void * buffer) {

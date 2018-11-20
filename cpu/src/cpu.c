@@ -36,7 +36,7 @@ void hilo_safa()
 	while (1)
 	{
 		Paquete *paquete = malloc(sizeof(Paquete));
-		RecibirPaqueteCliente(socket_safa, NULL, paquete);
+		RecibirPaqueteCliente(socket_safa, paquete);
 		interpretar_safa(paquete);
 	}
 }
@@ -105,7 +105,7 @@ char *pedir_primitiva(DTB *dtb)
 	if (ret != 1)
 	{
 		Paquete *primitiva_recibida = malloc(sizeof(Paquete));
-		RecibirPaqueteCliente(socket_fm9, NULL, primitiva_recibida);
+		RecibirPaqueteCliente(socket_fm9, primitiva_recibida);
 		char *primitiva = malloc(primitiva_recibida->header.tamPayload + 1);
 		memcpy(primitiva, primitiva_recibida->Payload, primitiva_recibida->header.tamPayload);
 		primitiva[primitiva_recibida->header.tamPayload] = '\0';
@@ -143,7 +143,7 @@ int handshake_safa()
 	int safa = crear_socket_safa();
 	handshake(safa, CPU);
 	Paquete *paquete = malloc(sizeof(Paquete));
-	RecibirPaqueteCliente(socket_safa, NULL, paquete);
+	RecibirPaqueteCliente(socket_safa, paquete);
 	if (paquete->header.tipoMensaje != ESHANDSHAKE)
 	{
 		_exit_with_error(safa, "No se logro el handshake", NULL);

@@ -249,7 +249,7 @@ int RecibirPaqueteServidorSafa(int socketFD, Emisor receptor, Paquete* paquete) 
 	return resul;
 }
 
-int RecibirPaqueteCliente(int socketFD, Emisor receptor, Paquete* paquete) {
+int RecibirPaqueteCliente(int socketFD, Paquete* paquete) {
 	paquete->Payload = NULL;
 	int resul = RecibirDatos(&(paquete->header), socketFD, TAMANIOHEADER);
 	if (resul > 0 && paquete->header.tipoMensaje != ESHANDSHAKE && paquete->header.tamPayload > 0) { //si no hubo error ni es un handshake

@@ -21,13 +21,14 @@ char* Emisores[5];
 typedef enum {CPU, FM9, ELDIEGO, MDJ, SAFA} Emisor;
 
 typedef enum {
-	ESHANDSHAKE, ESSTRING, ESDATOS, SUCCESS, ERROR,								   // Mensajes generales
-	VALIDAR_ARCHIVO, CREAR_ARCHIVO, OBTENER_DATOS, GUARDAR_DATOS, BORRAR_ARCHIVO, // Mensajes MDJ
-	NUEVA_PRIMITIVA,															 // Emisor: CPU, Receptor:FM9	
+	ESHANDSHAKE, ESSTRING, ESDATOS, SUCCESS, ERROR,				        // Mensajes generales
+	VALIDAR_ARCHIVO, CREAR_ARCHIVO, OBTENER_DATOS, GUARDAR_DATOS, BORRAR_ARCHIVO,   // Mensajes MDJ
+	NUEVA_PRIMITIVA,								// Emisor: CPU, Receptor:FM9	
 	DTB_EJECUTO, DTB_BLOQUEAR, PROCESS_TIMEOUT, QUANTUM_FALTANTE, WAIT, SIGNAL,	// Emisor: CPU, Receptor: SAFA
-	DUMMY_SUCCES, DUMMY_FAIL, DTB_SUCCES, DTB_FAIL,	DTB_FINALIZAR,			 	// Emisor: Diego, Receptor: SAFA
-	ESDTBDUMMY, ESDTB, FINALIZAR, CAMBIO_CONFIG, ROJADIRECTA, SIGASIGA,			// Emisor: SAFA, Receptor: CPU
-	FIN_BLOQUEADO																// Emisor: SAFA, Receptor: DIEGO
+	DUMMY_SUCCES, DUMMY_FAIL, DTB_SUCCES, DTB_FAIL,	DTB_FINALIZAR,			// Emisor: Diego, Receptor: SAFA
+	ESDTBDUMMY, ESDTB, FINALIZAR, CAMBIO_CONFIG, ROJADIRECTA, SIGASIGA,		// Emisor: SAFA, Receptor: CPU
+	FIN_EJECUTANDO,
+	FIN_BLOQUEADO									// Emisor: SAFA, Receptor: DIEGO
 	} Tipo;													
 
 typedef struct {
@@ -68,7 +69,7 @@ void EnviarHandshake(int socketFD, Emisor emisor);
 void EnviarHandshakeELDIEGO(int socketFD);
 void RecibirHandshake(int socketFD, Emisor emisor);
 int RecibirPaqueteServidor(int socketFD, Emisor receptor, Paquete* paquete); //Responde al recibir un Handshake
-int RecibirPaqueteCliente(int socketFD, Emisor receptor, Paquete* paquete); //No responde los Handshakes
+int RecibirPaqueteCliente(int socketFD, Paquete* paquete); //No responde los Handshakes
 int RecibirPaqueteServidorSafa(int socketFD, Emisor receptor, Paquete* paquete);
 int RecibirPaqueteServidorFm9(int socketFD, Emisor receptor, Paquete* paquete);
 int RecibirDatos(void* paquete, int socketFD, uint32_t cantARecibir);

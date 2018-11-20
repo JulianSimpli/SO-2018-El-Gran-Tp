@@ -10,8 +10,6 @@ void *interpretar_mensajes_de_safa(void *);
 void *interpretar_mensajes_de_fm9(void *);
 int crear_socket_fm9();
 
-Mensaje *recibir_mensaje(int socket);
-
 int socket_safa;
 int socket_mdj;
 int socket_fm9;
@@ -26,15 +24,15 @@ int main(int argc, char **argv)
 	//Crea por unica vez los sockets con los que tiene conexiones permanentes
 	//Primero hago el handshake con fm9 para poder tener el tamanio de linea
 	socket_safa = handshake_safa();
-	socket_mdj = handshake_mdj();
-	socket_fm9 = handshake_fm9();
+	//socket_mdj = handshake_mdj();
+	//socket_fm9 = handshake_fm9();
 
 	//inicializamos el semaforo en maximas_conexiones - 3 que son fijas
-	aceptar_cpus();
+	//aceptar_cpus();
 
 	levantar_hilo(interpretar_mensajes_de_safa);
-	levantar_hilo(interpretar_mensajes_de_mdj);
-	levantar_hilo(interpretar_mensajes_de_fm9);
+	//levantar_hilo(interpretar_mensajes_de_mdj);
+	//levantar_hilo(interpretar_mensajes_de_fm9);
 	return 0;
 }
 
@@ -69,12 +67,10 @@ int handshake_mdj()
 {
 	int mdj = crear_socket_mdj();
 	handshake(mdj, ELDIEGO);
-
-	Mensaje *mensaje = recibir_mensaje(mdj);
-	if (mensaje->paquete.header.tipoMensaje != ESHANDSHAKE)
-	{
+	Paquete paquete;
+	RecibirPaqueteCliente(socket_mdj, &paquete);
+	if (paquete.header.tipoMensaje != ESHANDSHAKE)
 		_exit_with_error(mdj, "No se logro el handshake", NULL);
-	}
 	log_info(logger, "Se concreto el handshake con MDJ, empiezo a recibir mensajes");
 	return mdj;
 }
@@ -88,16 +84,14 @@ int handshake_fm9()
 {
 	int fm9 = crear_socket_fm9();
 	handshake(fm9, ELDIEGO);
-	Mensaje *mensaje = recibir_mensaje(fm9);
-	if (mensaje->paquete.header.tipoMensaje != ESHANDSHAKE)
-	{
+	Paquete paquete;
+	RecibirPaqueteCliente(socket_mdj, &paquete);
+	if (paquete.header.tipoMensaje != ESHANDSHAKE)
 		_exit_with_error(fm9, "No se logro el primer paso de datos", NULL);
-	}
 	//Guardo en la global tamanio de linea que tiene fm9
-	memcpy(&tamanio_linea, mensaje->paquete.Payload, sizeof(u_int32_t));
+	memcpy(&tamanio_linea, paquete.Payload, sizeof(u_int32_t));
 	log_info(logger, "Se concreto el handshake con FM9, me pasa el tamanio de linea %d", tamanio_linea);
-	free(mensaje->paquete.Payload);
-	free(mensaje);
+	free(paquete.Payload);
 	return fm9;
 }
 
@@ -109,16 +103,16 @@ int handshake_safa()
 {
 	int safa = crear_socket_safa();
 	handshake(safa, ELDIEGO);
-	Mensaje *mensaje = recibir_mensaje(safa);
-	if (mensaje->paquete.header.tipoMensaje != ESHANDSHAKE)
-	{
+	Paquete paquete;
+	RecibirPaqueteCliente(socket_safa, &paquete);
+
+	if (paquete.header.tipoMensaje != ESHANDSHAKE)
 		_exit_with_error(safa, "No se logro el primer paso de datos", NULL);
-	}
+
 	//Guardo en la global tamanio de linea que tiene safa
-	memcpy(&tamanio_linea, mensaje->paquete.Payload, sizeof(u_int32_t));
+	memcpy(&tamanio_linea, paquete.Payload, sizeof(u_int32_t));
 	log_info(logger, "Se concreto el handshake con safa, me pasa el tamanio de linea %d", tamanio_linea);
-	free(mensaje->paquete.Payload);
-	free(mensaje);
+	free(paquete.Payload);
 	return safa;
 }
 
@@ -156,10 +150,11 @@ int crear_socket_fm9()
 
 void *interpretar_mensajes_de_mdj(void *args)
 {
-	Paquete *paquete = recibir_mensaje(socket_mdj);
+	Paquete paquete;
+	RecibirPaqueteCliente(socket_mdj, &paquete);
 
 	//interpreta
-	Tipo accion = mensaje->paquete.header.tipoMensaje;
+	Tipo accion = paquete.header.tipoMensaje;
 	switch (accion)
 	{
 	case VALIDAR_ARCHIVO:
@@ -187,7 +182,6 @@ int recibir_todo(Paquete *paquete, int socketFD, uint32_t cantARecibir)
 
 int recibir_partes(void *paquete, int socketFD, u_int32_t cant_a_recibir)
 {
-
 	void *datos = malloc(cant_a_recibir);
 	int recibido = 0;
 	int totalRecibido = 0;
@@ -222,17 +216,46 @@ int recibir_partes(void *paquete, int socketFD, u_int32_t cant_a_recibir)
 
 void *interpretar_mensajes_de_safa(void *args)
 {
+	int cant_a_recibir = 0;
+	void *datos = malloc(cant_a_recibir);
+	int recibido = 0;
+	int totalRecibido = 0;
+	int len = transfer_size;
+	Paquete paquete;
 
+	while (totalRecibido != cant_a_recibir)
+	{
+		if (cant_a_recibir < transfer_size) {
+			len = cant_a_recibir;
+		}
+
+		recibido = recv(socket_safa, datos + totalRecibido, len, 0);
+
+		//man recv en el caso de -1 es error pero tambien lo matamos
+		if (recibido <= 0)
+		{
+			printf("Cliente Desconectado\n");
+			//TODO: Preguntar que socket se desconecto, si no es CPU o si es el ultimo CPU tiene que morir todo.
+			close(socket_safa); // ¡Hasta luego!
+			//sem_post
+		}
+
+		totalRecibido += recibido;
+	}
+
+	memcpy(&paquete, datos, cant_a_recibir);
+	free(datos);
+
+	return (void*)(intptr_t)recibido;
 }
 
 void *interpretar_mensajes_de_fm9(void *args)
 {
-	int recibido =
 }
 
-void leer_config(char *path)
+void leer_config()
 {
-	config = config_create(strcat(path, "/DAM.config"));
+	config = config_create("/home/utnso/tp-2018-2c-Nene-Malloc/dam/src/DAM.config");
 }
 
 void inicializar_log(char *program)
@@ -244,9 +267,9 @@ void inicializar(char **argv)
 {
 	inicializar_log(argv[0]);
 	log_info(logger, "Logger cargado exitosamente");
-	leer_config(argv[1]);
+	leer_config();
 	log_info(logger, "Config cargada exitosamente");
-	transfer_size = config_get_int_value("TRANSFER_SIZE");
+	transfer_size = config_get_int_value(config, "TRANSFER_SIZE");
 }
 
 int escuchar_conexiones(int server_socket)
