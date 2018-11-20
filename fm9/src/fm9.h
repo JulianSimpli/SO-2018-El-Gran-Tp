@@ -12,16 +12,30 @@
 
 typedef struct {
 	char* idArchivo; //path del archivo
-	t_list* lineas; //lista de todas las lineas del archivo en un segmento; su list_size es el fin en la ts
-	int inicio; //posicion de la memoria real en la que se encuentra la primer linea
-} SegmentoArchivo;
+	t_list* lineas; //lista de todas las lineas del archivo en un segmento
+	int inicio; //numero posicion de la primer linea en la memoria real
+	int desplazamiento; //sizeof del t_list*lineas -1
+} SegmentoArchivoSegPur;
+
+typedef struct {
+	int disponible; //flag frame disponible, 1=disponible, 0=no disponible
+	t_list* lineas; //lista de todas las lineas del archivo en un frame
+	int inicio; //nro de linea de inicio
+	int fin; //nro de linea de fin (sizeof del t_list*lineas -1)
+} Frame;
+
+typedef struct {
+	char* idArchivo; //path del archivo
+	t_list* paginas; //tabla de paginas cuyo contenido de cada elemento es un nro de frame
+	int cantidadPaginas; //cantidad de paginas que representa ese segmento
+} SegmentoArchivoSegPag;
 
 typedef struct {
 	int idProceso;
-	t_list* segmentos; //lista de 'SegmentoArchivo' que posee un proceso
+	t_list* segmentos; //tabla segmentos/lista de 'SegmentoArchivo' que posee un proceso
 } ProcesoArchivo;
 
 //void ejemploCargarArchivoAMemoria();
-
+//void inicializarFramesMemoria();
 
 #endif /* FM9_H_ */
