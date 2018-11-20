@@ -14,6 +14,7 @@
 #include <string.h>
 #include "../../Bibliotecas/sockets.h"
 #include "primitivas.h"
+#include "../../Bibliotecas/dtb.h"
 
 //Logger y config globales
 t_log *logger;

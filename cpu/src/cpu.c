@@ -7,7 +7,7 @@ int socket_diego;
 int socket_safa;
 int socket_fm9;
 
-sem_t *chaos;
+sem_t *cambios;
 bool finalizar;
 
 int main(int argc, char **argv)
@@ -15,72 +15,122 @@ int main(int argc, char **argv)
 	inicializar(argv);
 
 	//TODO: Handshake con SAFA
-	int socker_safa = handshake_safa();
+	int socket_safa = handshake_safa();
 
 	//TODO: Handshake con el DIEGO
 
 	//TODO: Handshake con FM9
+	pthread_t p_thread_one;
+	pthread_create(&p_thread_one, NULL, hilo_safa, NULL);
+	pthread_t p_thread_two;
+	pthread_create(&p_thread_two, NULL, hilo_safa, NULL);
 
-	//TODO: Recibir DTB de SAFA
-	//Hay que levantar dos hilos, se van a turnar en quien ejecuta realmente un dtb
-	//Y quien escucha al mensaje finalizar y cambio de config
-	//pthread_create();
-	//pthread_create();
-	//pthread_join();
+	pthread_join(&p_thread_one, NULL);
+	pthread_join(&p_thread_two, NULL);
 	return 0;
 }
 
 //
 void hilo_safa()
 {
-	recibir_paquete();
-	interpretar_safa();
-}
-
-int ejecutar_quantum()
-{
-	int i;
-	for(i = 0; i < quantum; i++) 
+	while (1)
 	{
-		sem_wait(cambios);
-		char *primitiva = pedir_primitiva();
-		ejecutar(primitiva);
-		if(finalizar) break;
-		sem_post(cambios);
+		Paquete *paquete = malloc(sizeof(Paquete));
+		RecibirPaqueteCliente(socket_safa, NULL, paquete);
+		interpretar_safa(paquete);
 	}
-
-	if (finalizar) {
-		//empezar a mandar mensajes de finalizacion
-	}
-
-	if (!strcmp(algo, "VRR")) {
-		//enviar quantum restante
-		//quantum - i
-	}
-
 }
 
-
-
-int interpretar_safa(Paquete *paquete) 
+int ejecutar_quantum(Paquete *paquete)
 {
-	switch(paquete->header.tipoMensaje) {
-		case ESDTBDUMMY:
-			DTB dummy = dtb_deserializar(paquete);
-			ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(DTB *dtb);
-			ejecutar_quantum();
+	DTB *dtb = DTB_deserializar(paquete);
+	int i;
+	// cambios = 1;
+	for (i = 0; i < quantum; i++)
+	{
+		// sem_wait(cambios);
+		char *primitiva = pedir_primitiva(dtb);
+		ejecutar(primitiva); //avanzar el PC dentro del paquete
+		dtb->PC++;
+		if (finalizar)
 			break;
-		case ESDTB:
-			ejecutar_quantum();
-			break;
-		case FINALIZAR:
-			finalizar = true;
-			break;
-		case CAMBIO_CONFIG:
-			cargar_config_safa();
-			break;
-		default:
-			break;
+		// sem_post(cambios);
+	}
+
+	if (finalizar)
+	{
+		Paquete* paquete_a_diego = malloc(sizeof(Paquete));
+		paquete_a_diego->header.tipoMensaje = FINALIZAR;
+		paquete_a_diego->header.tamPayload = 0;
+		paquete_a_diego->header.emisor = CPU;
+		//empezar a mandar mensajes de finalizacion al DAM
+		//un paquete con el tipoDeMensaje = FINALIZAR
+		//emisor:CPU
+		//tamPayload: 0
+	}
+
+	//armar el paquete para mandar a safa, que dependiendo de si es RR o VRR, envía quantum restante
+	//si es RR, manda DTB_EJECUTO
+	//si es VRR, manda QUANTUM_FALTANTE
+	Paquete *nuevo_paquete = malloc(sizeof(Paquete));
+	nuevo_paquete->header.tipoMensaje = DTB_EJECUTO;
+	void * DTB_serializado = DTB_serializar(dtb, nuevo_paquete->header.tamPayload);
+	nuevo_paquete->header.emisor = CPU;
+	nuevo_paquete->Payload = DTB_serializado;
+
+	if (!strcmp(algoritmo, "VRR"))
+	{
+		nuevo_paquete->header.tipoMensaje = QUANTUM_FALTANTE;
+		nuevo_paquete->Payload = realloc(nuevo_paquete->Payload, nuevo_paquete->header.tamPayload + sizeof(u_int32_t));
+		int restante = quantum - i;
+		memcpy(nuevo_paquete->Payload+nuevo_paquete->header.tamPayload,restante,sizeof(u_int32_t));
+		nuevo_paquete->header.tamPayload += sizeof(u_int32_t);
+	}
+	EnviarPaquete(socket_safa, nuevo_paquete);
+}
+
+char *pedir_primitiva(DTB *dtb)
+{
+	//solo le envio a FM9 el PID y el PC del dtb que me llegó
+	Paquete *paquete = malloc(sizeof(Paquete));
+	int len = sizeof(u_int32_t) * 2;
+	paquete->header.tamPayload = len;
+	paquete->header.tipoMensaje = NUEVA_PRIMITIVA; 
+	paquete->header.emisor = CPU;
+	paquete->Payload = malloc(len);
+	memcpy(paquete->Payload, dtb->PID, sizeof(u_int32_t));
+	memcpy(paquete->Payload + sizeof(u_int32_t), dtb->PC, sizeof(u_int32_t));
+	// pedido_de_primitiva->header.tamPayload = 0;
+	int ret = EnviarPaquete(socket_fm9, paquete);
+	if (ret != 1)
+	{
+		Paquete *primitiva_recibida = malloc(sizeof(Paquete));
+		RecibirPaqueteCliente(socket_fm9, NULL, primitiva_recibida);
+		char *primitiva = malloc(primitiva_recibida->header.tamPayload + 1);
+		memcpy(primitiva, primitiva_recibida->Payload, primitiva_recibida->header.tamPayload);
+		primitiva[primitiva_recibida->header.tamPayload] = '\0';
+		return primitiva;
+	}
+}
+
+int interpretar_safa(Paquete *paquete)
+{
+	switch (paquete->header.tipoMensaje)
+	{
+	case ESDTBDUMMY:
+		EnviarPaquete(socket_diego, paquete); //envia el dtb al diego para que este haga el pedido correspondiente a MDJ
+		break;
+	case ESDTB:
+		ejecutar_quantum(paquete);
+		break;
+	case FINALIZAR:
+		finalizar = true;
+		break;
+	case CAMBIO_CONFIG:
+		cargar_config_safa();
+		break;
+	default:
+		break;
 	}
 }
 
@@ -92,8 +142,9 @@ int handshake_safa()
 {
 	int safa = crear_socket_safa();
 	handshake(safa, CPU);
-	Paquete *paquete = recibir_mensaje(safa);
-	if (mensaje->paquete.header.tipoMensaje != ESHANDSHAKE)
+	Paquete *paquete = malloc(sizeof(Paquete));
+	RecibirPaqueteCliente(socket_safa, NULL, paquete);
+	if (paquete->header.tipoMensaje != ESHANDSHAKE)
 	{
 		_exit_with_error(safa, "No se logro el handshake", NULL);
 	}
@@ -158,7 +209,7 @@ int connect_to_server(char *ip, char *port)
 	struct addrinfo *server_info;
 
 	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC;		 // Permite que la maquina se encargue de verificar si usamos IPv4 o IPv6
+	hints.ai_family = AF_UNSPEC;	 // Permite que la maquina se encargue de verificar si usamos IPv4 o IPv6
 	hints.ai_socktype = SOCK_STREAM; // Indica que usaremos el protocolo TCP
 
 	getaddrinfo(ip, port, &hints, &server_info); // Carga en server_info los datos de la conexion
@@ -186,7 +237,7 @@ int connect_to_server(char *ip, char *port)
 	return server_socket;
 }
 
-int interpretar(char *linea)
+int ejecutar(char *linea)
 {
 	int i = 0, existe = 0;
 	//Calcula la cantidad de primitivas que hay en el array

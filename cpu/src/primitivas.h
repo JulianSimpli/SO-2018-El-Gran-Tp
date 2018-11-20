@@ -76,10 +76,11 @@ void *ejecutar_borrar(char *linea)
    can understand. */
 typedef void *(*DoRunTimeChecks)();
 
-struct Primitiva{
-        char *name; /* User printable name of the function. */
+struct Primitiva
+{
+	char *name;			  /* User printable name of the function. */
 	DoRunTimeChecks func; /* Function to call to do the job. */
-	char *doc; /* Documentation for this function.  */
+	char *doc;			  /* Documentation for this function.  */
 };
 
 struct Primitiva primitivas[] = {

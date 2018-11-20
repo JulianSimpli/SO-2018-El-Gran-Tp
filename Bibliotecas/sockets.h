@@ -24,7 +24,8 @@ typedef enum {
 <<<<<<< HEAD
 	ESHANDSHAKE, ESSTRING, ESDATOS, SUCCESS, ERROR,								   // Mensajes generales
 	VALIDAR_ARCHIVO, CREAR_ARCHIVO, OBTENER_DATOS, GUARDAR_DATOS, BORRAR_ARCHIVO, // Mensajes MDJ
-	DTB_EJECUTO, DTB_BLOQUEAR, PROCESS_TIMEOUT, 						 		// Emisor: CPU, Receptor: SAFA
+	NUEVA_PRIMITIVA,															 // Emisor: CPU, Receptor:FM9	
+	DTB_EJECUTO, DTB_BLOQUEAR, PROCESS_TIMEOUT, QUANTUM_FALTANTE, 						 		// Emisor: CPU, Receptor: SAFA
 	DUMMY_SUCCES, DUMMY_FAIL, DTB_SUCCES, DTB_FAIL,							 	// Emisor: Diego, Receptor: SAFA
 	ESDTBDUMMY, ESDTB, FINALIZAR, CAMBIO_CONFIG															// Emisor: SAFA, Receptor: CPU												
 =======
