@@ -21,8 +21,10 @@ bool end;
 sem_t mutex_handshake_diego;
 sem_t mutex_handshake_cpu;
 
+
 // Declaracion de funciones
 void crear_logger();
+void crear_logger_finalizados();
 void inicializar_variables();
 void crear_listas();
 void llenar_lista_estados();
@@ -36,6 +38,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD);
 void *handshake_cpu_serializar(int *tamanio_payload);
 void enviar_handshake_cpu(int socketFD);
 void enviar_handshake_diego(int socketFD);
+bool verificar_si_murio(DTB *dtb, t_list *lista_origen);
 
 //Recursos
 t_recurso *recurso_crear(char *id_recurso, int valor_inicial);
