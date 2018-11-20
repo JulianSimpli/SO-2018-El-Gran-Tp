@@ -1,6 +1,6 @@
 #include "planificador.h"
 
-u_int32_t numero_pid = 1;
+u_int32_t numero_pid = 0;
 u_int32_t procesos_en_memoria = 0;
 u_int32_t procesos_finalizados = 0;
 
@@ -108,7 +108,7 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
 {
 	DTB *dtb_nuevo = malloc(sizeof(DTB));
     dtb_nuevo->flagInicializacion = flag_inicializacion;
-    dtb_nuevo->PC = 0;
+    dtb_nuevo->PC = 1;
     dtb_nuevo->archivosAbiertos = list_create();
     DTB_agregar_archivo(dtb_nuevo, 0, path);
 
@@ -122,8 +122,7 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
         }
         case GDT:
         {
-            dtb_nuevo->gdtPID = numero_pid;
-            numero_pid++;
+            dtb_nuevo->gdtPID = ++numero_pid;
             info_dtb_crear(dtb_nuevo->gdtPID);
             list_add(lista_nuevos, dtb_nuevo);
             break;
@@ -424,12 +423,18 @@ void finalizar(u_int32_t pid)
 {
     t_list *lista_actual;
     DTB_info *info_dtb;
+
+    if(pid <= numero_pid)
+    {
     DTB *dtb_finalizar = dtb_buscar_en_todos_lados(pid, &info_dtb, &lista_actual);
-    
+    /* lista_actual queda modificada con la lista donde está el pid que busco */
     if (dtb_finalizar != NULL)
         manejar_finalizar(dtb_finalizar, pid, info_dtb, lista_actual);
     else
-        printf("El proceso %i no esta en el sistema\n", pid);
+        printf("El proceso con PID %i ha sido finalizado, puede revisar Archivo Finalizados para mas informacion", pid);
+    }
+    else
+        printf("\nNo se tienen registros del proceso con PID %i en el sistema.\n", pid);
 }
 
 void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *lista_actual)
@@ -439,48 +444,67 @@ void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *list
     {
         case DTB_NUEVO:
         {
-            printf("El GDT %d esta en nuevos\n", pid);
+            printf("El GDT con PID %d esta en nuevos\n", pid);
             if(dtb_encuentra(lista_listos, pid, DUMMY))
             {
                 bloquear_dummy(lista_listos, pid);
+                loggear_finalizacion(dtb, info_dtb);
                 dtb_actualizar(dtb, lista_actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
             }
             break;
         }
         case DTB_LISTO:
         {
-            printf("El GDT %d esta listo\n", pid);
+        	printf("El GDT con PID %d esta listo\n", pid);
+        	loggear_finalizacion(dtb, info_dtb);
             list_iterate(info_dtb->recursos, forzar_signal);
+            dtb_actualizar(dtb, lista_actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
             enviar_finalizar_dam(pid);
             break;
         }
         case DTB_EJECUTANDO:
         {
-            printf("El GDT %d esta ejecutando\n", pid);
+        	printf("El GDT con PID %d esta ejecutando\n", pid);
             enviar_finalizar_cpu(pid, info_dtb->socket_cpu);
             break;
         }
         case DTB_BLOQUEADO:
         {
-            printf("El GDT %d esta bloqueado\n", pid);
+        	printf("El GDT con PID %d esta bloqueado\n", pid);
+        	loggear_finalizacion(dtb, info_dtb);
             list_iterate(info_dtb->recursos, forzar_signal);
             enviar_finalizar_dam(pid);
             break;
         }
         case DTB_FINALIZADO:
         {
-            printf("El GDT %d ya fue finalizado\n", pid);
+            printf("El GDT con PID %d ya fue finalizado\n", pid);
             break;
         }
         default:
         {
-            printf("El proceso %d no esta en ninguna cola\n", pid);
+            printf("El proceso con PID %d no esta en ninguna cola\n", pid);
             break;
         }
     }
     printf("El proceso de PID %d se ha movido a la cola de Finalizados\n", dtb->gdtPID);
-    //loggear_finalizacion(dtb, info_dtb);
 }
+
+
+void loggear_finalizacion(DTB* dtb, DTB_info* info_dtb)
+{
+	log_info(logger_fin, "El proceso con PID %d fue finalizado."
+"\n											 Flag: %i"
+"\n											 Cantidad de archivos abiertos: %d"
+"\n											 Tiempo de respuesta final: %f milisegundos"
+"\n											 Proceso Finalizado por Usuario: %s"
+"\n											 Ultimo Estado: %s",
+				              dtb->gdtPID, dtb->flagInicializacion,
+							  list_size(dtb->archivosAbiertos), info_dtb->tiempo_respuesta,
+							  (info_dtb->kill)? "Si" : "No",
+							  (info_dtb->kill) ? "DTB_Ejecutando" : Estados[info_dtb->estado]);
+}
+
 
 void pasaje_a_ready(u_int32_t *pid)
 {
@@ -505,7 +529,7 @@ void enviar_finalizar_cpu(u_int32_t pid, int socket_cpu)
     Paquete *paquete = malloc(sizeof(Paquete));
     paquete->Payload = malloc(sizeof(u_int32_t));
     memcpy(paquete->Payload, &pid, sizeof(u_int32_t));
-    paquete->header = cargar_header(sizeof(u_int32_t), FIN_EJECUTANDO, SAFA);
+    paquete->header = cargar_header(sizeof(u_int32_t), FINALIZAR, SAFA);
     EnviarPaquete(socket_cpu, paquete);
     free(paquete);
     printf("Le mande a cpu que finalice GDT %d\n", pid);
@@ -605,8 +629,10 @@ void mover_primero_de_lista1_a_lista2(t_list* lista1, t_list* lista2) {
 void dtb_finalizar_desde(DTB *dtb, t_list *source)
 {
     DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
+
     info_dtb->estado = DTB_FINALIZADO;
     mover_dtb_de_lista(dtb, source, lista_finalizados);
+    dtb_liberar(dtb);
     procesos_finalizados++;
 }
 
