@@ -13,7 +13,6 @@ typedef enum {
 	CPU_LIBRE, CPU_OCUPADA
 } Estado;
 
-
 typedef struct DTB_info {
 	u_int32_t gdtPID;
 	Estado estado;
@@ -23,6 +22,9 @@ typedef struct DTB_info {
 	float tiempo_respuesta;
 	bool kill;
 	t_list *recursos;
+	u_int32_t sentencias_en_nuevo;
+	u_int32_t sentencias_al_diego;
+	u_int32_t sentencias_hasta_finalizar;
 } DTB_info;
 
 typedef struct {
@@ -49,10 +51,13 @@ t_log *logger;
 t_log* logger_fin;
 
 u_int32_t numero_pid, procesos_en_memoria, procesos_finalizados;
+u_int32_t sentencias_globales_del_diego, sentencias_totales;
+
 u_int32_t MULTIPROGRAMACION, RETARDO_PLANIF; //La carga la config y SAFA al inicializarse
 char *ALGORITMO_PLANIFICACION;
 int socket_diego;
 pthread_t hilo_consola, hilo_plp, hilo_pcp;
+
 
 //Funciones
 //Hilo planificador largo plazo
@@ -137,7 +142,11 @@ void dtb_signal(t_recurso *recurso);
 void recurso_asignar_a_pid(t_recurso *recurso, u_int32_t pid);
 
 //Metricas
+void gdt_metricas(u_int32_t pid);
 void metricas();
+float calcular_sentencias_promedio_diego();
+float calcular_sentencias_promedio_hasta_finalizar();
+bool ya_finalizo(void *_info_dtb);
 float medir_tiempo(int signal, clock_t* tin_rcv, clock_t* tfin_rcv);
 
 #endif /* PLANIFICADOR_H_ */

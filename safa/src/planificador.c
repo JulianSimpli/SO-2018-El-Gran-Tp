@@ -1,8 +1,8 @@
 #include "planificador.h"
 
-u_int32_t numero_pid = 0;
-u_int32_t procesos_en_memoria = 0;
-u_int32_t procesos_finalizados = 0;
+u_int32_t numero_pid = 0, 
+procesos_en_memoria = 0, procesos_finalizados = 0,
+sentencias_globales_del_diego = 0, sentencias_totales = 0;
 
 char* Estados[5] = {"Nuevo", "Listo", "Ejecutando", "Bloqueado", "Finalizado"};
 
@@ -88,6 +88,8 @@ void ejecutar_primer_dtb_listo() {
     {
         case DUMMY:
         {
+            dtb_remueve(lista_listos, dtb_exec->gdtPID, DUMMY);
+            list_add(lista_ejecutando, dtb_exec);
             paquete->header = cargar_header(tamanio_DTB, ESDTBDUMMY, SAFA);
             EnviarPaquete(cpu_libre->socket, paquete);
             printf("Dummy %d ejecutando en cpu %d\n", dtb_exec->gdtPID, cpu_libre->socket);
@@ -145,6 +147,9 @@ DTB_info *info_dtb_crear(u_int32_t pid)
     info_dtb->tiempo_respuesta = 0;
     info_dtb->kill = false;
     info_dtb->recursos = list_create();
+    info_dtb->sentencias_en_nuevo = 0;
+    info_dtb->sentencias_al_diego = 0;
+    info_dtb->sentencias_hasta_finalizar = 0;
     //*info_dtb->tiempo_ini
     //*info_dtb->tiempo_fin
     list_add(lista_info_dtb, info_dtb);
@@ -562,7 +567,6 @@ void dtb_signal(t_recurso *recurso)
 	}
 }
 
-
 void recurso_asignar_a_pid(t_recurso *recurso, u_int32_t pid)
 {
 	DTB_info *info_dtb = info_asociada_a_pid(pid);
@@ -605,10 +609,98 @@ float medir_tiempo(int signal, clock_t* tin_rcv, clock_t* tfin_rcv){
 	  t_rta = t_total/contador_procesos_bloqueados;
 }
 
-void metricas(){
-
-	printf("\nEl Tiempo de Respuesta del sistema es: %f milisegundos", t_rta);
+void gdt_metricas(u_int32_t pid)
+{
+    metricas();
+    DTB_info *info_dtb = info_asociada_a_pid(pid);
+    printf("Estadisticas del GDT %d\n", pid);
+    printf("Espero en nuevo %d sentencias\n", info_dtb->sentencias_en_nuevo);
+    printf("Uso a  \"El diego\" %d veces", info_dtb->sentencias_al_diego);
+    printf("El ultimo tiempo de respuesta de %f", info_dtb->tiempo_respuesta);
 }
+
+void metricas(){
+    printf("Estadisticas de la fecha\n");
+    if(numero_pid)
+    {
+        float sentencias_promedio_diego = calcular_sentencias_promedio_diego();
+        printf("Sentencias ejecutadas promedio del sistema que usaron a \"El Diego\": %f"
+        ,sentencias_promedio_diego);
+    }
+    else printf("Todavia no empezo el campeonato\n");
+    if(procesos_finalizados)
+    {
+        float sentencias_promedio_hasta_finalizar = calcular_sentencias_promedio_hasta_finalizar();
+        printf("Sentencias ejecutadas promedio del sistema para que un dtb termine en la cola de EXIT: %f"
+        , sentencias_promedio_hasta_finalizar);
+    }
+    else printf("Ningun GDT finalizo hasta el momento\n");
+    if(sentencias_totales)
+    {
+        float porcentaje_al_diego = sentencias_globales_del_diego / sentencias_totales;
+        printf("Porcentaje de las sentencias ejecutadas promedio que fueron a \"El Diego\": %f"
+        , porcentaje_al_diego);
+    }
+    else printf("Ninguna sentencia fue ejecutada hasta el momento");
+    printf("Tiempo de respuesta promedio del sistema: %f milisegundos\n", t_rta);
+}
+
+void* list_fold(t_list* self, void* seed, void*(*operation)(void*, void*))
+{
+	t_link_element* element = self->head;
+	void* result = seed;
+
+	while(element != NULL)
+	{
+		result = operation(result, element->data);
+		element = element->next;
+	}
+
+	return result;
+}
+
+float calcular_sentencias_promedio_diego()
+{
+    int _sumar_sentencias_al_diego(void *_acum, void * _info_dtb)
+    {
+        int acum = (int)_acum;
+        DTB_info *info_dtb = (DTB_info *)_info_dtb;
+        return acum + info_dtb->sentencias_al_diego;
+    }
+    int sentencias_totales = list_fold(lista_info_dtb, 0, (void *)_sumar_sentencias_al_diego);
+    
+    return sentencias_totales/numero_pid;
+}
+
+float calcular_sentencias_promedio_hasta_finalizar()
+{
+    int _sumar_sentencias_hasta_finalizar(void *_acum, void *_info_dtb)
+    {
+        int acum = (int)_acum;
+        DTB_info *info_dtb = (DTB_info *)_info_dtb;
+        return acum + info_dtb->sentencias_hasta_finalizar;
+    }
+    t_list *finalizados = list_filter(lista_info_dtb, ya_finalizo);
+    if(finalizados == NULL)
+        return 0;
+    int sentencias_hasta_finalizar = list_fold(finalizados, 0, (void*)_sumar_sentencias_hasta_finalizar);
+
+    return sentencias_hasta_finalizar/procesos_finalizados;
+}
+
+bool ya_finalizo(void *_info_dtb)
+{
+    DTB_info *info_dtb = (DTB_info *)_info_dtb;
+    return info_dtb->estado == DTB_FINALIZADO;
+}
+
+/*
+1. Cant. de sentencias ejecutadas que esperó un DTB en la cola NEW
+2. Cant.de sentencias ejecutadas prom. del sistema que usaron a “El Diego”
+3. Cant. de sentencias ejecutadas prom. del sistema para que un DTB termine en la cola EXIT
+4. Porcentaje de las sentencias ejecutadas promedio que fueron a “El Diego”
+5. Tiempo de Respuesta promedio del Sistema
+ */
 
 
 // FUNCIONES VIEJAS QUE PROBABLEMENTE NO SE USEN. LAS DEJO POR LAS DUDAS

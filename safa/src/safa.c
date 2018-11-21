@@ -137,11 +137,13 @@ void parseo_consola(char *operacion, char *primerParametro)
 		{
 			pid = atoi(primerParametro);
 			printf("pid a mostrar metricas es %i\n", pid);
-			//mostrarMetricasDe(pid);
+			gdt_metricas(pid);
 		}
 		else
+		{
 			printf("metricas no trajo parametros. Solo se muestran estadisticas del sistema\n");
-		//mostrarMetricasDelSistema();
+			metricas();
+		}
 	}
 	else
 		printf("No se conoce la operacion\n");
@@ -287,6 +289,9 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 			liberar_cpu(socketFD);
 			// METRICAS CLOCK;
 			DTB *dtb = DTB_deserializar(paquete->Payload);
+			actualizar_sentencias_al_diego(dtb);
+			sentencias_globales_del_diego++;
+			metricas_actualizar(dtb, 0);
 			dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, dtb->PC, DTB_BLOQUEADO, socketFD);
 			DTB_info* info_dtb = info_asociada_a_pid(dtb->gdtPID);
 			//dtb_info->tiempo_ini=clock(); LLAMAR A LA FUNCION QUE HAGA ESO
@@ -298,12 +303,14 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		{
 			liberar_cpu(socketFD);
             DTB* dtb = DTB_deserializar(paquete->Payload);
+			metricas_actualizar(dtb, 0);
 			dtb_actualizar(dtb, lista_ejecutando, lista_listos, dtb->PC, DTB_LISTO, socketFD);
 			break;
         }
         case DTB_EJECUTO: // No veo diferencias con Process_timeout
 		{
             DTB* dtb = DTB_deserializar(paquete->Payload);
+			metricas_actualizar(dtb, 0);
 			DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
 			if(verificar_si_murio(dtb, lista_ejecutando))
 				break;
@@ -316,6 +323,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		{
 			liberar_cpu(socketFD);
             DTB* dtb = DTB_deserializar(paquete->Payload);
+			metricas_actualizar(dtb, 0);
 			DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
 			dtb_actualizar(dtb, lista_ejecutando, lista_finalizados, dtb->PC, DTB_FINALIZADO, socketFD);
 	        loggear_finalizacion(dtb, info_dtb);
@@ -328,9 +336,9 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 			u_int32_t pid = 0;
 			u_int32_t pc = 0;
 			t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc);
-			//dtb asociado a pid, y a wait le paso como parametro dtb->gdtPID porque tiene que ser dato persistido en memoria
-			// si no, se va a borrar cuando salga del bloque. Lo mismo en signal.
-			recurso_wait(recurso, pid, pc, socketFD);
+			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
+			metricas_actualizar(dtb, pc);
+			recurso_wait(recurso, dtb->gdtPID, pc, socketFD);
 			break;
 		}
 		case SIGNAL:
@@ -338,10 +346,71 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 			u_int32_t pid = 0;
 			u_int32_t pc = 0;
 			t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc);
-			recurso_signal(recurso, pid, pc, socketFD);
+			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
+			metricas_actualizar(dtb, pc);
+			recurso_signal(recurso, dtb->gdtPID, pc, socketFD);
 			break;
 		}
 	}
+}
+
+void metricas_actualizar(DTB *dtb, u_int32_t pc)
+{
+	u_int32_t sentencias_ejecutadas;
+
+	if(pc)
+		sentencias_ejecutadas = pc - dtb->PC;
+	else
+	{
+	DTB *dtb_viejo = dtb_encuentra(lista_ejecutando, dtb->gdtPID, GDT);
+	sentencias_ejecutadas = dtb->PC - dtb_viejo->PC;
+	}
+
+	actualizar_sentencias_en_nuevos(sentencias_ejecutadas);
+	actualizar_sentencias_en_no_finalizados(sentencias_ejecutadas);
+	sentencias_totales += sentencias_ejecutadas;
+}
+
+void actualizar_sentencias_al_diego(DTB *dtb)
+{
+	DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
+	info_dtb->sentencias_al_diego++;
+}
+
+void actualizar_sentencias_en_no_finalizados(u_int32_t sentencias_ejecutadas)
+{
+	void _sumar_sentencias_en_no_finalizados(void *_info_dtb)
+	{
+		DTB_info *info_dtb = (DTB_info *)_info_dtb;
+		info_dtb->sentencias_hasta_finalizar += sentencias_ejecutadas;
+	}
+	t_list *info_no_fin = list_filter(lista_info_dtb, es_no_finalizado);
+	list_iterate(info_no_fin, _sumar_sentencias_en_no_finalizados);
+	list_destroy(info_no_fin);
+}
+
+void actualizar_sentencias_en_nuevos(u_int32_t sentencias_ejecutadas)
+{
+	void _sumar_sentencias_en_nuevo(void *_info_dtb)
+	{
+		DTB_info *info_dtb = (DTB_info *)_info_dtb;
+		info_dtb->sentencias_en_nuevo += sentencias_ejecutadas;
+	}
+	t_list *info_nuevos = list_filter(lista_info_dtb, es_nuevo);
+	list_iterate(info_nuevos, _sumar_sentencias_en_nuevo);
+	list_destroy(info_nuevos);
+}
+
+bool es_no_finalizado(void *_info_dtb)
+{
+	DTB_info *info_dtb = (DTB_info *)_info_dtb;
+	return info_dtb->estado != DTB_FINALIZADO;
+}
+
+bool es_nuevo(void * _info_dtb)
+{
+	DTB_info *info_dtb = (DTB_info *)_info_dtb;
+	return info_dtb->estado == DTB_NUEVO;
 }
 
 bool verificar_si_murio(DTB *dtb, t_list *lista_origen)
