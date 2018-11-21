@@ -3,12 +3,13 @@
 void *mensajes_mdj();
 void *mensajes_safa();
 void *aceptar_cpu(int);
-void *levantar_hilo(void *);
+pthread_t levantar_hilo(void *);
 void *interpretar_mensajes_de_cpu(void *);
 void *interpretar_mensajes_de_mdj(void *);
 void *interpretar_mensajes_de_safa(void *);
 void *interpretar_mensajes_de_fm9(void *);
 int crear_socket_fm9();
+void aceptar_cpus();
 
 int socket_safa;
 int socket_mdj;
@@ -23,16 +24,17 @@ int main(int argc, char **argv)
 
 	//Crea por unica vez los sockets con los que tiene conexiones permanentes
 	//Primero hago el handshake con fm9 para poder tener el tamanio de linea
-	socket_safa = handshake_safa();
+	handshake_safa();
 	//socket_mdj = handshake_mdj();
 	//socket_fm9 = handshake_fm9();
 
 	//inicializamos el semaforo en maximas_conexiones - 3 que son fijas
-	//aceptar_cpus();
 
-	levantar_hilo(interpretar_mensajes_de_safa);
+	pthread_t safa = levantar_hilo(interpretar_mensajes_de_safa);
 	//levantar_hilo(interpretar_mensajes_de_mdj);
 	//levantar_hilo(interpretar_mensajes_de_fm9);
+	aceptar_cpus();
+	pthread_join(safa, NULL);
 	return 0;
 }
 
@@ -45,17 +47,15 @@ void aceptar_cpus()
 	for (;;)
 	{
 		//sem_wait
-		int conexion_aceptada = accept(socket_ligado, NULL, NULL);
+		int socket = accept(socket_ligado, NULL, NULL);
 
-		if (conexion_aceptada < 0)
-		{
+		if (socket < 0)
 			_exit_with_error(socket_ligado, "Fallo el accept", NULL);
-			exit_gracefully(1);
-		}
 
-		log_info(logger, "Acepto cpu en socket: %d", conexion_aceptada);
+		log_info(logger, "Acepto cpu en socket: %d", socket);
 
-		levantar_hilo(interpretar_mensajes_de_cpu);
+		pthread_t p_thread;
+		pthread_create(&p_thread, NULL, interpretar_mensajes_de_cpu, &socket);
 	}
 }
 
@@ -66,7 +66,7 @@ void aceptar_cpus()
 int handshake_mdj()
 {
 	int mdj = crear_socket_mdj();
-	handshake(mdj, ELDIEGO);
+	EnviarHandshake(mdj, ELDIEGO);
 	Paquete paquete;
 	RecibirPaqueteCliente(socket_mdj, &paquete);
 	if (paquete.header.tipoMensaje != ESHANDSHAKE)
@@ -83,7 +83,7 @@ int handshake_mdj()
 int handshake_fm9()
 {
 	int fm9 = crear_socket_fm9();
-	handshake(fm9, ELDIEGO);
+	EnviarHandshake(fm9, ELDIEGO);
 	Paquete paquete;
 	RecibirPaqueteCliente(socket_mdj, &paquete);
 	if (paquete.header.tipoMensaje != ESHANDSHAKE)
@@ -101,19 +101,16 @@ int handshake_fm9()
  */
 int handshake_safa()
 {
-	int safa = crear_socket_safa();
-	handshake(safa, ELDIEGO);
-	Paquete paquete;
-	RecibirPaqueteCliente(socket_safa, &paquete);
+	socket_safa = crear_socket_safa();
+	EnviarHandshake(socket_safa, ELDIEGO);
+	Paquete *paquete = malloc(sizeof(Paquete));
+	log_debug(logger, "socket safa : %i", socket_safa);
+	RecibirPaqueteCliente(socket_safa, paquete);
 
-	if (paquete.header.tipoMensaje != ESHANDSHAKE)
-		_exit_with_error(safa, "No se logro el primer paso de datos", NULL);
-
-	//Guardo en la global tamanio de linea que tiene safa
-	memcpy(&tamanio_linea, paquete.Payload, sizeof(u_int32_t));
-	log_info(logger, "Se concreto el handshake con safa, me pasa el tamanio de linea %d", tamanio_linea);
-	free(paquete.Payload);
-	return safa;
+	if (paquete->header.tipoMensaje != ESHANDSHAKE)
+		_exit_with_error(socket_safa, "No se logro el primer paso de datos", NULL);
+	log_info(logger, "Handshake con safa.");
+	return socket_safa;
 }
 
 // void * mensajes_mdj()
@@ -198,7 +195,7 @@ int recibir_partes(void *paquete, int socketFD, u_int32_t cant_a_recibir)
 		//man recv en el caso de -1 es error pero tambien lo matamos
 		if (recibido <= 0)
 		{
-			printf("Cliente Desconectado\n");
+			log_error(logger, "Cliente Desconectado\n");
 			//TODO: Preguntar que socket se desconecto, si no es CPU o si es el ultimo CPU tiene que morir todo.
 			close(socketFD); // ¡Hasta luego!
 			//sem_post
@@ -216,41 +213,28 @@ int recibir_partes(void *paquete, int socketFD, u_int32_t cant_a_recibir)
 
 void *interpretar_mensajes_de_safa(void *args)
 {
-	int cant_a_recibir = 0;
-	void *datos = malloc(cant_a_recibir);
-	int recibido = 0;
-	int totalRecibido = 0;
-	int len = transfer_size;
 	Paquete paquete;
+	RecibirPaqueteCliente(socket_safa, &paquete);	
+	switch(paquete.header.tipoMensaje){
+		case DTB_FAIL:
+		break;
 
-	while (totalRecibido != cant_a_recibir)
-	{
-		if (cant_a_recibir < transfer_size) {
-			len = cant_a_recibir;
-		}
-
-		recibido = recv(socket_safa, datos + totalRecibido, len, 0);
-
-		//man recv en el caso de -1 es error pero tambien lo matamos
-		if (recibido <= 0)
-		{
-			printf("Cliente Desconectado\n");
-			//TODO: Preguntar que socket se desconecto, si no es CPU o si es el ultimo CPU tiene que morir todo.
-			close(socket_safa); // ¡Hasta luego!
-			//sem_post
-		}
-
-		totalRecibido += recibido;
-	}
-
-	memcpy(&paquete, datos, cant_a_recibir);
-	free(datos);
-
-	return (void*)(intptr_t)recibido;
+	}	
 }
 
 void *interpretar_mensajes_de_fm9(void *args)
 {
+	int socket = args;
+	//For para recibir mensaje de cpu, interpretarlo y enviar la respuesta
+	log_info(logger, "Soy el hilo %d, recibi una conexion en el socket: %d", process_get_thread_id(), socket);
+	log_info(logger, "Interpreto mensaje");
+	Paquete paquete;
+	RecibirPaqueteCliente(socket, &paquete);
+	switch(paquete.header.tipoMensaje){
+		case :
+			log_info(logger, "Envio paquete a mdj");
+		break;
+	}
 }
 
 void leer_config()
@@ -290,10 +274,11 @@ int escuchar_conexiones(int server_socket)
 	return conexion_aceptada;
 }
 
-void *levantar_hilo(void *funcion)
+pthread_t levantar_hilo(void *funcion)
 {
 	pthread_t p_thread;
 	pthread_create(&p_thread, NULL, funcion, NULL);
+	return p_thread;
 }
 
 /**
@@ -304,7 +289,15 @@ void *levantar_hilo(void *funcion)
  */
 void *interpretar_mensajes_de_cpu(void *args)
 {
+	int socket = args;
 	//For para recibir mensaje de cpu, interpretarlo y enviar la respuesta
-	log_info(logger, "Soy el hilo %d, recibi una conexion en el socket: %d", process_get_thread_id(), ((Mensaje *)args)->socket);
+	log_info(logger, "Soy el hilo %d, recibi una conexion en el socket: %d", process_get_thread_id(), socket);
 	log_info(logger, "Interpreto mensaje");
+	Paquete paquete;
+	RecibirPaqueteCliente(socket, &paquete);
+	switch(paquete.header.tipoMensaje){
+		case ESDTBDUMMY:
+			log_info(logger, "Pido que me devuelva el escriptorio");
+		break;
+	}
 }

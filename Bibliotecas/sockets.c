@@ -88,7 +88,7 @@ int StartServidor(char* MyIP, int MyPort) // obtener socket a la escucha
 
 	if (setsockopt(SocketEscucha, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int))
 			== -1) // obviar el mensaje "address already in use" (la dirección ya se está usando)
-			{
+	{
 		perror("setsockopt");
 		exit(1);
 	}
@@ -242,7 +242,7 @@ int RecibirPaqueteServidor(int socketFD, Emisor receptor, Paquete* paquete) {
 int RecibirPaqueteServidorSafa(int socketFD, Emisor receptor, Paquete* paquete) {
 	paquete->Payload = NULL;
 	int resul = RecibirDatos(&(paquete->header), socketFD, TAMANIOHEADER);
-	if (resul > 0) { //si no hubo error
+	if (resul > 0 && paquete->header.tamPayload > 0) {
 		paquete->Payload = malloc(paquete->header.tamPayload);
 		resul = RecibirDatos(paquete->Payload, socketFD, paquete->header.tamPayload);
 	}
@@ -252,7 +252,7 @@ int RecibirPaqueteServidorSafa(int socketFD, Emisor receptor, Paquete* paquete) 
 int RecibirPaqueteCliente(int socketFD, Paquete* paquete) {
 	paquete->Payload = NULL;
 	int resul = RecibirDatos(&(paquete->header), socketFD, TAMANIOHEADER);
-	if (resul > 0 && paquete->header.tipoMensaje != ESHANDSHAKE && paquete->header.tamPayload > 0) { //si no hubo error ni es un handshake
+	if (resul > 0 && paquete->header.tamPayload > 0) { //si no hubo error ni es un handshake
 		paquete->Payload = malloc(paquete->header.tamPayload);
 		resul = RecibirDatos(paquete->Payload, socketFD, paquete->header.tamPayload);
 	}
@@ -265,6 +265,5 @@ Header cargar_header(int tamanio_payload, Tipo tipo_mensaje, Emisor emisor)
 	header.tamPayload = tamanio_payload;
 	header.tipoMensaje = tipo_mensaje;
 	header.emisor = emisor;
-
 	return header;
 }

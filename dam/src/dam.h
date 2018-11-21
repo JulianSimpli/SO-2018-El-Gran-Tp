@@ -47,14 +47,6 @@ int handshake_mdj();
 int handshake_safa();
 int crear_socket_safa();
 
-void handshake(int socket, int emisor) {
-	Mensaje *mensaje = malloc(sizeof(Mensaje));
-	mensaje->socket = socket;
-	mensaje->paquete.header.tipoMensaje = ESHANDSHAKE;
-	mensaje->paquete.header.tamPayload = 0;
-	mensaje->paquete.header.emisor = emisor;
-}
-
 int connect_to_server(char * ip, char * port) {
   struct addrinfo hints;
   struct addrinfo *server_info;

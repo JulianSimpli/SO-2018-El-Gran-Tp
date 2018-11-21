@@ -3,35 +3,37 @@
 
 int quantum;
 char *algoritmo;
-int socket_diego;
+int socket_dam;
 int socket_safa;
 int socket_fm9;
 
 sem_t *cambios;
 bool finalizar;
+void *hilo_safa();
+int interpretar_safa(Paquete *paquete);
+char *pedir_primitiva(DTB *dtb);
+void cargar_config_safa(Paquete *paquete);
+int ejecutar(char *linea);
 
 int main(int argc, char **argv)
 {
 	inicializar(argv);
 
-	//TODO: Handshake con SAFA
-	int socket_safa = handshake_safa();
-
-	//TODO: Handshake con el DIEGO
-
-	//TODO: Handshake con FM9
+	handshake_safa();
+	handshake_dam();
+	//handshake_fm9();
 	pthread_t p_thread_one;
 	pthread_create(&p_thread_one, NULL, hilo_safa, NULL);
 	pthread_t p_thread_two;
 	pthread_create(&p_thread_two, NULL, hilo_safa, NULL);
 
-	pthread_join(&p_thread_one, NULL);
-	pthread_join(&p_thread_two, NULL);
+	pthread_join(p_thread_one, NULL);
+	pthread_join(p_thread_two, NULL);
 	return 0;
 }
 
 //
-void hilo_safa()
+void *hilo_safa()
 {
 	while (1)
 	{
@@ -74,7 +76,7 @@ int ejecutar_quantum(Paquete *paquete)
 	//si es VRR, manda QUANTUM_FALTANTE
 	Paquete *nuevo_paquete = malloc(sizeof(Paquete));
 	nuevo_paquete->header.tipoMensaje = DTB_EJECUTO;
-	void * DTB_serializado = DTB_serializar(dtb, nuevo_paquete->header.tamPayload);
+	void * DTB_serializado = DTB_serializar(dtb, &nuevo_paquete->header.tamPayload);
 	nuevo_paquete->header.emisor = CPU;
 	nuevo_paquete->Payload = DTB_serializado;
 
@@ -83,7 +85,7 @@ int ejecutar_quantum(Paquete *paquete)
 		nuevo_paquete->header.tipoMensaje = QUANTUM_FALTANTE;
 		nuevo_paquete->Payload = realloc(nuevo_paquete->Payload, nuevo_paquete->header.tamPayload + sizeof(u_int32_t));
 		int restante = quantum - i;
-		memcpy(nuevo_paquete->Payload+nuevo_paquete->header.tamPayload,restante,sizeof(u_int32_t));
+		memcpy(nuevo_paquete->Payload + nuevo_paquete->header.tamPayload, &restante, sizeof(u_int32_t));
 		nuevo_paquete->header.tamPayload += sizeof(u_int32_t);
 	}
 	EnviarPaquete(socket_safa, nuevo_paquete);
@@ -98,8 +100,8 @@ char *pedir_primitiva(DTB *dtb)
 	paquete->header.tipoMensaje = NUEVA_PRIMITIVA; 
 	paquete->header.emisor = CPU;
 	paquete->Payload = malloc(len);
-	memcpy(paquete->Payload, dtb->PID, sizeof(u_int32_t));
-	memcpy(paquete->Payload + sizeof(u_int32_t), dtb->PC, sizeof(u_int32_t));
+	memcpy(paquete->Payload, &dtb->gdtPID, sizeof(u_int32_t));
+	memcpy(paquete->Payload + sizeof(u_int32_t), &dtb->PC, sizeof(u_int32_t));
 	// pedido_de_primitiva->header.tamPayload = 0;
 	int ret = EnviarPaquete(socket_fm9, paquete);
 	if (ret != 1)
@@ -118,50 +120,58 @@ int interpretar_safa(Paquete *paquete)
 	switch (paquete->header.tipoMensaje)
 	{
 	case ESDTBDUMMY:
-		EnviarPaquete(socket_diego, paquete); //envia el dtb al diego para que este haga el pedido correspondiente a MDJ
+		log_debug(logger, "ESDTBDUMMY");
+		EnviarPaquete(socket_dam, paquete); //envia el dtb al diego para que este haga el pedido correspondiente a MDJ
 		break;
 	case ESDTB:
+		log_debug(logger, "ESDTBDUMMY");
 		ejecutar_quantum(paquete);
 		break;
 	case FINALIZAR:
 		finalizar = true;
 		break;
 	case CAMBIO_CONFIG:
-		cargar_config_safa();
+		cargar_config_safa(paquete);
 		break;
 	default:
 		break;
 	}
 }
 
-/**
- * Se encarga de crear el socket y mandar el primer mensaje
- * Devuelve el socket 
- */
-int handshake_safa()
+void handshake_safa()
 {
-	int safa = crear_socket_safa();
-	handshake(safa, CPU);
+	socket_safa = crear_socket_safa();
+	EnviarHandshake(socket_safa, CPU);
 	Paquete *paquete = malloc(sizeof(Paquete));
 	RecibirPaqueteCliente(socket_safa, paquete);
 	if (paquete->header.tipoMensaje != ESHANDSHAKE)
-	{
-		_exit_with_error(safa, "No se logro el handshake", NULL);
-	}
+		_exit_with_error(socket_safa, "No se logro el handshake", NULL);
 	//TODO: Recibe quantum por primera vez de SAFA
-	leer_config_safa(paquete);
+	cargar_config_safa(paquete);
 
 	log_info(logger, "Se concreto el handshake con SAFA, empiezo a recibir mensajes");
-	return safa;
 }
 
-void leer_config_safa(Paquete *paquete)
+void handshake_dam()
 {
-	memcpy(&quantum, paquete->Payload + sizeof(u_int32_t), sizeof(u_int32_t));
+	socket_dam = crear_socket_dam();
+	EnviarHandshake(socket_dam, CPU);
+	Paquete *paquete = malloc(sizeof(Paquete));
+	RecibirPaqueteCliente(socket_dam, paquete);
+	if (paquete->header.tipoMensaje != ESHANDSHAKE)
+		_exit_with_error(socket_dam, "No se logro el handshake", NULL);
+
+	log_info(logger, "Se concreto el handshake con DAM, empiezo a recibir mensajes");
+}
+
+
+void cargar_config_safa(Paquete *paquete)
+{
+	memcpy(&quantum, paquete->Payload, sizeof(u_int32_t));
 	int len = 0;
-	memcpy(&len, paquete->Payload + sizeof(u_int32_t) * 2, sizeof(u_int32_t));
+	memcpy(&len, paquete->Payload + sizeof(u_int32_t), sizeof(u_int32_t));
 	algoritmo = malloc(len + 1);
-	memcpy(algoritmo, paquete->Payload + sizeof(u_int32_t) * 3, len);
+	memcpy(algoritmo, paquete->Payload + sizeof(u_int32_t) * 2, len);
 	algoritmo[len] = '\0';
 }
 
@@ -177,7 +187,7 @@ void handshake(int socket, int emisor)
 
 void leer_config(char *path)
 {
-	config = config_create(strcat(path, "/CPU.config"));
+	config = config_create("/home/utnso/tp-2018-2c-Nene-Malloc/cpu/src/CPU.config");
 }
 
 void inicializar_log(char *program)
@@ -295,13 +305,16 @@ Mensaje *recibir_mensaje(int conexion)
 
 int crear_socket_safa()
 {
-	char *puerto_safa = config_get_string_value(config, "PUERTO_SAFA");
+	char *puerto = config_get_string_value(config, "PUERTO_SAFA");
+	char *ip = config_get_string_value(config, "IP_SAFA");
+	return connect_to_server(ip, puerto);
+}
 
-	char *ip_safa = config_get_string_value(config, "IP_SAFA");
-
-	int socket = connect_to_server(ip_safa, puerto_safa);
-
-	return socket;
+int crear_socket_dam()
+{
+	char *puerto = config_get_string_value(config, "PUERTO_DIEGO");
+	char *ip = config_get_string_value(config, "IP_DIEGO");
+	return connect_to_server(ip, puerto);
 }
 
 void _exit_with_error(int socket, char *error_msg, void *buffer)

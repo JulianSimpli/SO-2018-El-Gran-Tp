@@ -21,7 +21,9 @@ void planificador_largo_plazo()
             for(int i = 0; i < list_size(lista_nuevos); i++)
             {
                 DTB *dtb_cargar = list_get(lista_nuevos, i);
-                if(!dummy_creado(dtb_cargar) && permite_multiprogramacion())
+                if(!permite_multiprogramacion())
+                    break;
+                if(!dummy_creado(dtb_cargar))
                     desbloquear_dummy(dtb_cargar);
             }
         }
@@ -77,7 +79,6 @@ void ejecutar_primer_dtb_listo() {
     cpu_libre->estado = CPU_OCUPADA;
 
     DTB *dtb_exec = list_remove(lista_listos, 0);
-    dtb_actualizar(dtb_exec, lista_listos, lista_ejecutando, dtb_exec->PC, DTB_EJECUTANDO, cpu_libre->socket);
     
     Paquete* paquete = malloc(sizeof(Paquete));
     int tamanio_DTB = 0;
@@ -94,6 +95,7 @@ void ejecutar_primer_dtb_listo() {
         }
         case GDT:
         { 
+            dtb_actualizar(dtb_exec, lista_listos, lista_ejecutando, dtb_exec->PC, DTB_EJECUTANDO, cpu_libre->socket);
             paquete->header = cargar_header(tamanio_DTB, ESDTB, SAFA);
             EnviarPaquete(cpu_libre->socket, paquete);
             printf("GDT %d ejecutando en cpu %d\n", dtb_exec->gdtPID, cpu_libre->socket);

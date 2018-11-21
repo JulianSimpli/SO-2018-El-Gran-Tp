@@ -1,7 +1,7 @@
 TARGET = cpu
-LIBS = -lcommons -lreadline
+LIBS = -lcommons -lreadline ../../Bibliotecas/dtb.c ../../Bibliotecas/sockets.c 
 program:
-	gcc cpu.c -I/home/tp-2018-2c-Nene-Malloc/cpu/src -o $(TARGET) $(LIBS)
+	gcc -pthread cpu.c -o $(TARGET) $(LIBS)
 clean:
 	-rm -f *.o
 	-rm -f $(TARGET)

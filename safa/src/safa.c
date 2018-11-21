@@ -156,7 +156,6 @@ void accion(void *socket)
 	//el socket del cliente conectado lo obtiene con la funcion servidorConcurrente en el main
 	while (RecibirPaqueteServidorSafa(socketFD, SAFA, &paquete) > 0)
 	{
-
 		log_info(logger, "Emisor: %i", paquete.header.emisor);
 		switch (paquete.header.emisor)
 		{
@@ -207,6 +206,11 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		}
 		case DUMMY_FAIL:
 		{
+			u_int32_t pid;
+			DTB_info *info_dtb;
+			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
+			bloquear_dummy(lista_ejecutando, pid);
+			log_error(logger, "Fallo la carga en memoria del %d", pid);
 			list_iterate(info_dtb->recursos, forzar_signal);
 			enviar_finalizar_dam(pid);
 			break;
@@ -237,6 +241,11 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		}
 		case DTB_FAIL:
 		{
+			u_int32_t pid;
+			DTB_info *info_dtb;
+			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
+			bloquear_dummy(lista_ejecutando, pid);
+			log_error(logger, "Fallo la carga en memoria del %d", pid);
 			list_iterate(info_dtb->recursos, forzar_signal);
 			enviar_finalizar_dam(pid);
 			break;
@@ -532,7 +541,7 @@ void enviar_handshake_diego(int socketFD)
 {
 	Paquete *paquete = malloc(sizeof(Paquete));
 	paquete->header = cargar_header(0, ESHANDSHAKE, SAFA);
-
+	log_info(logger, "Handshake a diego: %d", socketFD );
 	EnviarPaquete(socketFD, paquete);
 	free(paquete);
 }

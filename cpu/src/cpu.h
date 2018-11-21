@@ -34,6 +34,9 @@ void config_reload();
 int inicializar_socket();
 int connect_to_server(char *ip, char *port);
 void handshake(int, int);
+void handshake_safa();
+void handshake_dam();
+void handshake_fm9();
 int interpretar(char *linea);
 
 void exit_gracefully(int return_nr);
@@ -41,5 +44,6 @@ void _exit_with_error(int socket, char *error_msg, void *buffer);
 void enviar_mensaje(Mensaje mensaje);
 Mensaje *recibir_mensaje(int conexion);
 int crear_socket_safa();
+int crear_socket_dam();
 
 #endif
