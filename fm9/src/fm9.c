@@ -1,4 +1,4 @@
-#include "../../Bibliotecas/sockets.h"
+#include "fm9.h"
 
 char *MODO, *IP_FM9;
 int PUERTO_FM9, TAMANIO, MAX_LINEA, TAM_PAGINA, socketElDiego, lineasTotales, framesTotales, lineasPorFrame;
@@ -178,52 +178,63 @@ int primerLineaVaciaMemoria() {
 	return -1;
 }
 
-void ejemploCargarArchivoAMemoria() {
-	//recibo el archivo en string(?), cantidad de lineas (o las cuento yo), un id del archivo
-	//y el id del proceso que lo abrió
-	//------------
-	int idProc = 1;
-	char* idArch = "path";
-	char* archivo = "primer linea\nsegunda linea\ntercera linea";
-	int cantidadLineas = 3;
-	//-----------
-	//separo el string en lineas separando por \n
-	char** arrayLineas = string_n_split(archivo, cantidadLineas, "\n");
-	printf("\nguardo un archivo que contiene las siguientes lineas:\n%s\n%s\n%s\n", arrayLineas[0], arrayLineas[1], arrayLineas[2]);
-	//hay espacio en memoria?
-	int lineasLibres = lineasLibresConsecutivasMemoria(cantidadLineas);
-	if (lineasLibres>=0) {
-		//inicializo estructuras
+int contarElementosArray (char** array) {
+	int contador = 0;
+	while (array[contador] != NULL) {
+		contador++;
+	}
+	return contador;
+}
+
+void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo) {
+	char** arrayLineas = string_split(archivo, "\n"); //deja un elemento con NULL al final
+	int cantidadDeLineas = contarElementosArray(arrayLineas);
+	log_info(logger, "El archivo a cargar es...");
+	int inicioDeLinea = lineasLibresConsecutivasMemoria(cantidadDeLineas);
+	if (inicioDeLinea >= 0) {
+		//me fijo si ya tengo el proceso en lista
+		if (list_any_satisfy(procesos, LAMBDA(bool _(ProcesoArchivo* proceso){return proceso->idProceso == idProceso ? 1 : 0;}))) {
+			//si ya existe el proceso sólo le agrego el archivo
+		}
 		ProcesoArchivo* procesoArchivo = malloc(sizeof(procesoArchivo));
+		procesoArchivo->idProceso = idProceso;
 		t_list* segmentos = list_create();
-		SegmentoArchivoSegPur* unSegmentoArchivoSegPur = malloc(sizeof(SegmentoArchivoSegPur));
+		SegmentoArchivoSEG* unSegmentoArchivoSEG = malloc(sizeof(SegmentoArchivoSEG));
+		unSegmentoArchivoSEG->idArchivo = malloc(strlen(path) + 1);
+		strcpy(unSegmentoArchivoSEG->idArchivo, path);
 		t_list* lineasArchivo = list_create();
-		unSegmentoArchivoSegPur->idArchivo = malloc(strlen(idArch) + 1);
-		//persistencia de datos
-		strcpy(unSegmentoArchivoSegPur->idArchivo, idArch);
-		for (int x = 0; x < cantidadLineas; x++) {
+		for (int x = 0; x < cantidadDeLineas; x++) {
 			list_add(lineasArchivo, arrayLineas[x]);
 		}
-		//guardo las lineas de un archivo-segmento en una lista
-		unSegmentoArchivoSegPur->lineas = lineasArchivo;
-		procesoArchivo->idProceso = idProc;
-		list_add(segmentos, unSegmentoArchivoSegPur);
+		unSegmentoArchivoSEG->lineas = lineasArchivo;
+		unSegmentoArchivoSEG->inicio = inicioDeLinea;
+		unSegmentoArchivoSEG->fin = list_size(lineasArchivo) - 1;
+		list_add(segmentos, unSegmentoArchivoSEG);
 		procesoArchivo->segmentos = segmentos;
-		//hasta acá debería tener guardado un id de proceso con su lista de segmentos
-		//cuya lista de segmentos posee 1 elemento el cual tiene un id de archivo y su lista de lineas
-		//me falta agregarle el inicio de la ubicacion en memoria real de cada archivo
-		//cargo a memoria real cada segmento
-		unSegmentoArchivoSegPur->inicio = lineasLibres;
-		unSegmentoArchivoSegPur->desplazamiento = list_size(lineasArchivo) - 1;
-		int linea = 0;
-		for(int x = lineasLibres; x < (cantidadLineas+lineasLibres); x++) {
-			strcpy(memoria[x], arrayLineas[linea]);
-			linea++;
-		}
 		list_add(procesos, procesoArchivo);
+		for(int x = 0; x < cantidadDeLineas; x++) {
+			strcpy(memoria[inicioDeLinea], arrayLineas[x]);
+			inicioDeLinea++;
+		}
+		log_info(logger, "Archivo cargado con éxito...");
 	} else {
-		//no hay espacio ):
+		log_info(logger, "No hay espacio suficiente para cargar tal segmento...");
 	}
+}
+
+void agregarArchivoAProcesoExistenteSEG(int idProceso, char* path, char* archivo) {
+	int procesoEnLista(ProcesoArchivo* proceso) {
+		return (!strcmp(proceso->idProceso, idProceso));
+	}
+	ProcesoArchivo* proceso = list_find(procesos, (void*) procesoEnLista);
+}
+
+int verificarArchivoCargadoSEG(char* path) {
+	bool mismoIdArchivo(void* segmentoArchivo) {
+		if(!(strcmp(((SegmentoArchivoSEG*) segmentoArchivo)->idArchivo, path))) return 1;
+		return 0;
+	}
+	return list_any_satisfy(procesos, mismoIdArchivo); //1 si encontró, 0 si no encontró
 }
 
 void imprimirMemoria(){
@@ -265,7 +276,7 @@ int framesSuficientes(int lineasAGuardar) {
 	bool disponible(void* frame) {
 		return ((Frame*)frame)->disponible == 1;
 	}
-	int lineasDisponibles = lineasPorFrame * list_count_satisfying(framesMemoria, disponible());
+	int lineasDisponibles = lineasPorFrame * list_count_satisfying(framesMemoria, disponible);
 	if(lineasDisponibles >= lineasAGuardar) {
 		flag = 1;
 	}
@@ -303,12 +314,12 @@ void persistirArchivoEnPaginas() {
 		ProcesoArchivo* procesoArchivo = malloc(sizeof(ProcesoArchivo));
 		procesoArchivo->idProceso = idProc;
 		t_list* segmentos = list_create();
-		SegmentoArchivoSegPag* segmentoArchivoSegPag = malloc(sizeof(SegmentoArchivoSegPag));
-		segmentoArchivoSegPag->idArchivo = malloc(strlen(idArch)+1);
-		strcpy(segmentoArchivoSegPag->idArchivo, idArch);
+		SegmentoArchivoSPA* SegmentoArchivoSPA = malloc(sizeof(SegmentoArchivoSPA));
+		SegmentoArchivoSPA->idArchivo = malloc(strlen(idArch)+1);
+		strcpy(SegmentoArchivoSPA->idArchivo, idArch);
 		t_list* paginas = list_create();
 		int cantidadPaginasAUsar = ceil(cantidadLineasArchivo/lineasPorframe); //si rompe, ver agregar -lm math.h o 'm' a libraries (eclipse)
-		segmentoArchivoSegPag->cantidadPaginas = cantidadPaginasAUsar;
+		SegmentoArchivoSPA->cantidadPaginas = cantidadPaginasAUsar;
 		int lineas = 0;
 		for(int x = 0; x < cantidadPaginasAUsar; x++) {
 			Frame* frame = (Frame*) list_get(framesTotales, primerFrameLibre());
@@ -322,8 +333,8 @@ void persistirArchivoEnPaginas() {
 			frame->disponible = 0;
 			list_add(paginas, frame);
 		}
-		segmentoArchivoSegPag->paginas = paginas;
-		list_add(segmentos, segmentoArchivoSegPag);
+		SegmentoArchivoSPA->paginas = paginas;
+		list_add(segmentos, SegmentoArchivoSPA);
 		list_add(procesos, procesoArchivo);
 	} else {
 		//no hay espacio ):
@@ -336,8 +347,6 @@ int main() {
 	obtenerValoresArchivoConfiguracion();
 	imprimirArchivoConfiguracion();
 	asignarMemoriaLineas();
-	imprimirMemoria();
-	ejemploCargarArchivoAMemoria();
 	imprimirMemoria();
 	ServidorConcurrente(IP_FM9, PUERTO_FM9, FM9, &listaHilos, &end, accion);
 	pthread_t hiloConsola; //un hilo para la consola
