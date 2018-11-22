@@ -1,7 +1,7 @@
 #include "planificador.h"
 
 u_int32_t numero_pid = 0, 
-procesos_en_memoria = 0, procesos_finalizados = 0,
+procesos_finalizados = 0,
 sentencias_globales_del_diego = 0, sentencias_totales = 0;
 
 char* Estados[5] = {"Nuevo", "Listo", "Ejecutando", "Bloqueado", "Finalizado"};
@@ -9,26 +9,56 @@ char* Estados[5] = {"Nuevo", "Listo", "Ejecutando", "Bloqueado", "Finalizado"};
 //Hilo planificador largo plazo
 void planificador_largo_plazo()
 {
-    // ejecutar path ejecutar path2 ejecutar path3
-    // meto dummy 1, dummy 2, dummy 3 en ready
-
     while(true)
     {
-        //wait(sem_plp)/ el signal lo hacen ejecutar y mensaje de finalizar.
-        // pensar si primitiva finalizar hace signal.
-        if(permite_multiprogramacion() && !list_is_empty(lista_nuevos))
-        {
+        sem_wait(&sem_ejecutar);
+        sem_wait(&sem_multiprogramacion);
+//        if(!list_is_empty(lista_nuevos)) //Esto nunca estaria vacio si se hizo el signal de ejecutar. Esta al pedo
+//        {                                //La dejo por las dudas. Probablemente se borre.
             for(int i = 0; i < list_size(lista_nuevos); i++)
             {
                 DTB *dtb_cargar = list_get(lista_nuevos, i);
-                if(!permite_multiprogramacion())
-                    break;
                 if(!dummy_creado(dtb_cargar))
+                {   
                     desbloquear_dummy(dtb_cargar);
+                    break;
+                }
             }
-        }
-        sleep(1);
+//        }
     }
+}
+
+void pasaje_a_ready(u_int32_t pid)
+{
+    bloquear_dummy(lista_ejecutando, pid);
+    notificar_al_plp(pid);
+    log_info(logger, "%d pasa a lista de procesos listos", pid);
+}
+
+void notificar_al_plp(u_int32_t pid)
+{
+    DTB* DTB_a_mover = dtb_remueve(lista_nuevos, pid, 1);
+    list_add(lista_listos, DTB_a_mover);
+}
+
+bool dummy_creado(DTB *dtb)
+{
+    return (dtb_encuentra(lista_listos, dtb->gdtPID, DUMMY) != NULL) || (dtb_encuentra(lista_ejecutando, dtb->gdtPID, DUMMY) != NULL);
+}
+
+void bloquear_dummy(t_list *lista, u_int32_t pid)
+{
+    bool compara_dummy(void *dtb)
+    {
+        return dtb_coincide_pid(dtb, pid, DUMMY);
+    }
+    list_remove_and_destroy_by_condition(lista, compara_dummy, dtb_liberar);
+}
+
+void desbloquear_dummy(DTB* dtb_nuevo)
+{
+    ArchivoAbierto* escriptorio = DTB_obtener_escriptorio(dtb_nuevo);
+    DTB *dtb_dummy = dtb_crear(dtb_nuevo->gdtPID, escriptorio->path, DUMMY);
 }
 
 //Hilo planificador corto plazo
@@ -171,8 +201,11 @@ DTB *dtb_actualizar(DTB *dtb, t_list *source, t_list *dest, u_int32_t pc, Estado
     info_dtb_actualizar(estado, socket, info_dtb);
     switch(estado)
     {
-        case DTB_FINALIZADO: procesos_finalizados++;
-        case DTB_LISTO: procesos_en_memoria++;
+        case DTB_FINALIZADO:
+        {
+            procesos_finalizados++;
+            break;
+        }
     }
 
     return dtb;
@@ -201,28 +234,6 @@ void info_liberar(void *dtb)
         return info_coincide_pid(pid, info_dtb);
     }
     list_remove_and_destroy_by_condition(lista_info_dtb, coincide_info, free);
-}
-
-void bloquear_dummy(t_list *lista, u_int32_t pid)
-{
-    bool compara_dummy(void *dtb)
-    {
-        return dtb_coincide_pid(dtb, pid, DUMMY);
-    }
-    list_remove_and_destroy_by_condition(lista, compara_dummy, dtb_liberar);
-}
-
-void desbloquear_dummy(DTB* dtb_nuevo)
-{
-    ArchivoAbierto* escriptorio = DTB_obtener_escriptorio(dtb_nuevo);
-    DTB *dtb_dummy = dtb_crear(dtb_nuevo->gdtPID, escriptorio->path, DUMMY);
-}
-
-void notificar_al_plp(u_int32_t pid)
-{
-    DTB* DTB_a_mover = dtb_remueve(lista_nuevos, pid, 1);
-    list_add(lista_listos, DTB_a_mover);
-    procesos_en_memoria++;
 }
 
 bool dtb_coincide_pid(void* dtb, u_int32_t pid, u_int32_t flag)
@@ -285,22 +296,6 @@ bool esta_libre_cpu (void* cpu) {
 
 bool hay_cpu_libre() {
     return list_any_satisfy(lista_cpu, esta_libre_cpu);
-}
-
-//Funciones booleanas
-
-bool permite_multiprogramacion() {
-    return procesos_en_memoria < MULTIPROGRAMACION;
-}
-
-bool esta_en_memoria(DTB_info *info_dtb)
-{
-    return (info_dtb->estado == DTB_LISTO || info_dtb->estado == DTB_EJECUTANDO || info_dtb->estado == DTB_BLOQUEADO);
-}
-
-bool dummy_creado(DTB *dtb)
-{
-    return (dtb_encuentra(lista_listos, dtb->gdtPID, DUMMY) != NULL) || (dtb_encuentra(lista_ejecutando, dtb->gdtPID, DUMMY) != NULL);
 }
 
 //
@@ -408,6 +403,7 @@ void mostrar_archivo(void *_archivo, int index) // queda en void *_archivo por s
 //Funciones de Consola
 void ejecutar(char* path) {
 	DTB* dtb_nuevo = dtb_crear(0, path, GDT);
+    sem_post(&sem_ejecutar);
 }
 
 void status()
@@ -460,11 +456,17 @@ void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *list
         case DTB_NUEVO:
         {
             printf("El GDT con PID %d esta en nuevos\n", pid);
-            if(dtb_encuentra(lista_listos, pid, DUMMY))
+            if(!dummy_creado(dtb))
+            {
+                loggear_finalizacion(dtb, info_dtb);
+                dtb_actualizar(dtb, lista_actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);                
+            }
+            else if(dtb_encuentra(lista_listos, pid, DUMMY))
             {
                 bloquear_dummy(lista_listos, pid);
                 loggear_finalizacion(dtb, info_dtb);
                 dtb_actualizar(dtb, lista_actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
+                sem_post(&sem_multiprogramacion);
             }
             break;
         }
@@ -555,13 +557,6 @@ void loggear_finalizacion(DTB* dtb, DTB_info* info_dtb)
 							  (info_dtb->kill) ? "DTB_Ejecutando" : Estados[info_dtb->estado]);
 }
 
-
-void pasaje_a_ready(u_int32_t pid)
-{
-    bloquear_dummy(lista_ejecutando, pid);
-    notificar_al_plp(pid);
-    log_info(logger, "%d pasa a lista de procesos listos", pid);
-}
 
 void enviar_finalizar_dam(u_int32_t pid)
 {
@@ -782,4 +777,13 @@ DTB *mover_dtb_de_lista(DTB *dtb, t_list *source, t_list *dest)
 void dummy_finalizar(DTB *dtb) {
     DTB *dummy = dtb_remueve(lista_ejecutando, dtb->gdtPID, DUMMY);
     dtb_liberar(dummy);
+}
+
+// bool permite_multiprogramacion() {
+//     return procesos_en_memoria < MULTIPROGRAMACION;
+// }
+
+bool esta_en_memoria(DTB_info *info_dtb)
+{
+    return (info_dtb->estado == DTB_LISTO || info_dtb->estado == DTB_EJECUTANDO || info_dtb->estado == DTB_BLOQUEADO);
 }

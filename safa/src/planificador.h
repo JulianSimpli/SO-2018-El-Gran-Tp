@@ -54,7 +54,7 @@ t_list *lista_recursos_global;
 t_log *logger;
 t_log* logger_fin;
 
-u_int32_t numero_pid, procesos_en_memoria, procesos_finalizados;
+u_int32_t numero_pid, procesos_finalizados;
 u_int32_t sentencias_globales_del_diego, sentencias_totales;
 
 u_int32_t MULTIPROGRAMACION, RETARDO_PLANIF; //La carga la config y SAFA al inicializarse
@@ -62,17 +62,19 @@ char *ALGORITMO_PLANIFICACION;
 int socket_diego;
 pthread_t hilo_consola, hilo_plp, hilo_pcp;
 
+sem_t sem_ejecutar;
+sem_t sem_multiprogramacion;
 
 //Funciones
 //Hilo planificador largo plazo
 void planificador_largo_plazo();
-
-bool permite_multiprogramacion();
-bool dummy_creado(DTB *dtb);
-
 void pasaje_a_ready(u_int32_t pid);
 void notificar_al_plp(u_int32_t pid);
 
+//Funciones Dummy
+bool dummy_creado(DTB *dtb);
+void desbloquear_dummy(DTB* dtb_nuevo);
+void bloquear_dummy(t_list* lista, u_int32_t pid);
 
 //Hilo planificador corto plazo
 void planificador_corto_plazo();
@@ -104,22 +106,12 @@ bool dtb_coincide_pid(void *dtb, u_int32_t pid, u_int32_t flag);
 DTB_info *info_asociada_a_pid(u_int32_t pid);
 bool info_coincide_pid(u_int32_t pid, void *info_dtb);
 
-
 //Funciones de cpu
 void liberar_cpu(int socket);
 t_cpu* cpu_con_socket(t_list* lista, int socket);
 bool coincide_socket(int socket, void* cpu);
 bool esta_libre_cpu(void* cpu);
 bool hay_cpu_libre();
-
-
-//Funciones booleanas
-bool esta_en_memoria(DTB_info *info_dtb);
-
-
-//Funciones Dummy
-void desbloquear_dummy(DTB* dtb_nuevo);
-void bloquear_dummy(t_list* lista, u_int32_t pid);
 
 
 //Funciones de Consola
@@ -164,3 +156,5 @@ DTB *mover_dtb_de_lista(DTB *dtb, t_list *source, t_list *dest);
 void mover_primero_de_lista1_a_lista2(t_list* lista1, t_list* lista2);
 void dtb_finalizar_desde(DTB *dtb, t_list *source);
 void dummy_finalizar(DTB *dtb);
+bool esta_en_memoria(DTB_info *info_dtb);
+bool permite_multiprogramacion();

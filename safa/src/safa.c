@@ -11,36 +11,6 @@ void crear_logger_finalizados (){
 	logger_fin = log_create ("Archivos Finalizados.log", "safa", true, LOG_LEVEL_INFO);
 }
 
-
-void inicializar_variables() {
-	crear_listas();
-	llenar_lista_estados();
-	sem_init(&mutex_handshake_diego, 0, 0);
-	sem_init(&mutex_handshake_cpu, 0, 0);
-}
-
-void crear_listas()
-{
-	lista_cpu = list_create();
-	lista_nuevos = list_create();
-	lista_listos = list_create();
-	lista_ejecutando = list_create();
-	lista_bloqueados = list_create();
-	lista_finalizados = list_create();
-	lista_estados = list_create();
-	lista_info_dtb = list_create();
-	lista_recursos_global = list_create();
-}
-
-void llenar_lista_estados()
-{
-	list_add_in_index(lista_estados, 0, lista_nuevos);
-	list_add_in_index(lista_estados, 1, lista_listos);
-	list_add_in_index(lista_estados, 2, lista_ejecutando);
-	list_add_in_index(lista_estados, 3, lista_bloqueados);
-	list_add_in_index(lista_estados, 4, lista_finalizados);
-}
-
 void obtener_valores_archivo_configuracion()
 {
 	t_config *arch = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src/SAFA.config");
@@ -63,6 +33,37 @@ void imprimir_archivo_configuracion()
 	       "MULTIPROGRAMACION=%d\n"
 	       "RETARDO_PLANIF=%d\n",
 	       IP, PUERTO, ALGORITMO_PLANIFICACION, QUANTUM, MULTIPROGRAMACION, RETARDO_PLANIF);
+}
+
+void inicializar_variables() {
+	crear_listas();
+	llenar_lista_estados();
+	sem_init(&mutex_handshake_diego, 0, 0);
+	sem_init(&mutex_handshake_cpu, 0, 0);
+	sem_init(&sem_ejecutar, 0, 0);
+	sem_init(&sem_multiprogramacion, 0, MULTIPROGRAMACION);
+}
+
+void crear_listas()
+{
+	lista_cpu = list_create();
+	lista_nuevos = list_create();
+	lista_listos = list_create();
+	lista_ejecutando = list_create();
+	lista_bloqueados = list_create();
+	lista_finalizados = list_create();
+	lista_estados = list_create();
+	lista_info_dtb = list_create();
+	lista_recursos_global = list_create();
+}
+
+void llenar_lista_estados()
+{
+	list_add_in_index(lista_estados, 0, lista_nuevos);
+	list_add_in_index(lista_estados, 1, lista_listos);
+	list_add_in_index(lista_estados, 2, lista_ejecutando);
+	list_add_in_index(lista_estados, 3, lista_bloqueados);
+	list_add_in_index(lista_estados, 4, lista_finalizados);
 }
 
 void consola()
@@ -200,7 +201,10 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
 			DTB_info *info_dtb = info_asociada_a_pid(pid);
 			if(verificar_si_murio(dtb, lista_nuevos))
+			{
+				sem_post(&sem_multiprogramacion);
 				break;
+			}
 			pasaje_a_ready(pid);
 			liberar_cpu(socketFD);
 			log_info(logger, "Cpu %d liberada", socketFD);
@@ -254,12 +258,12 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		}
 		case DTB_FINALIZAR:
 		{
+			sem_post(&sem_multiprogramacion);
 			u_int32_t pid;
 			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
 			DTB_info *info_dtb;
 			t_list *lista_actual;
 			DTB *dtb = dtb_buscar_en_todos_lados(pid, &info_dtb, &lista_actual);
-			if(esta_en_memoria(info_dtb)) procesos_en_memoria--;
 			dtb_finalizar_desde(dtb, lista_actual);
 			free(dtb);
 		}
@@ -634,9 +638,14 @@ int main(void)
 {
 	crear_logger();
 	crear_logger_finalizados();
-	inicializar_variables();
 	obtener_valores_archivo_configuracion();
 	imprimir_archivo_configuracion();
+	inicializar_variables();
+	// Prueba de que carga el valor correcto.
+	int a = 0;
+	sem_getvalue(&sem_multiprogramacion, &a);
+	printf("sem_multiprogramacion es %d", a);
+	
 	log_info(logger, "Iniciando SAFA.log");
 	log_info(logger_fin, "***INFORMACION DE ARCHIVOS FINALIZADOS***");
 	clock_t t = clock();
