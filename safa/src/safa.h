@@ -14,7 +14,6 @@ char *IP;
 u_int32_t PUERTO, QUANTUM;
 
 t_list *lista_hilos;
-t_list *lista_recursos_global;
 
 bool end;
 
@@ -59,6 +58,7 @@ t_recurso *recurso_recibir(void *payload, int *pid, int *pc);
 void recurso_signal(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket);
 void recurso_wait(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket);
 DTB *dtb_bloquear(u_int32_t pid, u_int32_t pc, int socket);
+void avisar_desalojo_a_cpu(u_int32_t pid, u_int32_t pc, int socket);
 void seguir_ejecutando(u_int32_t pid, u_int32_t pc, int socket);
 void *serializar_pid_y_pc(u_int32_t pid, u_int32_t pc, int *tam_pid_y_pc);
 

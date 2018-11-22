@@ -201,7 +201,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			DTB_info *info_dtb = info_asociada_a_pid(pid);
 			if(verificar_si_murio(dtb, lista_nuevos))
 				break;
-			pasaje_a_ready(&pid);
+			pasaje_a_ready(pid);
 			liberar_cpu(socketFD);
 			log_info(logger, "Cpu %d liberada", socketFD);
 			break;
@@ -285,15 +285,14 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
         case DTB_BLOQUEAR:
 		{
 			// Habria que ver si algoritmo es rr o vrr para recibir quantum que queda
-
 			liberar_cpu(socketFD);
 			// METRICAS CLOCK;
 			DTB *dtb = DTB_deserializar(paquete->Payload);
 			actualizar_sentencias_al_diego(dtb);
 			sentencias_globales_del_diego++;
 			metricas_actualizar(dtb, 0);
+			DTB_info* info_dtb = info_asociada_a_pid(dtb->gdtPID);			
 			dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, dtb->PC, DTB_BLOQUEADO, socketFD);
-			DTB_info* info_dtb = info_asociada_a_pid(dtb->gdtPID);
 			//dtb_info->tiempo_ini=clock(); LLAMAR A LA FUNCION QUE HAGA ESO
 			medir_tiempo(1,(info_dtb->tiempo_ini), (info_dtb->tiempo_fin));
 			break;
@@ -338,6 +337,12 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 			t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc);
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 			metricas_actualizar(dtb, pc);
+			if(verificar_si_murio(dtb, lista_ejecutando))
+			{
+				dtb->PC = pc;
+				avisar_desalojo_a_cpu(dtb->gdtPID, pc, socketFD);
+				break;
+			}
 			recurso_wait(recurso, dtb->gdtPID, pc, socketFD);
 			break;
 		}
@@ -348,6 +353,12 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 			t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc);
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 			metricas_actualizar(dtb, pc);
+			if(verificar_si_murio(dtb, lista_ejecutando))
+			{
+				dtb->PC = pc;
+				avisar_desalojo_a_cpu(dtb->gdtPID, pc, socketFD);
+				break;
+			}
 			recurso_signal(recurso, dtb->gdtPID, pc, socketFD);
 			break;
 		}
@@ -362,8 +373,8 @@ void metricas_actualizar(DTB *dtb, u_int32_t pc)
 		sentencias_ejecutadas = pc - dtb->PC;
 	else
 	{
-	DTB *dtb_viejo = dtb_encuentra(lista_ejecutando, dtb->gdtPID, GDT);
-	sentencias_ejecutadas = dtb->PC - dtb_viejo->PC;
+		DTB *dtb_viejo = dtb_encuentra(lista_ejecutando, dtb->gdtPID, GDT);
+		sentencias_ejecutadas = dtb->PC - dtb_viejo->PC;
 	}
 
 	actualizar_sentencias_en_nuevos(sentencias_ejecutadas);
@@ -454,6 +465,15 @@ void seguir_ejecutando(u_int32_t pid, u_int32_t pc, int socket)
 
 DTB *dtb_bloquear(u_int32_t pid, u_int32_t pc, int socket)
 {
+	avisar_desalojo_a_cpu(pid, pc, socket);
+	DTB *dtb = dtb_encuentra(lista_ejecutando, pid, 1);
+	dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, pc, DTB_BLOQUEADO, socket);
+
+	return dtb;
+}
+
+void avisar_desalojo_a_cpu(u_int32_t pid, u_int32_t pc, int socket)
+{
 	Paquete *paquete = malloc(sizeof(Paquete));
 	int tamanio_payload = 0;
 	paquete->Payload = serializar_pid_y_pc(pid, pc, &tamanio_payload);
@@ -462,11 +482,6 @@ DTB *dtb_bloquear(u_int32_t pid, u_int32_t pc, int socket)
 	EnviarPaquete(socket, paquete);
 	free(paquete);
 	free(paquete->Payload);
-
-	DTB *dtb = dtb_encuentra(lista_ejecutando, pid, 1);
-	dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, pc, DTB_BLOQUEADO, socket);
-
-	return dtb;
 }
 
 void recurso_wait(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket)

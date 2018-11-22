@@ -39,13 +39,17 @@ typedef struct {
 }__attribute__((packed)) t_recurso;
 
 t_list *lista_cpu;
+
 t_list *lista_nuevos;
 t_list *lista_listos;
 t_list *lista_ejecutando;
 t_list *lista_bloqueados;
 t_list *lista_finalizados;
+
 t_list *lista_estados;
 t_list *lista_info_dtb;
+
+t_list *lista_recursos_global;
 
 t_log *logger;
 t_log* logger_fin;
@@ -66,7 +70,7 @@ void planificador_largo_plazo();
 bool permite_multiprogramacion();
 bool dummy_creado(DTB *dtb);
 
-void pasaje_a_ready(u_int32_t *pid);
+void pasaje_a_ready(u_int32_t pid);
 void notificar_al_plp(u_int32_t pid);
 
 
@@ -133,10 +137,13 @@ void dtb_imprimir_polenta(void *_dtb);
 //Finalizar
 void finalizar(u_int32_t pid);
 void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *lista_actual);
+void manejar_finalizar_bloqueado(DTB* dtb, u_int32_t pid, DTB_info *info_dtb, t_list *lista_actual);
 void enviar_finalizar_dam(u_int32_t pid);
 void enviar_finalizar_cpu(u_int32_t pid, int socket);
 void loggear_finalizacion(DTB* dtb, DTB_info* info_dtb);
 
+//Recursos que usa finalizar
+t_recurso *recurso_bloqueando_pid(u_int32_t pid);
 void forzar_signal(void *_recurso);
 void dtb_signal(t_recurso *recurso);
 void recurso_asignar_a_pid(t_recurso *recurso, u_int32_t pid);

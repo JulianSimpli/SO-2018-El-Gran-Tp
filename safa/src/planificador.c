@@ -161,6 +161,8 @@ DTB *dtb_actualizar(DTB *dtb, t_list *source, t_list *dest, u_int32_t pc, Estado
 {
     if(dtb_encuentra(source, dtb->gdtPID, dtb->flagInicializacion) != NULL)
         dtb_remueve(source, dtb->gdtPID, dtb->flagInicializacion);
+    else
+        printf("No se encontro al DTB en la lista de origen. Time to panic\n");
 
     list_add(dest, dtb);
     dtb->PC = pc;
@@ -483,10 +485,7 @@ void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *list
         }
         case DTB_BLOQUEADO:
         {
-        	printf("El GDT con PID %d esta bloqueado\n", pid);
-        	loggear_finalizacion(dtb, info_dtb);
-            list_iterate(info_dtb->recursos, forzar_signal);
-            enviar_finalizar_dam(pid);
+            manejar_finalizar_bloqueado(dtb, pid, info_dtb, lista_actual);
             break;
         }
         case DTB_FINALIZADO:
@@ -503,6 +502,44 @@ void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *list
     printf("El proceso de PID %d se ha movido a la cola de Finalizados\n", dtb->gdtPID);
 }
 
+void manejar_finalizar_bloqueado(DTB* dtb, u_int32_t pid, DTB_info *info_dtb, t_list *lista_actual)
+{
+    t_recurso *recurso = recurso_bloqueando_pid(pid);
+    if(recurso != NULL)
+    {
+        printf("El GDT %d esta bloqueado esperando por el recurso %s", pid, recurso->id);
+        printf("Se finalizara liberando al recurso, junto a todos los que tiene retenidos");
+        bool coincide_pid(void *_pid_recurso)
+        {
+            int *pid_recurso = (int *)_pid_recurso;
+            return *pid_recurso == pid;
+        }
+        list_remove_by_condition(recurso->pid_bloqueados, coincide_pid);
+        loggear_finalizacion(dtb, info_dtb);
+        list_iterate(info_dtb->recursos, forzar_signal);
+        dtb_actualizar(dtb, lista_actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
+        enviar_finalizar_dam(pid);
+    }
+    else
+        printf( "El GDT %d esta bloqueado esperando que se realice una operacion\n"
+                "Se esperara a que se desbloquee al proceso para finalizarlo\n", pid);
+}
+
+t_recurso *recurso_bloqueando_pid(u_int32_t pid)
+{
+    bool tiene_el_pid(void *_recurso)
+    {
+        bool coincide_pid(void *_pid_recurso)
+        {
+            int *pid_recurso = (int *)_pid_recurso;
+            return *pid_recurso == pid;
+        }
+        t_recurso *recurso = (t_recurso *)_recurso;
+        return list_any_satisfy(recurso->pid_bloqueados, coincide_pid);
+    }
+    
+    return list_find(lista_recursos_global, tiene_el_pid);
+}
 
 void loggear_finalizacion(DTB* dtb, DTB_info* info_dtb)
 {
@@ -519,10 +556,10 @@ void loggear_finalizacion(DTB* dtb, DTB_info* info_dtb)
 }
 
 
-void pasaje_a_ready(u_int32_t *pid)
+void pasaje_a_ready(u_int32_t pid)
 {
-    bloquear_dummy(lista_ejecutando, *pid);
-    notificar_al_plp(*pid);
+    bloquear_dummy(lista_ejecutando, pid);
+    notificar_al_plp(pid);
     log_info(logger, "%d pasa a lista de procesos listos", pid);
 }
 
