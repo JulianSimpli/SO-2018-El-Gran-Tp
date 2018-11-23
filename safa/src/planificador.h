@@ -21,7 +21,7 @@ typedef struct DTB_info {
 	clock_t *tiempo_fin;
 	float tiempo_respuesta;
 	bool kill;
-	t_list *recursos;
+	t_list *recursos_asignados;
 	u_int32_t sentencias_en_nuevo;
 	u_int32_t sentencias_al_diego;
 	u_int32_t sentencias_hasta_finalizar;
@@ -37,6 +37,11 @@ typedef struct {
 	u_int32_t semaforo;
 	t_list *pid_bloqueados;
 }__attribute__((packed)) t_recurso;
+
+typedef struct {
+	int instancias;
+	t_recurso *recurso;
+} __attribute__((packed)) t_recurso_asignado;
 
 t_list *lista_cpu;
 
@@ -68,6 +73,7 @@ sem_t sem_multiprogramacion;
 //Funciones
 //Hilo planificador largo plazo
 void planificador_largo_plazo();
+void crear_dummy();
 void pasaje_a_ready(u_int32_t pid);
 void notificar_al_plp(u_int32_t pid);
 
@@ -135,6 +141,10 @@ void enviar_finalizar_cpu(u_int32_t pid, int socket);
 void loggear_finalizacion(DTB* dtb, DTB_info* info_dtb);
 
 //Recursos que usa finalizar
+t_recurso *recurso_crear(char *id_recurso, int valor_inicial);
+void recurso_liberar(void *_recurso);
+bool recurso_coincide_id(void *recurso, char *id);
+t_recurso *recurso_encontrar(char* id_recurso);
 t_recurso *recurso_bloqueando_pid(u_int32_t pid);
 void forzar_signal(void *_recurso);
 void dtb_signal(t_recurso *recurso);

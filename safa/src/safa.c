@@ -217,7 +217,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
 			bloquear_dummy(lista_ejecutando, pid);
 			log_error(logger, "Fallo la carga en memoria del %d", pid);
-			list_iterate(info_dtb->recursos, forzar_signal);
+			list_iterate(info_dtb->recursos_asignados, forzar_signal);
 			enviar_finalizar_dam(pid);
 			break;
 		}
@@ -252,7 +252,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
 			bloquear_dummy(lista_ejecutando, pid);
 			log_error(logger, "Fallo la carga en memoria del %d", pid);
-			list_iterate(info_dtb->recursos, forzar_signal);
+			list_iterate(info_dtb->recursos_asignados, forzar_signal);
 			enviar_finalizar_dam(pid);
 			break;
 		}
@@ -330,7 +330,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 			DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
 			dtb_actualizar(dtb, lista_ejecutando, lista_finalizados, dtb->PC, DTB_FINALIZADO, socketFD);
 	        loggear_finalizacion(dtb, info_dtb);
-			list_iterate(info_dtb->recursos, forzar_signal);
+			list_iterate(info_dtb->recursos_asignados, forzar_signal);
 			enviar_finalizar_dam(dtb->gdtPID);
 			break;
 		}
@@ -435,7 +435,7 @@ bool verificar_si_murio(DTB *dtb, t_list *lista_origen)
 	if(info_dtb->kill)
 	{
 		loggear_finalizacion(dtb, info_dtb);
-		list_iterate(info_dtb->recursos, forzar_signal);
+		list_iterate(info_dtb->recursos_asignados, forzar_signal);
 		dtb_actualizar(dtb, lista_origen, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
 		enviar_finalizar_dam(dtb->gdtPID);
 	}
@@ -470,7 +470,7 @@ void seguir_ejecutando(u_int32_t pid, u_int32_t pc, int socket)
 DTB *dtb_bloquear(u_int32_t pid, u_int32_t pc, int socket)
 {
 	avisar_desalojo_a_cpu(pid, pc, socket);
-	DTB *dtb = dtb_encuentra(lista_ejecutando, pid, 1);
+	DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 	dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, pc, DTB_BLOQUEADO, socket);
 
 	return dtb;
@@ -557,42 +557,6 @@ char *string_deserializar(void *data, int *desplazamiento)
 	*desplazamiento = *desplazamiento + len_string;
 
 	return string;
-}
-
-t_recurso *recurso_crear(char *id_recurso, int valor_inicial)
-{
-	t_recurso *recurso = malloc(sizeof(t_recurso));
-	recurso->id = malloc(strlen(id_recurso) + 1);
-	strcpy(recurso->id, id_recurso);
-	recurso->semaforo = valor_inicial;
-	recurso->pid_bloqueados = list_create();
-
-	list_add(lista_recursos_global, recurso);
-
-	return recurso;
-}
-
-void recurso_liberar(void *_recurso)
-{
-	t_recurso *recurso = (t_recurso *)_recurso;
-	free(recurso->id);
-	list_destroy(recurso->pid_bloqueados);
-	free(recurso);
-}
-
-bool coincide_id(void *recurso, char *id)
-{
-	return !strcmp(((t_recurso *)recurso)->id, id);
-}
-
-t_recurso *recurso_encontrar(char *id_recurso)
-{
-	bool comparar_id(void *recurso)
-	{
-		return coincide_id(recurso, id_recurso);
-	}
-
-	return list_find(lista_recursos_global, comparar_id);
 }
 
 void *handshake_cpu_serializar(int *tamanio_payload)

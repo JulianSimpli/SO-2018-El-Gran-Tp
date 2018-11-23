@@ -13,18 +13,20 @@ void planificador_largo_plazo()
     {
         sem_wait(&sem_ejecutar);
         sem_wait(&sem_multiprogramacion);
-//        if(!list_is_empty(lista_nuevos)) //Esto nunca estaria vacio si se hizo el signal de ejecutar. Esta al pedo
-//        {                                //La dejo por las dudas. Probablemente se borre.
-            for(int i = 0; i < list_size(lista_nuevos); i++)
-            {
-                DTB *dtb_cargar = list_get(lista_nuevos, i);
-                if(!dummy_creado(dtb_cargar))
-                {   
-                    desbloquear_dummy(dtb_cargar);
-                    break;
-                }
-            }
-//        }
+        crear_dummy();
+    }
+}
+
+void crear_dummy()
+{
+    for(int i = 0; i < list_size(lista_nuevos); i++)
+    {
+        DTB *dtb_cargar = list_get(lista_nuevos, i);
+        if(!dummy_creado(dtb_cargar))
+        {   
+            desbloquear_dummy(dtb_cargar);
+            break;
+        }
     }
 }
 
@@ -176,7 +178,7 @@ DTB_info *info_dtb_crear(u_int32_t pid)
     info_dtb->socket_cpu = 0;
     info_dtb->tiempo_respuesta = 0;
     info_dtb->kill = false;
-    info_dtb->recursos = list_create();
+    info_dtb->recursos_asignados = list_create();
     info_dtb->sentencias_en_nuevo = 0;
     info_dtb->sentencias_al_diego = 0;
     info_dtb->sentencias_hasta_finalizar = 0;
@@ -474,7 +476,7 @@ void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *list
         {
         	printf("El GDT con PID %d esta listo\n", pid);
         	loggear_finalizacion(dtb, info_dtb);
-            list_iterate(info_dtb->recursos, forzar_signal);
+            list_iterate(info_dtb->recursos_asignados, forzar_signal);
             dtb_actualizar(dtb, lista_actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
             enviar_finalizar_dam(pid);
             break;
@@ -518,7 +520,7 @@ void manejar_finalizar_bloqueado(DTB* dtb, u_int32_t pid, DTB_info *info_dtb, t_
         }
         list_remove_by_condition(recurso->pid_bloqueados, coincide_pid);
         loggear_finalizacion(dtb, info_dtb);
-        list_iterate(info_dtb->recursos, forzar_signal);
+        list_iterate(info_dtb->recursos_asignados, forzar_signal);
         dtb_actualizar(dtb, lista_actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
         enviar_finalizar_dam(pid);
     }
@@ -580,10 +582,48 @@ void enviar_finalizar_cpu(u_int32_t pid, int socket_cpu)
     printf("Le mande a cpu que finalice GDT %d\n", pid);
 }
 
-void forzar_signal(void *_recurso)
+// Recursos
+t_recurso *recurso_crear(char *id_recurso, int valor_inicial)
 {
-    t_recurso *recurso = (t_recurso *)_recurso;
-    dtb_signal(recurso);
+	t_recurso *recurso = malloc(sizeof(t_recurso));
+	recurso->id = malloc(strlen(id_recurso) + 1);
+	strcpy(recurso->id, id_recurso);
+	recurso->semaforo = valor_inicial;
+	recurso->pid_bloqueados = list_create();
+
+	list_add(lista_recursos_global, recurso);
+
+	return recurso;
+}
+
+void recurso_liberar(void *_recurso)
+{
+	t_recurso *recurso = (t_recurso *)_recurso;
+	free(recurso->id);
+	list_destroy(recurso->pid_bloqueados);
+	free(recurso);
+}
+
+bool recurso_coincide_id(void *recurso, char *id)
+{
+	return !strcmp(((t_recurso *)recurso)->id, id);
+}
+
+t_recurso *recurso_encontrar(char *id_recurso)
+{
+	bool comparar_id(void *recurso)
+	{
+		return recurso_coincide_id(recurso, id_recurso);
+	}
+
+	return list_find(lista_recursos_global, comparar_id);
+}
+
+void forzar_signal(void *_recurso_asignado)
+{
+    t_recurso_asignado *recurso_asignado = (t_recurso_asignado *)_recurso_asignado;
+    while(recurso_asignado->instancias--)
+        dtb_signal(recurso_asignado->recurso);
 }
 
 void dtb_signal(t_recurso *recurso)
@@ -597,14 +637,33 @@ void dtb_signal(t_recurso *recurso)
 	dtb_actualizar(dtb, lista_bloqueados, lista_listos, dtb->PC , DTB_LISTO, info_dtb->socket_cpu);
 	recurso_asignar_a_pid(recurso, dtb->gdtPID);
 	}
+    else
+        recurso->semaforo++;
 }
 
 void recurso_asignar_a_pid(t_recurso *recurso, u_int32_t pid)
 {
 	DTB_info *info_dtb = info_asociada_a_pid(pid);
-	list_add(info_dtb->recursos, recurso);
-}
+    t_recurso_asignado *rec_asignado = malloc(sizeof(t_recurso_asignado));
 
+    bool esta_asignado (void * _recurso_asignado)
+    {
+        t_recurso_asignado *recurso_asignado = (t_recurso_asignado *)_recurso_asignado;
+        return recurso_coincide_id(recurso_asignado->recurso, recurso->id);
+    }
+    rec_asignado = list_find(info_dtb->recursos_asignados, esta_asignado);
+
+    if(rec_asignado == NULL)
+    {
+        rec_asignado->recurso = recurso;
+        rec_asignado->instancias = 1;
+        list_add(info_dtb->recursos_asignados, rec_asignado);
+    }
+    else
+        rec_asignado->instancias++;
+
+}
+//
 clock_t* t_ini;
 clock_t* t_fin;
 float secs;

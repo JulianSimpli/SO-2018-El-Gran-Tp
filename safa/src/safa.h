@@ -48,12 +48,6 @@ bool es_nuevo(void * _info_dtb);
 
 
 //Recursos
-t_recurso *recurso_crear(char *id_recurso, int valor_inicial);
-void recurso_liberar(void *_recurso);
-
-bool coincide_id(void *recurso, char *id);
-t_recurso *recurso_encontrar(char* id_recurso);
-
 t_recurso *recurso_recibir(void *payload, int *pid, int *pc);
 void recurso_signal(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket);
 void recurso_wait(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket);
