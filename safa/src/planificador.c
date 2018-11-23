@@ -476,7 +476,7 @@ void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *list
         {
         	printf("El GDT con PID %d esta listo\n", pid);
         	loggear_finalizacion(dtb, info_dtb);
-            list_iterate(info_dtb->recursos_asignados, forzar_signal);
+            limpiar_recursos(info_dtb);
             dtb_actualizar(dtb, lista_actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
             enviar_finalizar_dam(pid);
             break;
@@ -520,7 +520,7 @@ void manejar_finalizar_bloqueado(DTB* dtb, u_int32_t pid, DTB_info *info_dtb, t_
         }
         list_remove_by_condition(recurso->pid_bloqueados, coincide_pid);
         loggear_finalizacion(dtb, info_dtb);
-        list_iterate(info_dtb->recursos_asignados, forzar_signal);
+        limpiar_recursos(info_dtb);
         dtb_actualizar(dtb, lista_actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
         enviar_finalizar_dam(pid);
     }
@@ -619,9 +619,18 @@ t_recurso *recurso_encontrar(char *id_recurso)
 	return list_find(lista_recursos_global, comparar_id);
 }
 
-void forzar_signal(void *_recurso_asignado)
+void limpiar_recursos(DTB_info *info_dtb)
 {
-    t_recurso_asignado *recurso_asignado = (t_recurso_asignado *)_recurso_asignado;
+    for(int i = 0; i < list_size(info_dtb->recursos_asignados); i++)
+    {
+        t_recurso_asignado *recurso_asignado = list_get(info_dtb->recursos_asignados, i);
+        forzar_signal(recurso_asignado);
+    }
+    list_clean_and_destroy_elements(info_dtb->recursos_asignados, free);
+}
+
+void forzar_signal(t_recurso_asignado *recurso_asignado)
+{
     while(recurso_asignado->instancias--)
         dtb_signal(recurso_asignado->recurso);
 }

@@ -217,8 +217,6 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
 			bloquear_dummy(lista_ejecutando, pid);
 			log_error(logger, "Fallo la carga en memoria del %d", pid);
-			list_iterate(info_dtb->recursos_asignados, forzar_signal);
-			enviar_finalizar_dam(pid);
 			break;
 		}
 //		case DTB_SUCCES:
@@ -252,7 +250,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
 			bloquear_dummy(lista_ejecutando, pid);
 			log_error(logger, "Fallo la carga en memoria del %d", pid);
-			list_iterate(info_dtb->recursos_asignados, forzar_signal);
+			limpiar_recursos(info_dtb);
 			enviar_finalizar_dam(pid);
 			break;
 		}
@@ -330,7 +328,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 			DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
 			dtb_actualizar(dtb, lista_ejecutando, lista_finalizados, dtb->PC, DTB_FINALIZADO, socketFD);
 	        loggear_finalizacion(dtb, info_dtb);
-			list_iterate(info_dtb->recursos_asignados, forzar_signal);
+			limpiar_recursos(info_dtb);
 			enviar_finalizar_dam(dtb->gdtPID);
 			break;
 		}
@@ -435,7 +433,7 @@ bool verificar_si_murio(DTB *dtb, t_list *lista_origen)
 	if(info_dtb->kill)
 	{
 		loggear_finalizacion(dtb, info_dtb);
-		list_iterate(info_dtb->recursos_asignados, forzar_signal);
+		limpiar_recursos(info_dtb);
 		dtb_actualizar(dtb, lista_origen, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
 		enviar_finalizar_dam(dtb->gdtPID);
 	}

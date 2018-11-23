@@ -146,7 +146,8 @@ void recurso_liberar(void *_recurso);
 bool recurso_coincide_id(void *recurso, char *id);
 t_recurso *recurso_encontrar(char* id_recurso);
 t_recurso *recurso_bloqueando_pid(u_int32_t pid);
-void forzar_signal(void *_recurso);
+void limpiar_recursos(DTB_info *info_dtb);
+void forzar_signal(t_recurso_asignado *_recurso);
 void dtb_signal(t_recurso *recurso);
 void recurso_asignar_a_pid(t_recurso *recurso, u_int32_t pid);
 
