@@ -40,39 +40,90 @@ void imprimirArchivoConfiguracion() {
 			IP_FM9, PUERTO_FM9, MODO, TAMANIO, MAX_LINEA, TAM_PAGINA);
 }
 
+/* primitivas/tipoMensaje cpu
+ * nueva primitiva: recibo processId; PC
+ * asignar: recibo processId, path, posicion de la linea de tal path, dato (tengo que escrbiri en la linea)
+ * close: recibo PID, path
+ *
+ * primitivas Diego
+ * abrir: el dam envia de a partes (recibir de a partes)
+ * flush: envio archivo modificado
+ */
+
+void enviarOperacionOK(int Receptor) {
+
+}
+
+char* lineaDeUnaPosicion(int pid, int pc) {
+	int pcReal = pc-1; //porque la linea 1 del archivo esta guardada en la posicion 0
+	ProcesoArchivo* unProceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pid;}));
+	SegmentoArchivoSEG* unSegmento = list_get(unProceso->segmentos, 0);
+	if(pcReal > unSegmento->fin) {
+		//segmentation fault
+		return NULL;
+	} else
+		return ((char*) list_get(unSegmento->lineas, pcReal));
+}
+
 void accion(void* socket) {
 	int socketFD = *(int*) socket;
 	Paquete paquete;
 	void* datos;
 	while (RecibirPaqueteServidorFm9(socketFD, FM9, &paquete) > 0) {
-		int emisor = paquete.header.emisor;
-//		if (paquete.header.emisor == ELDIEGO) {
-//			switch (paquete.header.TipoMensaje) {
-//				case MENSAJE: {
-//				}
-//				break;
-//			}
-//		}
-	}
-}
+		if (paquete.header.emisor == ELDIEGO) {
+			switch (paquete.header.tipoMensaje) {
+				case ABRIR: {
+					if(!strcmp(MODO, "SEG")) {
+						//el payload debe ser: int(id)+char*(path)\0+char*(archivo)
+						int pid;
+						memcpy(&pid, paquete.Payload, sizeof(pid));
+						paquete.Payload += sizeof(pid);
+						char* fid = malloc(strlen(paquete.Payload)+1);
+						strcpy(fid, paquete.Payload);
+						paquete.Payload += strlen(fid)+1;
+						char* file = malloc(strlen(paquete.Payload)+1);
+						strcpy(file, paquete.Payload);
+						cargarArchivoAMemoriaSEG(pid, fid, file);
+					} else if(!strcmp(MODO, "TPI")) {
 
-/*
-while (RecibirPaqueteServidor(socketFD, FM9, &paquete) > 0) {
-	if (!strcmp(paquete.header.emisor, ELDIEGO)) {
-		switch (paquete.header.tipoMensaje) {
-			case OPERACIONABRIR: {
+					} else if(!strcmp(MODO, "SPA")) {
+
+					}
+				}
+				break;
+				case FLUSH: {
 
 				}
 				break;
-
-			case OPERACIONFLUSH: {
+			}
+		}
+		if (paquete.header.emisor == CPU) {
+			switch (paquete.header.tipoMensaje) {
+				case NUEVA_PRIMITIVA: {
+					//el payload debe ser: int(pid)+int(pc)
+					int pid, pc;
+					memcpy(&pid, paquete.Payload, sizeof(pid));
+					paquete.Payload =+ sizeof(pid);
+					memcpy(&pc, paquete.Payload, sizeof(pc));
+					char* linea = malloc(MAX_LINEA);
+					linea = lineaDeUnaPosicion(pid, pc);
+					linea = realloc(linea, strlen(linea)+1);
+					datos = linea;
+					EnviarDatosTipo(socketFD, CPU, datos, sizeof(linea), LINEA_PEDIDA);
+				}
+				break;
+				case ASIGNAR: {
 
 				}
 				break;
+				case CLOSE: {
+
+				}
+				break;
+			}
 		}
 	}
 }
-*/
 
 void consola() {
 	char * linea;
@@ -152,8 +203,13 @@ int cantidadLineasLibresMemoria() {
 	return contador;
 }
 
-//devuelve el nro de linea en el que empiezan los espacios libres consecutivos
-//en caso de hallar devuelve -1
+/*
+ * devuelve el nro de linea en el que empiezan los espacios libres consecutivos,
+ * en caso de no hallar devuelve -1
+ *
+ * Ésta funcion se debe a que un segmento está determinado por varias lineas y un segmento ocupa un espacio
+ * consecutivo de lineas, el mismo no se puede definir en partes, es uno.
+ */
 int lineasLibresConsecutivasMemoria(int lineasAGuardar) {
 	int contador = 0;
 	for(int i = 0; i < lineasTotales; i++){
@@ -178,7 +234,7 @@ int primerLineaVaciaMemoria() {
 	return -1;
 }
 
-int contarElementosArray (char** array) {
+int contarElementosArray(char** array) {
 	int contador = 0;
 	while (array[contador] != NULL) {
 		contador++;
@@ -192,49 +248,50 @@ void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo) {
 	log_info(logger, "El archivo a cargar es...");
 	int inicioDeLinea = lineasLibresConsecutivasMemoria(cantidadDeLineas);
 	if (inicioDeLinea >= 0) {
-		//me fijo si ya tengo el proceso en lista
-		if (list_any_satisfy(procesos, LAMBDA(bool _(ProcesoArchivo* proceso){return proceso->idProceso == idProceso ? 1 : 0;}))) {
-			//si ya existe el proceso sólo le agrego el archivo
-		}
-		ProcesoArchivo* procesoArchivo = malloc(sizeof(procesoArchivo));
-		procesoArchivo->idProceso = idProceso;
-		t_list* segmentos = list_create();
-		SegmentoArchivoSEG* unSegmentoArchivoSEG = malloc(sizeof(SegmentoArchivoSEG));
-		unSegmentoArchivoSEG->idArchivo = malloc(strlen(path) + 1);
-		strcpy(unSegmentoArchivoSEG->idArchivo, path);
-		t_list* lineasArchivo = list_create();
-		for (int x = 0; x < cantidadDeLineas; x++) {
-			list_add(lineasArchivo, arrayLineas[x]);
-		}
-		unSegmentoArchivoSEG->lineas = lineasArchivo;
-		unSegmentoArchivoSEG->inicio = inicioDeLinea;
-		unSegmentoArchivoSEG->fin = list_size(lineasArchivo) - 1;
-		list_add(segmentos, unSegmentoArchivoSEG);
-		procesoArchivo->segmentos = segmentos;
-		list_add(procesos, procesoArchivo);
-		for(int x = 0; x < cantidadDeLineas; x++) {
-			strcpy(memoria[inicioDeLinea], arrayLineas[x]);
-			inicioDeLinea++;
+		//me fijo si ya tengo el proceso en lista y solo le agrego el archivo a su lista de segmentos
+		if (list_any_satisfy(procesos, LAMBDA(bool _(ProcesoArchivo* proceso){return proceso->idProceso == idProceso;}))) {
+			ProcesoArchivo* unProceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == idProceso;}));
+			SegmentoArchivoSEG* nuevoSegmento = malloc(sizeof(SegmentoArchivoSEG));
+			nuevoSegmento->idArchivo = malloc(strlen(path) + 1);
+			strcpy(nuevoSegmento->idArchivo, path);
+			t_list* lineasArchivo = list_create();
+			for (int x = 0; x < cantidadDeLineas; x++) {
+				list_add(lineasArchivo, arrayLineas[x]);
+			}
+			nuevoSegmento->lineas = lineasArchivo;
+			nuevoSegmento->inicio = inicioDeLinea;
+			nuevoSegmento->fin = list_size(lineasArchivo) - 1;
+			list_add(unProceso->segmentos, nuevoSegmento);
+			for(int x = 0; x < cantidadDeLineas; x++) {
+				strcpy(memoria[inicioDeLinea], arrayLineas[x]);
+				inicioDeLinea++;
+			}
+		} else {
+			ProcesoArchivo* procesoArchivo = malloc(sizeof(procesoArchivo));
+			procesoArchivo->idProceso = idProceso;
+			t_list* segmentos = list_create();
+			SegmentoArchivoSEG* unSegmentoArchivoSEG = malloc(sizeof(SegmentoArchivoSEG));
+			unSegmentoArchivoSEG->idArchivo = malloc(strlen(path) + 1);
+			strcpy(unSegmentoArchivoSEG->idArchivo, path);
+			t_list* lineasArchivo = list_create();
+			for (int x = 0; x < cantidadDeLineas; x++) {
+				list_add(lineasArchivo, arrayLineas[x]);
+			}
+			unSegmentoArchivoSEG->lineas = lineasArchivo;
+			unSegmentoArchivoSEG->inicio = inicioDeLinea;
+			unSegmentoArchivoSEG->fin = list_size(lineasArchivo) - 1;
+			list_add(segmentos, unSegmentoArchivoSEG);
+			procesoArchivo->segmentos = segmentos;
+			list_add(procesos, procesoArchivo);
+			for(int x = 0; x < cantidadDeLineas; x++) {
+				strcpy(memoria[inicioDeLinea], arrayLineas[x]);
+				inicioDeLinea++;
+			}
 		}
 		log_info(logger, "Archivo cargado con éxito...");
 	} else {
 		log_info(logger, "No hay espacio suficiente para cargar tal segmento...");
 	}
-}
-
-void agregarArchivoAProcesoExistenteSEG(int idProceso, char* path, char* archivo) {
-	int procesoEnLista(ProcesoArchivo* proceso) {
-		return (!strcmp(proceso->idProceso, idProceso));
-	}
-	ProcesoArchivo* proceso = list_find(procesos, (void*) procesoEnLista);
-}
-
-int verificarArchivoCargadoSEG(char* path) {
-	bool mismoIdArchivo(void* segmentoArchivo) {
-		if(!(strcmp(((SegmentoArchivoSEG*) segmentoArchivo)->idArchivo, path))) return 1;
-		return 0;
-	}
-	return list_any_satisfy(procesos, mismoIdArchivo); //1 si encontró, 0 si no encontró
 }
 
 void imprimirMemoria(){
