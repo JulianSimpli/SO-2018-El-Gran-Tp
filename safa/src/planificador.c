@@ -603,20 +603,13 @@ void loggear_finalizacion(DTB* dtb, DTB_info* info_dtb)
 	Estados[info_dtb->estado],
 	list_size(dtb->archivosAbiertos));
 
- 	FILE* logger_fin = txt_open_for_append("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src/DTB_finalizados.log");
-	for(int i = 0; i < list_size(info_dtb->recursos_asignados); i++)
-    {
-		t_recurso_asignado *recurso;
-		recurso = list_get(info_dtb->recursos_asignados, i);
-		txt_write_in_file(logger_fin, recurso->recurso->id);
-	}
-    for(int i = 0; i < list_size(dtb->archivosAbiertos); i++)
-    {
-        ArchivoAbierto *archivo;
-        archivo = list_get(dtb->archivosAbiertos, i);
-        txt_write_in_file(logger_fin, archivo->path);
-    }
-fclose(logger_fin);
+	FILE* logger_fin = fopen("/home/utnso/Escritorio/KE/Archivos backup TP/TPSO/tp-2018-2c-Nene-Malloc/safa/src/Archivos Finalizados.log", "a");
+		for(int i=0; i<list_size(info_dtb->recursos_asignados); i++){
+			t_recurso* recurso;
+			recurso = list_get(info_dtb->recursos_asignados, i);
+			fprintf(logger_fin, "\nRecurso retenido n° %i: %s: ",recurso->id);
+		}
+	fclose(logger_fin);
 }
 
 void enviar_finalizar_dam(u_int32_t pid)
