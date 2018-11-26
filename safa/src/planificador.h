@@ -108,14 +108,15 @@ DTB *dtb_encuentra(t_list* lista, u_int32_t pid, u_int32_t flag);
 DTB *dtb_remueve(t_list* lista, u_int32_t pid, u_int32_t flag);
 DTB *dtb_buscar_en_todos_lados(u_int32_t pid, DTB_info **info_dtb, t_list **lista_actual);
 bool dtb_coincide_pid(void *dtb, u_int32_t pid, u_int32_t flag);
+bool dtb_coincide_socket(int socket, void *dtb);
 
 DTB_info *info_asociada_a_pid(u_int32_t pid);
 bool info_coincide_pid(u_int32_t pid, void *info_dtb);
 
 //Funciones de cpu
 void liberar_cpu(int socket);
-t_cpu* cpu_con_socket(t_list* lista, int socket);
-bool coincide_socket(int socket, void* cpu);
+t_cpu* cpu_con_socket(int socket);
+bool cpu_coincide_socket(int socket, void* cpu);
 bool esta_libre_cpu(void* cpu);
 bool hay_cpu_libre();
 

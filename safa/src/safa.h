@@ -9,6 +9,10 @@
 #define FINALIZAR "finalizar"
 #define METRICAS "metricas"
 
+#define EVENT_SIZE (sizeof(struct inotify_event) + 16)
+#define BUF_INOTIFY_LEN (16 * EVENT_SIZE)
+
+
 //Declaracion de variables globales
 char *IP;
 u_int32_t PUERTO, QUANTUM;
@@ -16,6 +20,8 @@ u_int32_t PUERTO, QUANTUM;
 t_list *lista_hilos;
 
 bool end;
+
+pthread_t hilo_event_watcher;
 
 sem_t mutex_handshake_diego;
 sem_t mutex_handshake_cpu;
@@ -33,7 +39,7 @@ void parseo_consola(char* operacion, char* primerParametro);
 void accion(void* socket);
 void manejar_paquetes_diego(Paquete *paquete, int socketFD);
 void manejar_paquetes_CPU(Paquete *paquete, int socketFD);
-void *handshake_cpu_serializar(int *tamanio_payload);
+void *config_cpu_serializar(int *tamanio_payload);
 void enviar_handshake_cpu(int socketFD);
 void enviar_handshake_diego(int socketFD);
 bool verificar_si_murio(DTB *dtb, t_list *lista_origen);
@@ -55,6 +61,14 @@ DTB *dtb_bloquear(u_int32_t pid, u_int32_t pc, int socket);
 void avisar_desalojo_a_cpu(u_int32_t pid, u_int32_t pc, int socket);
 void seguir_ejecutando(u_int32_t pid, u_int32_t pc, int socket);
 void *serializar_pid_y_pc(u_int32_t pid, u_int32_t pc, int *tam_pid_y_pc);
+
+// Event watcher (inotify)
+void event_watcher();
+void enviar_valores_config(void *_cpu);
+
+// Desconexiones
+void manejar_desconexion(int socket);
+void manejar_desconexion_cpu(int socket);
 
 //Estas van a para a otro lado
 void *string_serializar(char *string, int *desplazamiento);

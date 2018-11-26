@@ -1,11 +1,11 @@
 #include "safa.h"
+#include <sys/inotify.h>
 
 /*Creación de Logger*/
 void crear_logger()
 {
 	logger = log_create("safa.log", "safa", true, LOG_LEVEL_INFO);
 }
-
 
 void crear_logger_finalizados (){
 	logger_fin = log_create ("DTB_finalizados.log", "safa", true, LOG_LEVEL_INFO);
@@ -175,10 +175,55 @@ void accion(void *socket)
 		}
 		}
 	}
-	// Caso desconexion cpu
+	// Si sale del while hubo error o desconexion
+	manejar_desconexion(socketFD);
 	if (paquete.Payload != NULL)
 		free(paquete.Payload);
 	close(socketFD);
+}
+
+void manejar_desconexion(int socket)
+{
+	if(socket == socket_diego)
+	{
+		log_error(logger, "Desconexion en el socket %d, donde estaba El Diego", socket_diego);
+		printf("Se desconecto El Diego, que hacemo?\n");
+		//exit(1); ?
+	}
+	else
+		manejar_desconexion_cpu(socket);		
+}
+
+void manejar_desconexion_cpu(int socket)
+{
+	log_error(logger, "Desconexion de la cpu %d", socket);
+	printf("Se desconecto la cpu %d\n", socket);
+
+	bool _dtb_compara_socket(void *_dtb)
+	{
+		return dtb_coincide_socket(socket, _dtb);
+	}
+	DTB *dtb = list_find(lista_ejecutando, _dtb_compara_socket);
+	dtb_actualizar(dtb, lista_ejecutando, lista_listos, dtb->PC, DTB_LISTO, socket);
+	log_info(logger, "GDT %d desalojado de cpu %d desconectada", dtb->gdtPID, socket);
+	printf("Se desalojo al gdt %d de la cpu %d desconectada\n", dtb->gdtPID, socket);
+
+	bool _compara_cpu(void *_cpu)
+	{
+		return cpu_coincide_socket(socket, _cpu);
+	}
+	list_remove_and_destroy_by_condition(lista_cpu, _compara_cpu, free);
+	log_info(logger, "Cpu %d removida del sistema", socket);
+	printf("Cpu %d removida del sistema\n", socket);
+
+	if(!list_size(lista_cpu))
+	{
+		log_info(logger, "Se desconecto la ultima cpu del sistema");
+		printf("Se desconecto la ultima cpu del sistema\n");
+		// Esperar a que conecte otra por x tiempo?
+		// sleep(30) Si sigue siendo 0 el list size exit(1)
+		// Si entro otra cpu, continua ejecutando
+	}
 }
 
 void manejar_paquetes_diego(Paquete *paquete, int socketFD)
@@ -555,7 +600,7 @@ char *string_deserializar(void *data, int *desplazamiento)
 	return string;
 }
 
-void *handshake_cpu_serializar(int *tamanio_payload)
+void *config_cpu_serializar(int *tamanio_payload)
 {
 	void *payload = malloc(sizeof(u_int32_t));
 	int desplazamiento = 0;
@@ -569,7 +614,7 @@ void *handshake_cpu_serializar(int *tamanio_payload)
 
 	memcpy(payload + desplazamiento, algoritmo_serializado, tamanio_serializado);
 	desplazamiento += tamanio_serializado;
-	free(algoritmo_serializado); // Esto es correcto?
+	free(algoritmo_serializado);
 
 	*tamanio_payload = desplazamiento;
 	return payload;
@@ -579,9 +624,10 @@ void enviar_handshake_cpu(int socketFD)
 {
 	int tamanio_payload = 0;
 	Paquete *paquete = malloc(sizeof(Paquete));
-	paquete->Payload = handshake_cpu_serializar(&tamanio_payload);
+	paquete->Payload = config_cpu_serializar(&tamanio_payload);
 	paquete->header = cargar_header(tamanio_payload, ESHANDSHAKE, SAFA);
 	EnviarPaquete(socketFD, paquete);
+	free(paquete->Payload);
 	free(paquete);
 }
 
@@ -591,6 +637,71 @@ void enviar_handshake_diego(int socketFD)
 	paquete->header = cargar_header(0, ESHANDSHAKE, SAFA);
 	log_info(logger, "Handshake a diego: %d", socketFD );
 	EnviarPaquete(socketFD, paquete);
+	free(paquete->Payload);
+	free(paquete);
+}
+
+void event_watcher()
+{
+	int multip_vieja = MULTIPROGRAMACION;
+	char buffer[BUF_INOTIFY_LEN];
+
+	int fd_config = inotify_init();
+	if(fd_config < 0)
+		log_error(logger, "Fallo creacion de File Descriptor para config.cfg (inotify_init)");
+	
+	int watch_descriptor = inotify_add_watch(fd_config, "/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src", IN_MODIFY);
+	if(watch_descriptor < 0)
+		log_error(logger, "Fallo creacion de observador de eventos en archivos (inotify_add_watch)");
+	
+	int length = read(fd_config, buffer, BUF_INOTIFY_LEN);
+	if(length < 0)
+		log_error(logger, "Fallo lectura de File Descriptor para observador de eventos (read)");
+	
+	int offset = 0;
+
+	while(offset < length)
+	{
+		struct inotify_event *event = (struct inotify_event *)(&buffer[offset]);
+
+		if(event->len)
+		{
+			if(event->mask & IN_MODIFY)
+			{
+				if(event->mask & IN_ISDIR)
+					log_info(logger, "El directorio %s fue modificado", event->name);
+				else
+					log_info(logger, "El archivo %s fue modificado", event->name);
+
+			}
+		}
+		offset += sizeof (struct inotify_event) + event->len;
+	}
+
+	obtener_valores_archivo_configuracion();
+	list_iterate(lista_cpu, enviar_valores_config);
+
+	int dif = MULTIPROGRAMACION - multip_vieja;
+	if(dif < 0)
+		for(int i = 0; dif == i; i--)
+			sem_wait(&sem_multiprogramacion);
+	if(dif > 0)
+		for(int i = 0; dif == i; i++)
+			sem_post(&sem_multiprogramacion);
+
+	inotify_rm_watch(fd_config, watch_descriptor);
+	close(fd_config);
+}
+
+void enviar_valores_config(void *_cpu)
+{
+	t_cpu *cpu = (t_cpu *)_cpu;
+	int tamanio_payload = 0;
+	Paquete *paquete = malloc(sizeof(Paquete));
+	paquete->Payload = config_cpu_serializar(&tamanio_payload);
+	paquete->header = cargar_header(tamanio_payload, CAMBIO_CONFIG, SAFA);
+	EnviarPaquete(cpu->socket, paquete);
+	free(paquete->Payload);
 	free(paquete);
 }
 
@@ -618,11 +729,14 @@ int main(void)
 
 	pthread_create(&hilo_pcp, NULL, (void *)planificador_corto_plazo, NULL);
 
+	pthread_create(&hilo_event_watcher, NULL, (void *)event_watcher, NULL);
+
 	ServidorConcurrente(IP, PUERTO, SAFA, &lista_hilos, &end, accion);
 
 	pthread_join(hilo_consola, NULL);
 	pthread_join(hilo_pcp, NULL);
 	pthread_join(hilo_plp, NULL);
+	pthread_join(hilo_event_watcher, NULL);
 
 	return EXIT_SUCCESS;
 }

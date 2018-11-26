@@ -296,27 +296,38 @@ DTB *dtb_remueve(t_list* lista, u_int32_t pid, u_int32_t flag)
 
 void liberar_cpu(int socket)
 {
-    t_cpu* cpu_actual = cpu_con_socket(lista_cpu, socket);
+    t_cpu* cpu_actual = cpu_con_socket(socket);
     cpu_actual->estado = CPU_LIBRE;
 }
 
-bool coincide_socket(int socket, void* cpu) {
+bool dtb_coincide_socket(int socket, void *dtb)
+{
+    DTB_info *info_dtb = info_asociada_a_pid(((DTB *)dtb)->gdtPID);
+    return info_dtb->socket_cpu == socket;
+}
+
+bool cpu_coincide_socket(int socket, void *cpu)
+{
 	return ((t_cpu*)cpu)->socket == socket;
 }
 
-t_cpu* cpu_con_socket(t_list* lista, int socket) {
-    bool compara_cpu(void* cpu) {
-        return coincide_socket(socket, cpu);
+t_cpu* cpu_con_socket(int socket)
+{
+    bool compara_cpu(void* cpu)
+    {
+        return cpu_coincide_socket(socket, cpu);
     }
-    return list_find(lista, compara_cpu);
+    return list_find(lista_cpu, compara_cpu);
 }
 
-bool esta_libre_cpu (void* cpu) {
+bool esta_libre_cpu (void* cpu)
+{
 	t_cpu* cpu_recv = (t_cpu*) cpu;
     return (cpu_recv->estado == CPU_LIBRE);
 }
 
-bool hay_cpu_libre() {
+bool hay_cpu_libre()
+{
     return list_any_satisfy(lista_cpu, esta_libre_cpu);
 }
 
@@ -895,11 +906,12 @@ void info_liberar_completo(void* info_dtb)
 void advertencia()
 {
     int c, procesos_liberados, procesos_eliminar;
-    if(procesos_finalizados > 1)
+    if(procesos_finalizados > 1) //Te lo puse en 1 para poder probarlo.
     {
         printf("\nHay mas de 60 procesos finalizados, seleccione una opcion:\n"
         "1: Eliminar todos los procesos.\n"
-        "2: Elegir la cantidad de procesos a eliminar\n");
+        "2: Elegir la cantidad de procesos a eliminar\n"
+        "3: Continuar sin hacer nada\n");
         scanf("%i",&c);
         switch(c)
         {
@@ -911,13 +923,17 @@ void advertencia()
             log_info(logger, "Se finalizaron %i procesos por consola", procesos_liberados);
             break;
         }
-        case 2:
+        case 2: // Falla este case
         {
             printf("\nIngrese la cantidad de procesos a eliminar: ");
             scanf("%i", &procesos_eliminar);
             liberar_parte_de_memoria(procesos_eliminar);
             log_info(logger, "Se finalizaron los primeros %i procesos por consola", procesos_eliminar);
             printf("Se liberaron los primeros %i procesos\n", procesos_eliminar);
+            break;
+        }
+        case 3: // Para mi, esta opcion deberia "dejar de molestar" al usuario por una cantidad X de dtbs. No se como implementarlo.
+        {
             break;
         }
         }
