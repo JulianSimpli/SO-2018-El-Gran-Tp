@@ -42,7 +42,6 @@ typedef struct {
 	int instancias;
 	t_recurso *recurso;
 } __attribute__((packed)) t_recurso_asignado;
-
 t_list *lista_cpu;
 
 t_list *lista_nuevos;
@@ -59,7 +58,7 @@ t_list *lista_recursos_global;
 t_log *logger;
 t_log* logger_fin;
 
-u_int32_t numero_pid, procesos_finalizados;
+u_int32_t numero_pid, procesos_en_memoria, procesos_finalizados;
 u_int32_t sentencias_globales_del_diego, sentencias_totales;
 
 u_int32_t MULTIPROGRAMACION, RETARDO_PLANIF; //La carga la config y SAFA al inicializarse
@@ -106,11 +105,12 @@ DTB_info* info_dtb_actualizar(Estado estado, int socket, DTB_info *info_dtb);
 // Busquedas
 DTB *dtb_encuentra(t_list* lista, u_int32_t pid, u_int32_t flag);
 DTB *dtb_remueve(t_list* lista, u_int32_t pid, u_int32_t flag);
-DTB *dtb_buscar_en_todos_lados(u_int32_t pid, DTB_info **info_dtb, t_list **lista_actual);
+DTB *dtb_buscar_en_todos_lados(u_int32_t pid, DTB_info *info_dtb, t_list *lista_actual);
 bool dtb_coincide_pid(void *dtb, u_int32_t pid, u_int32_t flag);
 
 DTB_info *info_asociada_a_pid(u_int32_t pid);
 bool info_coincide_pid(u_int32_t pid, void *info_dtb);
+
 
 //Funciones de cpu
 void liberar_cpu(int socket);
@@ -119,6 +119,16 @@ bool coincide_socket(int socket, void* cpu);
 bool esta_libre_cpu(void* cpu);
 bool hay_cpu_libre();
 
+
+//Funciones booleanas
+bool esta_en_memoria(DTB_info *info_dtb);
+
+
+//Funciones Dummy
+void desbloquear_dummy(DTB* dtb_nuevo);
+void bloquear_dummy(t_list* lista, u_int32_t pid);
+bool es_dummy(void* dtb);
+void contar_dummys_y_gdt(t_list* lista);
 
 //Funciones de Consola
 //Ejecutar
@@ -138,6 +148,8 @@ void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *list
 void manejar_finalizar_bloqueado(DTB* dtb, u_int32_t pid, DTB_info *info_dtb, t_list *lista_actual);
 void enviar_finalizar_dam(u_int32_t pid);
 void enviar_finalizar_cpu(u_int32_t pid, int socket);
+void liberar_memoria();
+void liberar_parte_de_memoria(int procesos_a_eliminar);
 void loggear_finalizacion(DTB* dtb, DTB_info* info_dtb);
 
 //Recursos que usa finalizar
