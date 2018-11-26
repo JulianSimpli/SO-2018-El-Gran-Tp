@@ -3,7 +3,7 @@
 
 void *DTB_serializar_estaticos(DTB *dtb, int *desplazamiento)
 {
-    void *serializado_ints = malloc(sizeof(u_int32_t) * 3);
+    void *serializado_ints = malloc(sizeof(u_int32_t) * 4);
     int tamanio = sizeof(u_int32_t);
 
     memcpy(serializado_ints, &dtb->gdtPID, tamanio);
@@ -11,6 +11,8 @@ void *DTB_serializar_estaticos(DTB *dtb, int *desplazamiento)
     memcpy(serializado_ints + *desplazamiento, &dtb->PC, tamanio);
     *desplazamiento += tamanio;
     memcpy(serializado_ints + *desplazamiento, &dtb->flagInicializacion, tamanio);
+    *desplazamiento += tamanio;
+    memcpy(serializado_ints + *desplazamiento, &dtb->entrada_salidas, tamanio);
     *desplazamiento += tamanio;
     
     return serializado_ints;
@@ -21,7 +23,7 @@ void *DTB_serializar_archivo(ArchivoAbierto *archivo, int *desplazamiento)
     int tamanio = sizeof(u_int32_t);
     u_int32_t tamanio_direccion = strlen(archivo->path);
 
-    void *serializado = malloc(sizeof(ArchivoAbierto) + tamanio + tamanio_direccion);
+    void *serializado = malloc(tamanio * 2 + tamanio_direccion);
 
     memcpy(serializado + *desplazamiento, &archivo->cantLineas, tamanio);
     *desplazamiento += tamanio;
@@ -49,6 +51,7 @@ void *DTB_serializar_lista(t_list *archivos_abiertos, int *tamanio_total)
 
         serializado = realloc(serializado, *tamanio_total + tamanio_serializado);
         memcpy(serializado + *tamanio_total, archivo_serializado, tamanio_serializado);
+        free(archivo_serializado);
 
         *tamanio_total += tamanio_serializado;
     }
@@ -58,12 +61,15 @@ void *DTB_serializar_lista(t_list *archivos_abiertos, int *tamanio_total)
 
 void *DTB_serializar(DTB *dtb, int *tamanio_dtb)
 {
-    void *payload;
+    void *payload = malloc(sizeof(DTB));
     int desplazamiento = 0;
     int tamanio = sizeof(u_int32_t);
 
-    payload = DTB_serializar_estaticos(dtb, &desplazamiento);
-    payload = realloc(payload, sizeof(void *));
+    int tamanio_enteros = 0;
+    void *serializado_ints = DTB_serializar_estaticos(dtb, &tamanio_enteros);
+    memcpy(payload, serializado_ints, tamanio_enteros);
+    desplazamiento += tamanio_enteros;
+    free(serializado_ints);
 
     //La lista va estar vacia solo en el caso del dummy ahora
     if (dtb->archivosAbiertos == NULL)
@@ -84,6 +90,7 @@ void *DTB_serializar(DTB *dtb, int *tamanio_dtb)
     void *lista_serializada = DTB_serializar_lista(dtb->archivosAbiertos, &tamanio_lista_serializada);
     payload = realloc(payload, desplazamiento + tamanio_lista_serializada);
     memcpy(payload + desplazamiento, lista_serializada, tamanio_lista_serializada);
+    free(lista_serializada);
     desplazamiento += tamanio_lista_serializada;
 
     *tamanio_dtb = desplazamiento;
@@ -92,7 +99,7 @@ void *DTB_serializar(DTB *dtb, int *tamanio_dtb)
 
 void DTB_cargar_estaticos(DTB *dtb, void *data, int *desplazamiento)
 {
-    size_t tamanio = sizeof(u_int32_t) * 3;
+    size_t tamanio = sizeof(u_int32_t) * 4;
     memcpy(dtb, data, tamanio);
     *desplazamiento += tamanio;
 }

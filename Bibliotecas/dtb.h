@@ -10,13 +10,14 @@ typedef struct DTB{
 	u_int32_t gdtPID; // PID = ProcessID
 	u_int32_t PC; // PC = Program Counter
 	u_int32_t flagInicializacion;
+	u_int32_t entrada_salidas;
 	t_list *archivosAbiertos;
-} DTB;
+}__attribute__((packed)) DTB;
 
 typedef struct {
     u_int32_t cantLineas;
     char *path;
-} ArchivoAbierto;
+}__attribute__((packed)) ArchivoAbierto;
 
 //Funciones
 

@@ -8,7 +8,7 @@ void crear_logger()
 
 
 void crear_logger_finalizados (){
-	logger_fin = log_create ("Archivos Finalizados.log", "safa", true, LOG_LEVEL_INFO);
+	logger_fin = log_create ("DTB_finalizados.log", "safa", true, LOG_LEVEL_INFO);
 }
 
 void obtener_valores_archivo_configuracion()
@@ -52,6 +52,7 @@ void crear_listas()
 	lista_ejecutando = list_create();
 	lista_bloqueados = list_create();
 	lista_finalizados = list_create();
+	lista_prioridad = list_create();
 	lista_estados = list_create();
 	lista_info_dtb = list_create();
 	lista_recursos_global = list_create();
@@ -216,7 +217,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			DTB_info *info_dtb;
 			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
 			bloquear_dummy(lista_ejecutando, pid);
-			log_error(logger, "Fallo la carga en memoria del PID %d", pid);
+			log_error(logger, "Fallo la carga en memoria del GDT %d", pid);
 			break;
 		}
 //		case DTB_SUCCES:
@@ -249,7 +250,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			DTB_info *info_dtb;
 			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
 			bloquear_dummy(lista_ejecutando, pid);
-			log_error(logger, "Fallo la carga en memoria del PID %d", pid);
+			log_error(logger, "Fallo la carga en memoria del GDT %d", pid);
 			limpiar_recursos(info_dtb);
 			enviar_finalizar_dam(pid);
 			break;
@@ -262,8 +263,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			DTB_info *info_dtb;
 			t_list *lista_actual;
 			DTB *dtb = dtb_buscar_en_todos_lados(pid, &info_dtb, &lista_actual);
-			dtb_finalizar_desde(dtb, lista_actual);
-			free(dtb);
+			dtb_actualizar(dtb, lista_actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
 		}
 	}
 }
@@ -272,20 +272,20 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 {
 	switch (paquete->header.tipoMensaje)
 	{
-		case ESHANDSHAKE:
-		{
-			t_cpu *cpu_nuevo = malloc(sizeof(t_cpu));
-			cpu_nuevo->socket = socketFD;
-			cpu_nuevo->estado = CPU_LIBRE;
-			list_add(lista_cpu, cpu_nuevo);
-			log_info(logger, "llegada cpu con id %i", cpu_nuevo->socket);
-			sem_post(&mutex_handshake_cpu);
-			enviar_handshake_cpu(socketFD);
-			break;
-		}
+	case ESHANDSHAKE:
+	{
+		t_cpu *cpu_nuevo = malloc(sizeof(t_cpu));
+		cpu_nuevo->socket = socketFD;
+		cpu_nuevo->estado = CPU_LIBRE;
+		list_add(lista_cpu, cpu_nuevo);
+		log_info(logger, "llegada cpu con id %i", cpu_nuevo->socket);
+		sem_post(&mutex_handshake_cpu);
+		enviar_handshake_cpu(socketFD);
+		break;
+	}
 
-    	case DTB_BLOQUEAR:
-    	{
+        case DTB_BLOQUEAR:
+		{
 			// Habria que ver si algoritmo es rr o vrr para recibir quantum que queda
 			liberar_cpu(socketFD);
 			DTB *dtb = DTB_deserializar(paquete->Payload);
@@ -318,14 +318,14 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 			dtb_actualizar(dtb, lista_ejecutando, lista_listos, dtb->PC, DTB_LISTO, socketFD);
 			break;
         }
-		case DTB_FINALIZAR: //Aca es cuando el dtb + "normalmente"
+		case DTB_FINALIZAR: //Aca es cuando el dtb finaliza "normalmente"
 		{
 			liberar_cpu(socketFD);
             DTB* dtb = DTB_deserializar(paquete->Payload);
 			metricas_actualizar(dtb, 0);
 			DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
 			dtb_actualizar(dtb, lista_ejecutando, lista_finalizados, dtb->PC, DTB_FINALIZADO, socketFD);
-			loggear_finalizacion(dtb, info_dtb);
+	        loggear_finalizacion(dtb, info_dtb);
 			limpiar_recursos(info_dtb);
 			enviar_finalizar_dam(dtb->gdtPID);
 			break;
@@ -555,42 +555,6 @@ char *string_deserializar(void *data, int *desplazamiento)
 	return string;
 }
 
-t_recurso *recurso_crear(char *id_recurso, int valor_inicial)
-{
-	t_recurso *recurso = malloc(sizeof(t_recurso));
-	recurso->id = malloc(strlen(id_recurso) + 1);
-	strcpy(recurso->id, id_recurso);
-	recurso->semaforo = valor_inicial;
-	recurso->pid_bloqueados = list_create();
-
-	list_add(lista_recursos_global, recurso);
-
-	return recurso;
-}
-
-void recurso_liberar(void *_recurso)
-{
-	t_recurso *recurso = (t_recurso *)_recurso;
-	free(recurso->id);
-	list_destroy(recurso->pid_bloqueados);
-	free(recurso);
-}
-
-bool coincide_id(void *recurso, char *id)
-{
-	return !strcmp(((t_recurso *)recurso)->id, id);
-}
-
-t_recurso *recurso_encontrar(char *id_recurso)
-{
-	bool comparar_id(void *recurso)
-	{
-		return coincide_id(recurso, id_recurso);
-	}
-
-	return list_find(lista_recursos_global, comparar_id);
-}
-
 void *handshake_cpu_serializar(int *tamanio_payload)
 {
 	void *payload = malloc(sizeof(u_int32_t));
@@ -641,7 +605,7 @@ int main(void)
 	int a = 0;
 	sem_getvalue(&sem_multiprogramacion, &a);
 	printf("sem_multiprogramacion es %d", a);
-
+	
 	log_info(logger, "Iniciando SAFA.log");
 	log_info(logger_fin, "***INFORMACION DE ARCHIVOS FINALIZADOS***");
 	clock_t t = clock();

@@ -22,6 +22,7 @@ typedef struct DTB_info {
 	float tiempo_respuesta;
 	bool kill;
 	t_list *recursos_asignados;
+	u_int32_t quantum_faltante;
 	u_int32_t sentencias_en_nuevo;
 	u_int32_t sentencias_al_diego;
 	u_int32_t sentencias_hasta_finalizar;
@@ -42,6 +43,7 @@ typedef struct {
 	int instancias;
 	t_recurso *recurso;
 } __attribute__((packed)) t_recurso_asignado;
+
 t_list *lista_cpu;
 
 t_list *lista_nuevos;
@@ -49,6 +51,8 @@ t_list *lista_listos;
 t_list *lista_ejecutando;
 t_list *lista_bloqueados;
 t_list *lista_finalizados;
+
+t_list *lista_prioridad;
 
 t_list *lista_estados;
 t_list *lista_info_dtb;
@@ -58,7 +62,7 @@ t_list *lista_recursos_global;
 t_log *logger;
 t_log* logger_fin;
 
-u_int32_t numero_pid, procesos_en_memoria, procesos_finalizados;
+u_int32_t numero_pid, procesos_finalizados;
 u_int32_t sentencias_globales_del_diego, sentencias_totales;
 
 u_int32_t MULTIPROGRAMACION, RETARDO_PLANIF; //La carga la config y SAFA al inicializarse
@@ -84,33 +88,29 @@ void bloquear_dummy(t_list* lista, u_int32_t pid);
 //Hilo planificador corto plazo
 void planificador_corto_plazo();
 
-void ejecutar_primer_dtb_listo();
 void planificar_fifo();
 void planificar_rr();
 void planificar_vrr();
 void planificar_iobound();
 
+void ejecutar_primer_dtb_listo();
+void ejecutar_primer_dtb_prioridad();
+t_cpu *cpu_buscar_libre();
 
 //Funciones de DTB
 DTB *dtb_crear(u_int32_t pid, char *path, int flag_inicializacion);
 DTB_info *info_dtb_crear(u_int32_t pid);
 
-void dtb_liberar(void *dtb);
-void info_liberar(void *dtb);
-
 DTB *dtb_actualizar(DTB *dtb, t_list *source, t_list *dest, u_int32_t pc, Estado estado, int socket);
 DTB_info* info_dtb_actualizar(Estado estado, int socket, DTB_info *info_dtb);
-
-
 // Busquedas
 DTB *dtb_encuentra(t_list* lista, u_int32_t pid, u_int32_t flag);
 DTB *dtb_remueve(t_list* lista, u_int32_t pid, u_int32_t flag);
-DTB *dtb_buscar_en_todos_lados(u_int32_t pid, DTB_info *info_dtb, t_list *lista_actual);
+DTB *dtb_buscar_en_todos_lados(u_int32_t pid, DTB_info **info_dtb, t_list **lista_actual);
 bool dtb_coincide_pid(void *dtb, u_int32_t pid, u_int32_t flag);
 
 DTB_info *info_asociada_a_pid(u_int32_t pid);
 bool info_coincide_pid(u_int32_t pid, void *info_dtb);
-
 
 //Funciones de cpu
 void liberar_cpu(int socket);
@@ -120,16 +120,6 @@ bool esta_libre_cpu(void* cpu);
 bool hay_cpu_libre();
 
 
-//Funciones booleanas
-bool esta_en_memoria(DTB_info *info_dtb);
-
-
-//Funciones Dummy
-void desbloquear_dummy(DTB* dtb_nuevo);
-void bloquear_dummy(t_list* lista, u_int32_t pid);
-bool es_dummy(void* dtb);
-void contar_dummys_y_gdt(t_list* lista);
-
 //Funciones de Consola
 //Ejecutar
 void ejecutar(char* path);
@@ -137,10 +127,11 @@ void ejecutar(char* path);
 //Status
 void status();
 void gdt_status(u_int32_t pid);
-void mostrar_proceso(void *_dtb);
-void mostrar_archivo(void *_archivo, int index);
 void dtb_imprimir_basico(void *_dtb);
 void dtb_imprimir_polenta(void *_dtb);
+void mostrar_proceso(void *_dtb);
+void mostrar_archivo(void *_archivo, int index);
+void contar_dummys_y_gdt(t_list* lista);
 
 //Finalizar
 void finalizar(u_int32_t pid);
@@ -148,8 +139,6 @@ void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *list
 void manejar_finalizar_bloqueado(DTB* dtb, u_int32_t pid, DTB_info *info_dtb, t_list *lista_actual);
 void enviar_finalizar_dam(u_int32_t pid);
 void enviar_finalizar_cpu(u_int32_t pid, int socket);
-void liberar_memoria();
-void liberar_parte_de_memoria(int procesos_a_eliminar);
 void loggear_finalizacion(DTB* dtb, DTB_info* info_dtb);
 
 //Recursos que usa finalizar
@@ -171,13 +160,22 @@ float calcular_sentencias_promedio_hasta_finalizar();
 bool ya_finalizo(void *_info_dtb);
 float medir_tiempo(int signal, clock_t* tin_rcv, clock_t* tfin_rcv);
 
-#endif /* PLANIFICADOR_H_ */
+//Liberar memoria
+void dtb_liberar(void *dtb);
+void info_liberar(void *dtb);
+void info_liberar_completo(void *info_dtb);
+void advertencia();
+void liberar_memoria();
+void liberar_parte_de_memoria(int procesos_a_eliminar);
 
-// Probablemente dejen de usarse
-DTB *dtb_reemplazar_de_lista(DTB *dtb_nuevo, t_list *source, t_list *dest, Estado estado);
-DTB *mover_dtb_de_lista(DTB *dtb, t_list *source, t_list *dest);
-void mover_primero_de_lista1_a_lista2(t_list* lista1, t_list* lista2);
-void dtb_finalizar_desde(DTB *dtb, t_list *source);
-void dummy_finalizar(DTB *dtb);
-bool esta_en_memoria(DTB_info *info_dtb);
-bool permite_multiprogramacion();
+
+// NO SE USAN MAS
+// DTB *dtb_reemplazar_de_lista(DTB *dtb_nuevo, t_list *source, t_list *dest, Estado estado);
+// DTB *mover_dtb_de_lista(DTB *dtb, t_list *source, t_list *dest);
+// void mover_primero_de_lista1_a_lista2(t_list* lista1, t_list* lista2);
+// void dtb_finalizar_desde(DTB *dtb, t_list *source);
+// void dummy_finalizar(DTB *dtb);
+// bool esta_en_memoria(DTB_info *info_dtb);
+// bool permite_multiprogramacion();
+
+#endif /* PLANIFICADOR_H_ */

@@ -15,13 +15,13 @@ context(test_dtb) {
 			un_archivo->cantLineas = 10;
 			char *ejemplo = "ejemplo.txt";
 			un_archivo->path = malloc(strlen(ejemplo) + 1);
-			memcpy(un_archivo->path, ejemplo, strlen(ejemplo));
+			memcpy(un_archivo->path, ejemplo, strlen(ejemplo) + 1);
 
 			otro_archivo = malloc(sizeof(ArchivoAbierto));
 			otro_archivo->cantLineas = 11;
 			char *otro_ejemplo = "otro_ejemplo.txt";
 			otro_archivo->path = malloc(strlen(otro_ejemplo) + 1);
-			memcpy(otro_archivo->path, otro_ejemplo, strlen(otro_ejemplo));
+			memcpy(otro_archivo->path, otro_ejemplo, strlen(otro_ejemplo) + 1);
 
 			una_lista = list_create();
 			list_add(una_lista, un_archivo);
@@ -31,6 +31,7 @@ context(test_dtb) {
 			un_dtb->gdtPID = 1;
 			un_dtb->PC = 10;
 			un_dtb->flagInicializacion = 1;
+			un_dtb->entrada_salidas = 5;
 
 			un_dtb->archivosAbiertos = una_lista;
 		} end
@@ -42,21 +43,23 @@ context(test_dtb) {
 			free(un_dtb);
 		} end
 
-		it("Puede serializar 3 ints") {
+		it("Puede serializar y deserializar 4 ints") {
 			int tamanio_serializado = 0;
 			void *serializado = DTB_serializar_estaticos(un_dtb, &tamanio_serializado);
-			should_int(tamanio_serializado) be equal to (12);
+			should_int(tamanio_serializado) be equal to (16);
 
 			int offset = 0;
 			DTB *dtb = malloc(sizeof(DTB));
 			DTB_cargar_estaticos(dtb, serializado, &offset);
-			should_int(offset) be equal to (12);
+			should_int(offset) be equal to (16);
 			should_int(dtb->gdtPID) be equal to (1);
 			should_int(dtb->PC) be equal to (10);
 			should_int(dtb->flagInicializacion) be equal to (1);
+			should_int(dtb->entrada_salidas) be equal to (5);
 			free(dtb);
 		} end
-		it("Puede serializar archivo") {
+
+		it("Puede serializar y deserializar archivo") {
 			int tamanio_serializado = 0;
 			void *serializado = DTB_serializar_archivo(un_archivo, &tamanio_serializado);
 			should_int(tamanio_serializado) be equal to(19);
@@ -65,9 +68,18 @@ context(test_dtb) {
         	ArchivoAbierto *deserializado = DTB_leer_struct_archivo(serializado, &desplazamiento);
 			should_int(deserializado->cantLineas) be equal to(10);
 			should_string(deserializado->path) be equal to("ejemplo.txt");
+
+			int tamanio_2 = 0;
+			void *serializado_2 = DTB_serializar_archivo(otro_archivo, &tamanio_2);
+			should_int(tamanio_2) be equal to(24);
+			
+			int desplazamiento_2 = 0;
+        	ArchivoAbierto *deserializado_2 = DTB_leer_struct_archivo(serializado_2, &desplazamiento_2);
+			should_int(deserializado_2->cantLineas) be equal to(11);
+			should_string(deserializado_2->path) be equal to("otro_ejemplo.txt");
 		} end
 
-		it("Puede serializar lista") {
+		it("Puede serializar y deserializar lista") {
 			int tamanio_lista_serializada = 0;
 			void *lista_serializada = DTB_serializar_lista(una_lista, &tamanio_lista_serializada);
 			should_int(tamanio_lista_serializada) be equal to(43);
@@ -90,10 +102,10 @@ context(test_dtb) {
 			should_string(b->path) be equal to("otro_ejemplo.txt");
 		} end
 
-		it("Puede serializar dtb entero") {
+		it("Puede serializar y deserializar dtb entero") {
 			int tamanio_dtb = 0;
 			void *dtb_serializado = DTB_serializar(un_dtb, &tamanio_dtb);
-			should_int(tamanio_dtb) be equal to(59);
+			should_int(tamanio_dtb) be equal to(63);
 
 			DTB *dtb = DTB_deserializar(dtb_serializado);
 			
