@@ -239,6 +239,7 @@ DTB *dtb_actualizar(DTB *dtb, t_list *source, t_list *dest, u_int32_t pc, Estado
             case DTB_FINALIZADO:
             {
                 procesos_finalizados++;
+                printf("El proceso de PID %d se ha movido a la cola de Finalizados\n", dtb->gdtPID);
                 advertencia();
                 break;
             }
@@ -334,13 +335,20 @@ DTB *dtb_buscar_en_todos_lados(u_int32_t pid, DTB_info **info_dtb, t_list **list
             break;
         }
     }
+
+    if(dtb_encontrado == NULL && pid <= numero_pid)
+        printf("El GDT %d ya fue finalizado y removido de memoria.\n"
+                "Ver archivo DTB_finalizados.log, donde encontrara la informacion de todos los dtb finalizados.\n", pid);
+    else if(dtb_encontrado == NULL)
+        printf("Nunca ingreso al sistema un GDT con PID %d\n", pid);
+            
     return dtb_encontrado;
 }
 
 //Funciones de Consola
 void ejecutar(char* path)
 {
-	DTB* dtb_nuevo = dtb_crear(0, path, GDT);
+    DTB* dtb_nuevo = dtb_crear(0, path, GDT);
     sem_post(&sem_ejecutar);
 }
 
@@ -366,8 +374,8 @@ void gdt_status(u_int32_t pid)
     DTB_info *info_dtb;
     DTB *dtb_status = dtb_buscar_en_todos_lados(pid, &info_dtb, &lista_actual);
 
-    if (dtb_status != NULL) mostrar_proceso(dtb_status);
-    else printf("El proceso %i no esta en el sistema\n", pid);
+    if (dtb_status != NULL)
+        mostrar_proceso(dtb_status);
 }
 
 void contar_dummys_y_gdt(t_list* lista)
@@ -382,7 +390,6 @@ void contar_dummys_y_gdt(t_list* lista)
         printf("Cantidad de DUMMYS: %i\n", cant_dummys);
     printf("Cantidad de GDTs: %i\n", cant_gdt);
 }
-
 
 void dtb_imprimir_basico(void *_dtb)
 {
@@ -451,13 +458,15 @@ void mostrar_proceso(void *_dtb)
         ArchivoAbierto *archivo = list_get(dtb->archivosAbiertos, i);
         mostrar_archivo(archivo, i);
     }
-
-    printf("Recursos retenidos por el proceso: %d\n", list_size(info_dtb->recursos_asignados));
-    for(int j = 0; j < list_size(info_dtb->recursos_asignados); j++)
+    if(list_size(info_dtb->recursos_asignados))
     {
-        t_recurso_asignado *recurso_asignado = list_get(info_dtb->recursos_asignados, j);
-        printf( "Recurso %d: %s\n",
-                j, recurso_asignado->recurso->id);
+        printf("Recursos retenidos por el proceso: %d\n", list_size(info_dtb->recursos_asignados));
+        for(int j = 0; j < list_size(info_dtb->recursos_asignados); j++)
+        {
+            t_recurso_asignado *recurso_asignado = list_get(info_dtb->recursos_asignados, j);
+            printf( "Recurso %d: %s\n",
+                    j, recurso_asignado->recurso->id);
+        }
     }
 }
 
@@ -470,8 +479,6 @@ void mostrar_archivo(void *_archivo, int index) // queda en void *_archivo por s
             index, archivo->path);
     if (archivo->cantLineas) 
         printf(", cantidad de lineas: %i", archivo->cantLineas);
-    else 
-        printf(", No cargadas todavia");
     printf("\n");
 }
 
@@ -481,17 +488,10 @@ void finalizar(u_int32_t pid)
     t_list *lista_actual;
     DTB_info *info_dtb;
 
-    if(pid <= numero_pid)
-    {
     DTB *dtb_finalizar = dtb_buscar_en_todos_lados(pid, &info_dtb, &lista_actual);
     /* lista_actual queda modificada con la lista donde está el pid que busco */
     if (dtb_finalizar != NULL)
         manejar_finalizar(dtb_finalizar, pid, info_dtb, lista_actual);
-    else
-        printf("El proceso con PID %i ha sido finalizado, puede revisar Archivo Finalizados para mas informacion", pid);
-    }
-    else
-        printf("\nNo se tienen registros del proceso con PID %i en el sistema.\n", pid);
 }
 
 void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *lista_actual)
@@ -547,7 +547,6 @@ void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *list
             break;
         }
     }
-    printf("El proceso de PID %d se ha movido a la cola de Finalizados\n", dtb->gdtPID);
 }
 
 void manejar_finalizar_bloqueado(DTB* dtb, u_int32_t pid, DTB_info *info_dtb, t_list *lista_actual)
@@ -594,21 +593,29 @@ void loggear_finalizacion(DTB* dtb, DTB_info* info_dtb)
 	log_info(logger_fin, "El proceso con PID %d fue finalizado."
 "\n											 Tiempo de respuesta final: %f milisegundos"
 "\n											 Proceso Finalizado por Usuario: %s"
-"\n											 Ultimo Estado: %s"
-"\n                                          Cantidad de archivos abiertos: %d"
-"\n                                          Recursos retenidos por el proceso: %d",
-    dtb->gdtPID, dtb->flagInicializacion,
+"\n											 Ultimo Estado: %s",
+    dtb->gdtPID,
 	info_dtb->tiempo_respuesta,
 	(info_dtb->kill)? "Si" : "No",
-	Estados[info_dtb->estado],
-	list_size(dtb->archivosAbiertos));
+	Estados[info_dtb->estado]);
 
-	FILE* logger_fin = fopen("/home/utnso/Escritorio/KE/Archivos backup TP/TPSO/tp-2018-2c-Nene-Malloc/safa/src/Archivos Finalizados.log", "a");
-		for(int i=0; i<list_size(info_dtb->recursos_asignados); i++){
-			t_recurso* recurso;
-			recurso = list_get(info_dtb->recursos_asignados, i);
-			fprintf(logger_fin, "\nRecurso retenido n° %i: %s: ",recurso->id);
-		}
+	FILE* logger_fin = fopen("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src/DTB_finalizados.log", "a");
+    
+    fprintf(logger_fin, "Archivos abiertos: %d\n", list_size(dtb->archivosAbiertos));
+    for(int i = 0; i < list_size(dtb->archivosAbiertos); i++)
+    {
+        ArchivoAbierto* archivo;
+        archivo = list_get(dtb->archivosAbiertos, i);
+        fprintf(logger_fin, "\nArchivo n° %i: %s\n", i, archivo->path);
+    }
+    
+    fprintf(logger_fin, "Recursos retenidos: %d\n", list_size(info_dtb->recursos_asignados));
+    for(int i = 0; i < list_size(info_dtb->recursos_asignados); i++)
+    {
+        t_recurso* recurso;
+        recurso = list_get(info_dtb->recursos_asignados, i);
+        fprintf(logger_fin, "\nRecurso retenido n° %i: %s\n", i, recurso->id);
+    }
 	fclose(logger_fin);
 }
 
@@ -888,7 +895,7 @@ void info_liberar_completo(void* info_dtb)
 void advertencia()
 {
     int c, procesos_liberados, procesos_eliminar;
-    if(procesos_finalizados > 60)
+    if(procesos_finalizados > 1)
     {
         printf("\nHay mas de 60 procesos finalizados, seleccione una opcion:\n"
         "1: Eliminar todos los procesos.\n"
@@ -916,16 +923,25 @@ void advertencia()
         }
     }
 }
+
 void liberar_memoria()
 {
     list_clean_and_destroy_elements(lista_finalizados, dtb_liberar);
     procesos_finalizados -= list_size(lista_finalizados);
 }
+
 void liberar_parte_de_memoria(int procesos_a_eliminar)
 {
-    for(int i = 0; i < procesos_a_eliminar; i++)
-        list_remove_and_destroy_element(lista_finalizados, i, dtb_liberar);
-    procesos_finalizados -= procesos_a_eliminar;
+    if(procesos_a_eliminar < list_size(lista_finalizados))
+    {
+        for(int i = 0; i < procesos_a_eliminar; i++)
+        {
+            list_remove_and_destroy_element(lista_finalizados, i, dtb_liberar);
+        }
+        procesos_finalizados -= procesos_a_eliminar;
+    }
+    else
+        liberar_memoria();
 }
 
 
