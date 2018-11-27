@@ -8,6 +8,7 @@
 #define STATUS "status"
 #define FINALIZAR "finalizar"
 #define METRICAS "metricas"
+#define LIBERAR "liberar"
 
 #define EVENT_SIZE (sizeof(struct inotify_event) + 16)
 #define BUF_INOTIFY_LEN (16 * EVENT_SIZE)

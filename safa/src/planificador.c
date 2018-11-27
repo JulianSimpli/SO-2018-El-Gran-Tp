@@ -3,6 +3,7 @@
 u_int32_t numero_pid = 0, 
 procesos_finalizados = 0,
 sentencias_globales_del_diego = 0, sentencias_totales = 0;
+int procesos_a_esperar = 0;
 
 char* Estados[5] = {"Nuevo", "Listo", "Ejecutando", "Bloqueado", "Finalizado"};
 
@@ -206,6 +207,8 @@ DTB_info *info_dtb_crear(u_int32_t pid)
     info_dtb->gdtPID = pid;
     info_dtb->estado = DTB_NUEVO;
     info_dtb->socket_cpu = 0;
+    info_dtb->tiempo_ini = NULL;
+    info_dtb->tiempo_fin = NULL;
     info_dtb->tiempo_respuesta = 0;
     info_dtb->kill = false;
     info_dtb->recursos_asignados = list_create();
@@ -213,8 +216,6 @@ DTB_info *info_dtb_crear(u_int32_t pid)
     info_dtb->sentencias_en_nuevo = 0;
     info_dtb->sentencias_al_diego = 0;
     info_dtb->sentencias_hasta_finalizar = 0;
-    //*info_dtb->tiempo_ini
-    //*info_dtb->tiempo_fin
     list_add(lista_info_dtb, info_dtb);
 
     return info_dtb;
@@ -617,7 +618,7 @@ void loggear_finalizacion(DTB* dtb, DTB_info* info_dtb)
     {
         ArchivoAbierto* archivo;
         archivo = list_get(dtb->archivosAbiertos, i);
-        fprintf(logger_fin, "\nArchivo n° %i: %s\n", i, archivo->path);
+        fprintf(logger_fin, "Archivo n° %i: %s\n", i, archivo->path);
     }
     
     fprintf(logger_fin, "Recursos retenidos: %d\n", list_size(info_dtb->recursos_asignados));
@@ -895,69 +896,87 @@ void info_liberar(void *dtb)
     list_remove_and_destroy_by_condition(lista_info_dtb, coincide_info, info_liberar_completo);
 }
 
-void info_liberar_completo(void* info_dtb)
+void info_liberar_completo(void* _info_dtb)
 {
-    list_clean_and_destroy_elements(((DTB_info*)info_dtb)->recursos_asignados, free);
-    free(((DTB_info*)info_dtb)->tiempo_fin);
-    free(((DTB_info*)info_dtb)->tiempo_ini);
+    DTB_info *info_dtb = (DTB_info *)_info_dtb;
+    list_clean_and_destroy_elements(info_dtb->recursos_asignados, free);
+    free(info_dtb->tiempo_ini);
+    free(info_dtb->tiempo_fin);
     free(info_dtb);
 }
 
 void advertencia()
 {
-    int c, procesos_liberados, procesos_eliminar;
-    if(procesos_finalizados > 1) //Te lo puse en 1 para poder probarlo.
+    procesos_a_esperar--;
+    char *c = malloc(10);
+    int procesos_eliminar;
+    if(procesos_finalizados > 1 && procesos_a_esperar <= 0) //Te lo puse en 1 para poder probarlo. Va hardcodeado en 30?
     {
-        printf("\nHay mas de 60 procesos finalizados, seleccione una opcion:\n"
+        printf("\nHay mas de 1 procesos finalizados, seleccione una opcion:\n"
         "1: Eliminar todos los procesos.\n"
         "2: Elegir la cantidad de procesos a eliminar\n"
         "3: Continuar sin hacer nada\n");
-        scanf("%i",&c);
-        switch(c)
+        scanf("%s", c);
+        int d = atoi(c);
+        switch(d)
         {
         case 1:
         {
-            procesos_liberados = list_size(lista_finalizados);
             liberar_memoria();
-            printf("Se liberaron %i procesos\n", procesos_liberados);
-            log_info(logger, "Se finalizaron %i procesos por consola", procesos_liberados);
             break;
         }
-        case 2: // Falla este case
+        case 2:
         {
             printf("\nIngrese la cantidad de procesos a eliminar: ");
-            scanf("%i", &procesos_eliminar);
+            scanf("%d", &procesos_eliminar);
             liberar_parte_de_memoria(procesos_eliminar);
-            log_info(logger, "Se finalizaron los primeros %i procesos por consola", procesos_eliminar);
-            printf("Se liberaron los primeros %i procesos\n", procesos_eliminar);
             break;
         }
-        case 3: // Para mi, esta opcion deberia "dejar de molestar" al usuario por una cantidad X de dtbs. No se como implementarlo.
+        case 3:
         {
+            procesos_a_esperar = 5;
+            printf("\n");
+            break;
+        }
+        default:
+        {
+            printf("\n");
             break;
         }
         }
     }
+    free(c);
 }
 
 void liberar_memoria()
 {
+    int procesos_liberados;
+    procesos_liberados = list_size(lista_finalizados);
+
     list_clean_and_destroy_elements(lista_finalizados, dtb_liberar);
-    procesos_finalizados -= list_size(lista_finalizados);
+    printf("Se liberaron %i procesos de la lista de finalizados\n", procesos_liberados);
+    log_info(logger, "Por consola, se liberaron de memoria %i procesos de la lista de finalizados", procesos_liberados);
+    procesos_finalizados -= procesos_liberados;
 }
 
-void liberar_parte_de_memoria(int procesos_a_eliminar)
+void liberar_parte_de_memoria(int procesos_eliminar)
 {
-    if(procesos_a_eliminar < list_size(lista_finalizados))
+    if(procesos_eliminar < list_size(lista_finalizados))
     {
-        for(int i = 0; i < procesos_a_eliminar; i++)
+        procesos_finalizados -= procesos_eliminar;
+        for(int i = 0; i < procesos_eliminar; i++)
         {
-            list_remove_and_destroy_element(lista_finalizados, i, dtb_liberar);
+            list_remove_and_destroy_element(lista_finalizados, 0, dtb_liberar);
         }
-        procesos_finalizados -= procesos_a_eliminar;
+        log_info(logger, "Se finalizaron los primeros %i procesos de la lista de finalizados", procesos_eliminar);
+        printf("Por consola, se liberaron de memoria %i procesos de la lista de finalizados\n", procesos_eliminar);
     }
     else
+    {
+        if(procesos_eliminar > list_size(lista_finalizados))
+            printf("Solo hay %d procesos en la lista de finalizados\n", procesos_finalizados);
         liberar_memoria();
+    }
 }
 
 

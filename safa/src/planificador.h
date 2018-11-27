@@ -64,6 +64,7 @@ t_log* logger_fin;
 
 u_int32_t numero_pid, procesos_finalizados;
 u_int32_t sentencias_globales_del_diego, sentencias_totales;
+int procesos_a_esperar;
 
 u_int32_t MULTIPROGRAMACION, RETARDO_PLANIF; //La carga la config y SAFA al inicializarse
 char *ALGORITMO_PLANIFICACION;

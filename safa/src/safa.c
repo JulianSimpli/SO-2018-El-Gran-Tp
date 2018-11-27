@@ -95,23 +95,24 @@ void consola()
 	}
 }
 
-void parseo_consola(char *operacion, char *primerParametro)
+void parseo_consola(char *operacion, char *primer_parametro)
 {
 	u_int32_t pid = 0;
 	if (string_equals_ignore_case(operacion, EJECUTAR))
 	{
-		if (primerParametro == NULL)
-		{
+		if (primer_parametro == NULL)
 			printf("expected ejecutar <path>\n");
+		else
+		{
+			printf("path a ejecutar es %s\n", primer_parametro);
+			ejecutar(primer_parametro);
 		}
-		printf("path a ejecutar es %s\n", primerParametro);
-		ejecutar(primerParametro);
 	}
 	else if (string_equals_ignore_case(operacion, STATUS))
 	{
-		if (primerParametro != NULL)
+		if (primer_parametro != NULL)
 		{
-			pid = atoi(primerParametro);
+			pid = atoi(primer_parametro);
 			printf("Mostrar status de proceso con PID %i\n", pid);
 			gdt_status(pid);
 		}
@@ -123,21 +124,21 @@ void parseo_consola(char *operacion, char *primerParametro)
 	}
 	else if (string_equals_ignore_case(operacion, FINALIZAR))
 	{
-		if (primerParametro == NULL)
+		if (primer_parametro == NULL)
 		{
 			printf("expected finalizar <pid>\n");
 			return;
 		}
 
-		pid = atoi(primerParametro);
+		pid = atoi(primer_parametro);
 		printf("pid a finalizar es %i\n", pid);
 		finalizar(pid);
 	}
 	else if (string_equals_ignore_case(operacion, METRICAS))
 	{
-		if (primerParametro != NULL)
+		if (primer_parametro != NULL)
 		{
-			pid = atoi(primerParametro);
+			pid = atoi(primer_parametro);
 			printf("pid a mostrar metricas es %i\n", pid);
 			gdt_metricas(pid);
 		}
@@ -145,6 +146,20 @@ void parseo_consola(char *operacion, char *primerParametro)
 		{
 			printf("metricas no trajo parametros. Solo se muestran estadisticas del sistema\n");
 			metricas();
+		}
+	}
+	else if (string_equals_ignore_case(operacion, LIBERAR))
+	{
+		if (primer_parametro != NULL)
+		{
+			int procesos_a_liberar = atoi(primer_parametro);
+			printf("Se van a liberar %d procesos\n", procesos_a_liberar);
+			liberar_parte_de_memoria(procesos_a_liberar);
+		}
+		else
+		{
+			printf("Se van a liberar todos los procesos de finalizados (%d)\n", list_size(lista_finalizados));
+			liberar_memoria();
 		}
 	}
 	else
