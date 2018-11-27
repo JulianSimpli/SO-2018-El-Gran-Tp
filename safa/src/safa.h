@@ -71,9 +71,5 @@ void enviar_valores_config(void *_cpu);
 void manejar_desconexion(int socket);
 void manejar_desconexion_cpu(int socket);
 
-//Estas van a para a otro lado
-void *string_serializar(char *string, int *desplazamiento);
-char *string_deserializar(void *data, int *desplazamiento);
-
 #endif /* SAFA_H_ */
 

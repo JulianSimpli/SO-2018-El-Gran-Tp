@@ -17,3 +17,31 @@ size_t getFileSize(const char* filename) {
     }
     return st.st_size;
 }
+
+void *string_serializar(char *string, int *desplazamiento)
+{
+	u_int32_t len_string = strlen(string);
+	void *serializado = malloc(sizeof(len_string) + len_string);
+
+	memcpy(serializado + *desplazamiento, &len_string, sizeof(len_string));
+	*desplazamiento += sizeof(len_string);
+	memcpy(serializado + *desplazamiento, string, len_string);
+	*desplazamiento += len_string;
+
+	return serializado;
+}
+
+char *string_deserializar(void *data, int *desplazamiento)
+{
+	u_int32_t len_string = 0;
+	memcpy(&len_string, data + *desplazamiento, sizeof(len_string));
+	*desplazamiento += sizeof(len_string);
+
+	char *string = malloc(len_string + 1);
+	memcpy(string, data + *desplazamiento, len_string);
+	*(string + len_string) = '\0';
+	*desplazamiento = *desplazamiento + len_string;
+
+	return string;
+}
+

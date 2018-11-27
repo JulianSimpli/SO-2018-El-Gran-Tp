@@ -31,6 +31,7 @@ typedef enum {
 	FIN_BLOQUEADO,									// Emisor: SAFA, Receptor: DIEGO
 	ABRIR, FLUSH,									 //Emisor: DIEGO, Receptor: FM9
 	LINEA_PEDIDA,									//Emisor: FM9, Receptor: CPU
+	ABORTAR=20001, 										//Errores ASIGNAR
 	} Tipo;													
 
 typedef struct {

@@ -41,6 +41,7 @@
 
 char* integer_to_string(char*string,int x);
 size_t getFileSize(const char* filename);
-
+void *string_serializar(char *string, int *desplazamiento);
+char *string_deserializar(void *data, int *desplazamiento);
 
 #endif /* HELPER_*/
