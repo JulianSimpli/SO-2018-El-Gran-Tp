@@ -48,27 +48,19 @@ int crear_socket_safa();
 int crear_socket_dam();
 
 //Primitivas
-void *ejecutar_abrir(char **, DTB*);
-
-void *ejecutar_concentrar(char **,DTB*);
-
-void *ejecutar_asignar(char **,DTB*);
-
-void *ejecutar_wait(char *,DTB*);
-
-void *ejecutar_signal(char *,DTB*);
-
-void *ejecutar_flush(char *,DTB*);
-
-void *ejecutar_close(char *,DTB*);
-
-void *ejecutar_crear(char *,DTB*);
-
-void *ejecutar_borrar(char *,DTB*);
+int ejecutar_abrir(char **, DTB*);
+int ejecutar_concentrar(char **,DTB*);
+int ejecutar_asignar(char **,DTB*);
+int ejecutar_wait(char **,DTB*);
+int ejecutar_signal(char **,DTB*);
+int ejecutar_flush(char *,DTB*);
+int ejecutar_close(char *,DTB*);
+int ejecutar_crear(char *,DTB*);
+int ejecutar_borrar(char *,DTB*);
 
 /* A structure which contains information on the commands this program
    can understand. */
-typedef void *(*DoRunTimeChecks)();
+typedef int (*DoRunTimeChecks)();
 
 struct Primitiva
 {

@@ -44,6 +44,36 @@ void *hilo_safa()
 	}
 }
 
+int ejecutar(char *linea, DTB *dtb)
+{
+	int i = 0, existe = 0, flag=1;
+	//Calcula la cantidad de primitivas que hay en el array
+	size_t cantidad_primitivas = sizeof(primitivas) / sizeof(primitivas[0]) - 1;
+
+	//Para poder identificar el comando y que el resto son parametros necesarios para que ejecute
+	//Por ej: linea = abrir /home/utnso/
+	char **parameters = string_split(linea, " ");
+
+	for (i; i < cantidad_primitivas && flag != 1; i++)
+	{
+		if (!strcmp(primitivas[i].name, parameters[0]))
+		{
+			existe = 1;
+			log_info(logger, primitivas[i].doc);
+			//llama a la funcion que tiene guardado esa primitiva en la estructura
+			flag = primitivas[i].func(parameters, dtb);
+			break;
+		}
+	}
+
+	if (!existe)
+	{
+		exit_gracefully(1);
+	}
+
+	return flag;
+}
+
 int ejecutar_quantum(Paquete *paquete)
 {
 	DTB *dtb = DTB_deserializar(paquete);
@@ -53,9 +83,9 @@ int ejecutar_quantum(Paquete *paquete)
 	{
 		// sem_wait(cambios);
 		char *primitiva = pedir_primitiva(dtb);
-		ejecutar(primitiva, dtb); //avanzar el PC dentro del paquete
+		int flag = ejecutar(primitiva, dtb); //avanzar el PC dentro del paquete
 		dtb->PC++;
-		if (finalizar)
+		if (!flag || finalizar)
 			break;
 		// sem_post(cambios);
 	}
@@ -247,36 +277,6 @@ int connect_to_server(char *ip, char *port)
 	return server_socket;
 }
 
-int ejecutar(char *linea, DTB *dtb)
-{
-	int i = 0, existe = 0;
-	//Calcula la cantidad de primitivas que hay en el array
-	size_t cantidad_primitivas = sizeof(primitivas) / sizeof(primitivas[0]) - 1;
-
-	//Para poder identificar el comando y que el resto son parametros necesarios para que ejecute
-	//Por ej: linea = abrir /home/utnso/
-	char **parameters = string_split(linea, " ");
-
-	for (i; i < cantidad_primitivas; i++)
-	{
-		if (!strcmp(primitivas[i].name, parameters[0]))
-		{
-			existe = 1;
-			log_info(logger, primitivas[i].doc);
-			//llama a la funcion que tiene guardado esa primitiva en la estructura
-			primitivas[i].func(parameters, dtb);
-			break;
-		}
-	}
-
-	if (!existe)
-	{
-		error_show("No existe el comando %s\n", linea);
-	}
-
-	return existe;
-}
-
 void enviar_mensaje(Mensaje mensaje)
 {
 	void *buffer = malloc(sizeof(Paquete));
@@ -338,7 +338,7 @@ void exit_gracefully(int return_nr)
 
 //PRIMITIVAS
 
-void *ejecutar_abrir(char **parameters, DTB *dtb)
+int ejecutar_abrir(char **parameters, DTB *dtb)
 {
 	printf("ABRIR\n");
 	char *path = parameters[1];
@@ -346,7 +346,7 @@ void *ejecutar_abrir(char **parameters, DTB *dtb)
 	ArchivoAbierto *archivo_encontrado = _DTB_encontrar_archivo(dtb, path);
 
 	if (archivo_encontrado != NULL)
-		return NULL;
+		return 1;
 
 	Paquete *pedido_a_dam = malloc(sizeof(Paquete));
 	pedido_a_dam->header.tipoMensaje = ABRIR;
@@ -363,6 +363,7 @@ void *ejecutar_abrir(char **parameters, DTB *dtb)
 	bloqueate_safa->header.tipoMensaje = DTB_BLOQUEAR;
 	bloqueate_safa->header.emisor = CPU;
 	bloqueate_safa->header.tamPayload = 0;
+	//TODO: me falta agregar el PID y el PC
 	EnviarPaquete(socket_safa, bloqueate_safa);
 
 	//Cuando se realiza esta operatoria, el CPU desaloja al DTB indicando a S-AFA
@@ -373,17 +374,17 @@ void *ejecutar_abrir(char **parameters, DTB *dtb)
 	//avisará a S-AFA los datos requeridos para obtenerlo de FM9
 	//para que pueda desbloquear el G.DT.
 
-	return NULL;
+	return 1;
 }
 
-void *ejecutar_concentrar(char **parametros, DTB *dtb)
+int ejecutar_concentrar(char **parametros, DTB *dtb)
 {
 	printf("CONCENTRAR\n");
 	sleep(retardo);
-	return NULL;
+	return 1;
 }
 
-void *ejecutar_asignar(char **parametros, DTB *dtb)
+int ejecutar_asignar(char **parametros, DTB *dtb)
 {
 	printf("ASIGNAR\n");
 	char *path = parametros[1];
@@ -398,6 +399,7 @@ void *ejecutar_asignar(char **parametros, DTB *dtb)
 		abortar_gdt->header.tamPayload = 0;
 		abortar_gdt->header.emisor = CPU;
 		abortar_gdt->header.tipoMensaje = ABORTAR;
+		//TODO: falta agregar el PID y el PC
 
 		EnviarPaquete(socket_safa, abortar_gdt);
 		//mandar mensaje a SAFA
@@ -423,35 +425,82 @@ void *ejecutar_asignar(char **parametros, DTB *dtb)
 		//mandar mensaje a FM9
 		//enviar parametros. El string sin splitear? o separados?
 	}
-	return NULL;
+	return 1;
 }
 
-void *ejecutar_wait(char *linea, DTB *dtb)
+int ejecutar_wait(char **parametros, DTB *dtb)
 {
 	printf("WAIT\n");
+	char *recurso = parametros[1];
+
+	Paquete *pedido_recurso = malloc(sizeof(Paquete));
+	pedido_recurso->header.emisor = CPU;
+	pedido_recurso->header.tipoMensaje = WAIT;
+
+	int len_recurso = 0;
+	void *recurso_serializado = string_serializar(recurso, &len_recurso);
+	pedido_recurso->header.tamPayload = len_recurso;
+	pedido_recurso->Payload = malloc(len_recurso);
+	memcpy(pedido_recurso->Payload, recurso, len_recurso);
+
+	EnviarPaquete(socket_safa, pedido_recurso);
+	//espero la respuesta de SAFA
+	Paquete *paquete_recibido = malloc(sizeof(Paquete));
+	RecibirPaqueteCliente(socket_safa, paquete_recibido);
+
+	//si no se pudo asignar, mando mensaje de bloqueo
+	if (paquete_recibido->header.tipoMensaje == ROJADIRECTA)
+	{
+		Paquete *bloquear_safa = malloc(sizeof(Paquete));
+		bloquear_safa->header.tipoMensaje = DTB_BLOQUEAR;
+		bloquear_safa->header.tamPayload = 0;
+		bloquear_safa->header.emisor = CPU;
+		//TODO: me falta agregar el PID y el PC
+		EnviarPaquete(socket_safa, bloquear_safa);
+		return 0; //agarrar este false en el ejecutar
+	}
+	return 1;
 }
 
-void *ejecutar_signal(char *linea, DTB *dtb)
+int ejecutar_signal(char **parametros, DTB *dtb)
 {
 	printf("SIGNAL\n");
+	char *recurso = parametros[1];
+
+	Paquete *liberar_recurso = malloc(sizeof(Paquete));
+	liberar_recurso->header.emisor = CPU;
+	liberar_recurso->header.tipoMensaje = SIGNAL;
+
+	int len_recurso = 0;
+	void *recurso_serializado = string_serializar(recurso, &len_recurso);
+	liberar_recurso->header.tamPayload = len_recurso;
+	liberar_recurso->Payload = malloc(len_recurso);
+	memcpy(liberar_recurso->Payload, recurso, len_recurso);
+
+	EnviarPaquete(socket_safa, liberar_recurso);
+	//SAFA responderá afirmativamente para que pueda continuar
+	Paquete *paquete_recibido = malloc(sizeof(Paquete));
+	RecibirPaqueteCliente(socket_safa, paquete_recibido);
+
+	return paquete_recibido->header.tipoMensaje == SIGASIGA;
 }
 
-void *ejecutar_flush(char *linea, DTB *dtb)
+int ejecutar_flush(char *linea, DTB *dtb)
 {
 	printf("FLUSH\n");
 }
 
-void *ejecutar_close(char *linea, DTB *dtb)
+int ejecutar_close(char *linea, DTB *dtb)
 {
 	printf("CLOSE\n");
 }
 
-void *ejecutar_crear(char *linea, DTB *dtb)
+int ejecutar_crear(char *linea, DTB *dtb)
 {
 	printf("CREAR\n");
 }
 
-void *ejecutar_borrar(char *linea, DTB *dtb)
+int ejecutar_borrar(char *linea, DTB *dtb)
 {
 	printf("BORRAR\n");
 }
