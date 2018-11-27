@@ -14,7 +14,7 @@ void *hilo_safa();
 int interpretar_safa(Paquete *paquete);
 char *pedir_primitiva(DTB *dtb);
 void cargar_config_safa(Paquete *paquete);
-int ejecutar(char *, DTB*);
+int ejecutar(char *, DTB *);
 
 int main(int argc, char **argv)
 {
@@ -62,7 +62,7 @@ int ejecutar_quantum(Paquete *paquete)
 
 	if (finalizar)
 	{
-		Paquete* paquete_a_diego = malloc(sizeof(Paquete));
+		Paquete *paquete_a_diego = malloc(sizeof(Paquete));
 		paquete_a_diego->header.tipoMensaje = FINALIZAR;
 		paquete_a_diego->header.tamPayload = 0;
 		paquete_a_diego->header.emisor = CPU;
@@ -77,7 +77,7 @@ int ejecutar_quantum(Paquete *paquete)
 	//si es VRR, manda QUANTUM_FALTANTE
 	Paquete *nuevo_paquete = malloc(sizeof(Paquete));
 	nuevo_paquete->header.tipoMensaje = DTB_EJECUTO;
-	void * DTB_serializado = DTB_serializar(dtb, &nuevo_paquete->header.tamPayload);
+	void *DTB_serializado = DTB_serializar(dtb, &nuevo_paquete->header.tamPayload);
 	nuevo_paquete->header.emisor = CPU;
 	nuevo_paquete->Payload = DTB_serializado;
 
@@ -98,7 +98,7 @@ char *pedir_primitiva(DTB *dtb)
 	Paquete *paquete = malloc(sizeof(Paquete));
 	int len = sizeof(u_int32_t) * 2;
 	paquete->header.tamPayload = len;
-	paquete->header.tipoMensaje = NUEVA_PRIMITIVA; 
+	paquete->header.tipoMensaje = NUEVA_PRIMITIVA;
 	paquete->header.emisor = CPU;
 	paquete->Payload = malloc(len);
 	memcpy(paquete->Payload, &dtb->gdtPID, sizeof(u_int32_t));
@@ -164,7 +164,6 @@ void handshake_dam()
 
 	log_info(logger, "Se concreto el handshake con DAM, empiezo a recibir mensajes");
 }
-
 
 void cargar_config_safa(Paquete *paquete)
 {
@@ -344,25 +343,27 @@ void *ejecutar_abrir(char **parameters, DTB *dtb)
 	printf("ABRIR\n");
 	char *path = parameters[1];
 
-	ArchivoAbierto * archivo_encontrado = _DTB_encontrar_archivo(dtb,path);
+	ArchivoAbierto *archivo_encontrado = _DTB_encontrar_archivo(dtb, path);
 
-	if (archivo_encontrado != NULL) return NULL;
-	
-		Paquete* pedido_a_dam = malloc(sizeof(Paquete));
-		pedido_a_dam->header.tipoMensaje = ABRIR;
-		pedido_a_dam->header.emisor = CPU;
-		memcpy(pedido_a_dam->Payload, &dtb->gdtPID,sizeof(u_int32_t));
-		int len = 0;
-		void *path_serializado= string_serializar(path, &len);
-		pedido_a_dam->header.tamPayload = len;
-		memcpy(pedido_a_dam->Payload+sizeof(u_int32_t),&path_serializado,len);
+	if (archivo_encontrado != NULL)
+		return NULL;
 
-		EnviarPaquete(socket_dam, pedido_a_dam);
-		Paquete* bloqueate_safa = malloc(sizeof(Paquete));
-		bloqueate_safa->header.tipoMensaje= DTB_BLOQUEAR;
-		bloqueate_safa->header.emisor = CPU;
-		bloqueate_safa->header.tamPayload= 0;
-		EnviarPaquete(socket_safa, bloqueate_safa);
+	Paquete *pedido_a_dam = malloc(sizeof(Paquete));
+	pedido_a_dam->header.tipoMensaje = ABRIR;
+	pedido_a_dam->header.emisor = CPU;
+	int len = 0;
+	void *path_serializado = string_serializar(path, &len);
+	pedido_a_dam->header.tamPayload = len + sizeof(u_int32_t);
+	pedido_a_dam->Payload = malloc(pedido_a_dam->header.tamPayload);
+	memcpy(pedido_a_dam->Payload, &dtb->gdtPID, sizeof(u_int32_t));
+	memcpy(pedido_a_dam->Payload + sizeof(u_int32_t), path_serializado, len);
+
+	EnviarPaquete(socket_dam, pedido_a_dam);
+	Paquete *bloqueate_safa = malloc(sizeof(Paquete));
+	bloqueate_safa->header.tipoMensaje = DTB_BLOQUEAR;
+	bloqueate_safa->header.emisor = CPU;
+	bloqueate_safa->header.tamPayload = 0;
+	EnviarPaquete(socket_safa, bloqueate_safa);
 
 	//Cuando se realiza esta operatoria, el CPU desaloja al DTB indicando a S-AFA
 	//que el mismo está esperando que El Diego cargue en FM9 el archivo deseado.
@@ -375,42 +376,82 @@ void *ejecutar_abrir(char **parameters, DTB *dtb)
 	return NULL;
 }
 
-void *ejecutar_concentrar(char **parametros, DTB* dtb)
+void *ejecutar_concentrar(char **parametros, DTB *dtb)
 {
 	printf("CONCENTRAR\n");
+	sleep(retardo);
+	return NULL;
 }
 
-void *ejecutar_asignar(char *linea, DTB* dtb)
+void *ejecutar_asignar(char **parametros, DTB *dtb)
 {
 	printf("ASIGNAR\n");
+	char *path = parametros[1];
+	int linea = atoi(parametros[2]);
+	char *dato = parametros[3];
+
+	ArchivoAbierto *archivo_encontrado = _DTB_encontrar_archivo(dtb, path);
+
+	if (archivo_encontrado == NULL)
+	{
+		Paquete *abortar_gdt = malloc(sizeof(Paquete));
+		abortar_gdt->header.tamPayload = 0;
+		abortar_gdt->header.emisor = CPU;
+		abortar_gdt->header.tipoMensaje = ABORTAR;
+
+		EnviarPaquete(socket_safa, abortar_gdt);
+		//mandar mensaje a SAFA
+		//abortar GDT
+		//Error 20001: El archivo no se encuentra abierto
+	}
+	else
+	{
+		Paquete *datos_a_fm9 = malloc(sizeof(Paquete));
+		datos_a_fm9->header.emisor = CPU;
+		datos_a_fm9->header.tipoMensaje = ASIGNAR;
+		int len_path = 0;
+		int len_dato = 0;
+		void *path_serializado = string_serializar(path, &len_path);
+		void *dato_serializado = string_serializar(dato, &len_dato);
+		datos_a_fm9->header.tamPayload = len_path + len_dato + sizeof(u_int32_t);
+		datos_a_fm9->Payload = malloc(datos_a_fm9->header.tamPayload);
+		memcpy(datos_a_fm9->Payload, path_serializado, len_path);
+		memcpy(datos_a_fm9->Payload + len_path, &linea, sizeof(u_int32_t));
+		memcpy(datos_a_fm9->Payload + len_path + sizeof(u_int32_t), dato_serializado, len_dato);
+
+		EnviarPaquete(socket_fm9, datos_a_fm9);
+		//mandar mensaje a FM9
+		//enviar parametros. El string sin splitear? o separados?
+	}
+	return NULL;
 }
 
-void *ejecutar_wait(char *linea, DTB* dtb)
+void *ejecutar_wait(char *linea, DTB *dtb)
 {
 	printf("WAIT\n");
 }
 
-void *ejecutar_signal(char *linea, DTB* dtb)
+void *ejecutar_signal(char *linea, DTB *dtb)
 {
 	printf("SIGNAL\n");
 }
 
-void *ejecutar_flush(char *linea, DTB* dtb)
+void *ejecutar_flush(char *linea, DTB *dtb)
 {
 	printf("FLUSH\n");
 }
 
-void *ejecutar_close(char *linea, DTB* dtb)
+void *ejecutar_close(char *linea, DTB *dtb)
 {
 	printf("CLOSE\n");
 }
 
-void *ejecutar_crear(char *linea, DTB* dtb)
+void *ejecutar_crear(char *linea, DTB *dtb)
 {
 	printf("CREAR\n");
 }
 
-void *ejecutar_borrar(char *linea, DTB* dtb)
+void *ejecutar_borrar(char *linea, DTB *dtb)
 {
 	printf("BORRAR\n");
 }

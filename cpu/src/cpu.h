@@ -52,7 +52,7 @@ void *ejecutar_abrir(char **, DTB*);
 
 void *ejecutar_concentrar(char **,DTB*);
 
-void *ejecutar_asignar(char *,DTB*);
+void *ejecutar_asignar(char **,DTB*);
 
 void *ejecutar_wait(char *,DTB*);
 
