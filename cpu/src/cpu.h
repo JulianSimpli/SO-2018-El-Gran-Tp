@@ -13,8 +13,9 @@
 #include <commons/collections/list.h>
 #include <string.h>
 #include "../../Bibliotecas/sockets.h"
-#include "primitivas.h"
 #include "../../Bibliotecas/dtb.h"
+#include "../../Bibliotecas/helper.h"
+
 
 //Logger y config globales
 t_log *logger;
@@ -45,5 +46,47 @@ void enviar_mensaje(Mensaje mensaje);
 Mensaje *recibir_mensaje(int conexion);
 int crear_socket_safa();
 int crear_socket_dam();
+
+//Primitivas
+void *ejecutar_abrir(char **, DTB*);
+
+void *ejecutar_concentrar(char **,DTB*);
+
+void *ejecutar_asignar(char *,DTB*);
+
+void *ejecutar_wait(char *,DTB*);
+
+void *ejecutar_signal(char *,DTB*);
+
+void *ejecutar_flush(char *,DTB*);
+
+void *ejecutar_close(char *,DTB*);
+
+void *ejecutar_crear(char *,DTB*);
+
+void *ejecutar_borrar(char *,DTB*);
+
+/* A structure which contains information on the commands this program
+   can understand. */
+typedef void *(*DoRunTimeChecks)();
+
+struct Primitiva
+{
+	char *name;			  /* User printable name of the function. */
+	DoRunTimeChecks func; /* Function to call to do the job. */
+	char *doc;			  /* Documentation for this function.  */
+};
+
+struct Primitiva primitivas[] = {
+	{"abrir", ejecutar_abrir, "El comando abrir permitirá abrir un nuevo archivo para el escriptorio."},
+	{"concentrar", ejecutar_concentrar, "La primitiva concentrar será un comando de no operación. El objetivo del mismo es hacer correr una unidad de tiempo de quantum."},
+	{"asignar", ejecutar_asignar, "La primitiva asignar permitirá la asignación de datos a una línea dentro de path pasado."},
+	{"wait", ejecutar_wait, "La primitiva Wait permitirá la espera y retención de distintos recursos tanto existentes como no que administrá S-AFA."},
+	{"signal", ejecutar_signal, "La primitiva Signal permitirá la liberación de un recurso que son administrados S-AFA."},
+	{"flush", ejecutar_flush, "La primitiva Flush permite guardar el contenido de FM9 a MDJ."},
+	{"close", ejecutar_close, "La primitiva Close permite liberar un archivo abierto que posea el G.DT."},
+	{"crear", ejecutar_crear, "La primitiva crear permitirá crear un nuevo archivo en el MDJ. Para esto, se deberá utilizar de intermediario a El Diego."},
+	{"borrar", ejecutar_borrar, "La primitiva borrar permitirá eliminar un archivo de MDJ."},
+};
 
 #endif

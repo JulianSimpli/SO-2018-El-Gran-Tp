@@ -1,5 +1,5 @@
 TARGET = cpu
-LIBS = -lcommons -lreadline ../../Bibliotecas/dtb.c ../../Bibliotecas/sockets.c 
+LIBS = -lcommons -lreadline ../../Bibliotecas/dtb.c ../../Bibliotecas/sockets.c ../../Bibliotecas/helper.c 
 program:
 	gcc -pthread cpu.c -o $(TARGET) $(LIBS)
 clean:

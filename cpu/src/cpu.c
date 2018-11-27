@@ -6,6 +6,7 @@ char *algoritmo;
 int socket_dam;
 int socket_safa;
 int socket_fm9;
+int retardo;
 
 sem_t *cambios;
 bool finalizar;
@@ -13,7 +14,7 @@ void *hilo_safa();
 int interpretar_safa(Paquete *paquete);
 char *pedir_primitiva(DTB *dtb);
 void cargar_config_safa(Paquete *paquete);
-int ejecutar(char *linea);
+int ejecutar(char *, DTB*);
 
 int main(int argc, char **argv)
 {
@@ -52,7 +53,7 @@ int ejecutar_quantum(Paquete *paquete)
 	{
 		// sem_wait(cambios);
 		char *primitiva = pedir_primitiva(dtb);
-		ejecutar(primitiva); //avanzar el PC dentro del paquete
+		ejecutar(primitiva, dtb); //avanzar el PC dentro del paquete
 		dtb->PC++;
 		if (finalizar)
 			break;
@@ -247,7 +248,7 @@ int connect_to_server(char *ip, char *port)
 	return server_socket;
 }
 
-int ejecutar(char *linea)
+int ejecutar(char *linea, DTB *dtb)
 {
 	int i = 0, existe = 0;
 	//Calcula la cantidad de primitivas que hay en el array
@@ -264,7 +265,7 @@ int ejecutar(char *linea)
 			existe = 1;
 			log_info(logger, primitivas[i].doc);
 			//llama a la funcion que tiene guardado esa primitiva en la estructura
-			primitivas[i].func(parameters);
+			primitivas[i].func(parameters, dtb);
 			break;
 		}
 	}
@@ -334,4 +335,82 @@ void exit_gracefully(int return_nr)
 
 	log_destroy(logger);
 	exit(return_nr);
+}
+
+//PRIMITIVAS
+
+void *ejecutar_abrir(char **parameters, DTB *dtb)
+{
+	printf("ABRIR\n");
+	char *path = parameters[1];
+
+	ArchivoAbierto * archivo_encontrado = _DTB_encontrar_archivo(dtb,path);
+
+	if (archivo_encontrado != NULL) return NULL;
+	
+		Paquete* pedido_a_dam = malloc(sizeof(Paquete));
+		pedido_a_dam->header.tipoMensaje = ABRIR;
+		pedido_a_dam->header.emisor = CPU;
+		memcpy(pedido_a_dam->Payload, &dtb->gdtPID,sizeof(u_int32_t));
+		int len = 0;
+		void *path_serializado= string_serializar(path, &len);
+		pedido_a_dam->header.tamPayload = len;
+		memcpy(pedido_a_dam->Payload+sizeof(u_int32_t),&path_serializado,len);
+
+		EnviarPaquete(socket_dam, pedido_a_dam);
+		Paquete* bloqueate_safa = malloc(sizeof(Paquete));
+		bloqueate_safa->header.tipoMensaje= DTB_BLOQUEAR;
+		bloqueate_safa->header.emisor = CPU;
+		bloqueate_safa->header.tamPayload= 0;
+		EnviarPaquete(socket_safa, bloqueate_safa);
+
+	//Cuando se realiza esta operatoria, el CPU desaloja al DTB indicando a S-AFA
+	//que el mismo está esperando que El Diego cargue en FM9 el archivo deseado.
+	//Esta operación hace que S-AFA bloquee el G.DT.
+
+	//Cuando El Diego termine la operatoria de cargarlo en FM9,
+	//avisará a S-AFA los datos requeridos para obtenerlo de FM9
+	//para que pueda desbloquear el G.DT.
+
+	return NULL;
+}
+
+void *ejecutar_concentrar(char **parametros, DTB* dtb)
+{
+	printf("CONCENTRAR\n");
+}
+
+void *ejecutar_asignar(char *linea, DTB* dtb)
+{
+	printf("ASIGNAR\n");
+}
+
+void *ejecutar_wait(char *linea, DTB* dtb)
+{
+	printf("WAIT\n");
+}
+
+void *ejecutar_signal(char *linea, DTB* dtb)
+{
+	printf("SIGNAL\n");
+}
+
+void *ejecutar_flush(char *linea, DTB* dtb)
+{
+	printf("FLUSH\n");
+}
+
+void *ejecutar_close(char *linea, DTB* dtb)
+{
+	printf("CLOSE\n");
+}
+
+void *ejecutar_crear(char *linea, DTB* dtb)
+{
+	printf("CREAR\n");
+}
+
+void *ejecutar_borrar(char *linea, DTB* dtb)
+{
+	printf("BORRAR\n");
 }
