@@ -611,7 +611,7 @@ void loggear_finalizacion(DTB* dtb, DTB_info* info_dtb)
 	(info_dtb->kill)? "Si" : "No",
 	Estados[info_dtb->estado]);
 
-	FILE* logger_fin = fopen("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src/DTB_finalizados.log", "a");
+	FILE* logger_fin = fopen("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src/logs/DTB_finalizados.log", "a");
     
     fprintf(logger_fin, "Archivos abiertos: %d\n", list_size(dtb->archivosAbiertos));
     for(int i = 0; i < list_size(dtb->archivosAbiertos); i++)
@@ -915,7 +915,8 @@ void advertencia()
         printf("\nHay mas de 1 procesos finalizados, seleccione una opcion:\n"
         "1: Eliminar todos los procesos.\n"
         "2: Elegir la cantidad de procesos a eliminar\n"
-        "3: Continuar sin hacer nada\n");
+        "3: Continuar sin hacer nada\n"
+        ">> "); // Le puse esto para que simule seguir siendo la consola 
         scanf("%s", c);
         int d = atoi(c);
         switch(d)
@@ -927,7 +928,7 @@ void advertencia()
         }
         case 2:
         {
-            printf("\nIngrese la cantidad de procesos a eliminar: ");
+            printf("Ingrese la cantidad de procesos a eliminar: ");
             scanf("%d", &procesos_eliminar);
             liberar_parte_de_memoria(procesos_eliminar);
             break;
@@ -935,14 +936,10 @@ void advertencia()
         case 3:
         {
             procesos_a_esperar = 5;
-            printf("\n");
             break;
         }
         default:
-        {
-            printf("\n");
             break;
-        }
         }
     }
     free(c);

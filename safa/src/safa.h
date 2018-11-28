@@ -2,6 +2,7 @@
 #define SAFA_H_
 
 #include "planificador.h"
+#include <sys/inotify.h>
 
 //Declaracion de constantes
 #define EJECUTAR "ejecutar"
@@ -10,8 +11,8 @@
 #define METRICAS "metricas"
 #define LIBERAR "liberar"
 
-#define EVENT_SIZE (sizeof(struct inotify_event) + 16)
-#define BUF_INOTIFY_LEN (16 * EVENT_SIZE)
+#define EVENT_SIZE (sizeof(struct inotify_event) + 256)
+#define BUF_INOTIFY_LEN (1024 * EVENT_SIZE)
 
 
 //Declaracion de variables globales
@@ -28,8 +29,7 @@ sem_t mutex_handshake_diego;
 sem_t mutex_handshake_cpu;
 
 // Declaracion de funciones
-void crear_logger();
-void crear_logger_finalizados();
+void crear_loggers();
 void inicializar_variables();
 void crear_listas();
 void llenar_lista_estados();
@@ -55,7 +55,7 @@ bool es_nuevo(void * _info_dtb);
 
 
 //Recursos
-t_recurso *recurso_recibir(void *payload, int *pid, int *pc);
+t_recurso *recurso_recibir(void *payload, int *pid, int *pc, Tipo senial);
 void recurso_signal(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket);
 void recurso_wait(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket);
 DTB *dtb_bloquear(u_int32_t pid, u_int32_t pc, int socket);

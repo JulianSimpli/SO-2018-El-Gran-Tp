@@ -1,25 +1,31 @@
 #include "safa.h"
+#include "planificador.h"
 #include <sys/inotify.h>
 
 /*Creación de Logger*/
-void crear_logger()
+void crear_loggers()
 {
-	logger = log_create("safa.log", "safa", true, LOG_LEVEL_INFO);
-}
-
-void crear_logger_finalizados (){
-	logger_fin = log_create ("DTB_finalizados.log", "safa", true, LOG_LEVEL_INFO);
+	logger = log_create("logs/safa.log", "safa", true, LOG_LEVEL_INFO);
+	logger_fin = log_create ("logs/DTB_finalizados.log", "safa", true, LOG_LEVEL_INFO);
+	log_info(logger, "Iniciando SAFA.log");
+	log_info(logger_fin, "INFORMACION DE ARCHIVOS FINALIZADOS");
 }
 
 void obtener_valores_archivo_configuracion()
 {
 	t_config *arch = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src/SAFA.config");
 	IP = "127.0.0.1";
+	log_info(logger, "IP: %s", IP);
 	PUERTO = config_get_int_value(arch, "PUERTO");
+	log_info(logger, "Puerto: %d", PUERTO);
 	ALGORITMO_PLANIFICACION = string_duplicate(config_get_string_value(arch, "ALGORITMO"));
+	log_info(logger, "Algoritmo de planificacion: %s", ALGORITMO_PLANIFICACION);
 	QUANTUM = config_get_int_value(arch, "QUANTUM");
+	log_info(logger, "Quantum: %d", QUANTUM);
 	MULTIPROGRAMACION = config_get_int_value(arch, "MULTIPROGRAMACION");
+	log_info(logger, "Grado de multiprogramacion: %d", MULTIPROGRAMACION);
 	RETARDO_PLANIF = config_get_int_value(arch, "RETARDO_PLANIF");
+	log_info(logger, "Retardo de planificacion: %d", RETARDO_PLANIF);
 	config_destroy(arch);
 }
 
@@ -394,7 +400,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		{
 			u_int32_t pid = 0;
 			u_int32_t pc = 0;
-			t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc);
+			t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc, WAIT);
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 			metricas_actualizar(dtb, pc);
 			if(verificar_si_murio(dtb, lista_ejecutando))
@@ -410,7 +416,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		{
 			u_int32_t pid = 0;
 			u_int32_t pc = 0;
-			t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc);
+			t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc, SIGNAL);
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 			metricas_actualizar(dtb, pc);
 			if(verificar_si_murio(dtb, lista_ejecutando))
@@ -571,7 +577,7 @@ void recurso_signal(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket)
 		seguir_ejecutando(pid, pc, socket);
 }
 
-t_recurso *recurso_recibir(void *payload, int *pid, int *pc)
+t_recurso *recurso_recibir(void *payload, int *pid, int *pc, Tipo senial)
 {
 	int desplazamiento = 0;
 	char *id_recurso = string_deserializar(payload, &desplazamiento);
@@ -583,7 +589,21 @@ t_recurso *recurso_recibir(void *payload, int *pid, int *pc)
 
 	t_recurso *recurso = recurso_encontrar(id_recurso);
 	if (recurso == NULL)
-		recurso = recurso_crear(id_recurso, 1);
+	{
+		switch(senial)
+		{
+		case SIGNAL:
+		{
+			recurso_crear(id_recurso, 0);
+			break;
+		}
+		case WAIT:
+		{
+			recurso_crear(id_recurso, 1);
+			break;
+		}
+		}
+	}
 
 	return recurso;
 }
@@ -631,54 +651,68 @@ void enviar_handshake_diego(int socketFD)
 
 void event_watcher()
 {
-	int multip_vieja = MULTIPROGRAMACION;
-	char buffer[BUF_INOTIFY_LEN];
-
-	int fd_config = inotify_init();
-	if(fd_config < 0)
-		log_error(logger, "Fallo creacion de File Descriptor para config.cfg (inotify_init)");
-	
-	int watch_descriptor = inotify_add_watch(fd_config, "/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src", IN_MODIFY);
-	if(watch_descriptor < 0)
-		log_error(logger, "Fallo creacion de observador de eventos en archivos (inotify_add_watch)");
-	
-	int length = read(fd_config, buffer, BUF_INOTIFY_LEN);
-	if(length < 0)
-		log_error(logger, "Fallo lectura de File Descriptor para observador de eventos (read)");
-	
-	int offset = 0;
-
-	while(offset < length)
+	while(true)
 	{
-		struct inotify_event *event = (struct inotify_event *)(&buffer[offset]);
+		//sleep(1);
+		int multip_vieja = MULTIPROGRAMACION;
+		char buffer[BUF_INOTIFY_LEN];
 
-		if(event->len)
+		int fd_config = inotify_init();
+		if(fd_config < 0)
+			log_error(logger, "Fallo creacion de File Descriptor para config.cfg (inotify_init)");
+		
+		int watch_descriptor = inotify_add_watch(fd_config, "/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src", IN_MODIFY);
+		if(watch_descriptor < 0)
+			log_error(logger, "Fallo creacion de observador de eventos en archivos (inotify_add_watch)");
+		
+		int length = read(fd_config, buffer, BUF_INOTIFY_LEN);
+		if(length < 0)
+			log_error(logger, "Fallo lectura de File Descriptor para observador de eventos (read)");
+		
+		int offset = 0;
+
+		while(offset < length)
 		{
-			if(event->mask & IN_MODIFY)
+			struct inotify_event *event = (struct inotify_event *)(&buffer[offset]);
+
+			if(event->len)
 			{
-				if(event->mask & IN_ISDIR)
-					log_info(logger, "El directorio %s fue modificado", event->name);
-				else
-					log_info(logger, "El archivo %s fue modificado", event->name);
+				if(event->mask & IN_MODIFY)
+				{
+					if(event->mask & IN_ISDIR)
+						log_info(logger, "El directorio %s fue modificado", event->name);
+					else
+						log_info(logger, "El archivo %s fue modificado", event->name);
 
+				}
 			}
+			offset += sizeof (struct inotify_event) + event->len;
 		}
-		offset += sizeof (struct inotify_event) + event->len;
+		inotify_rm_watch(fd_config, watch_descriptor);
+		close(fd_config);
+
+		sleep(1);
+
+		obtener_valores_archivo_configuracion();
+		printf("Los nuevos valores del archivo config.cfg son: \n");
+		imprimir_archivo_configuracion();
+		list_iterate(lista_cpu, enviar_valores_config);
+		
+		int dif = MULTIPROGRAMACION - multip_vieja;
+		printf("dif es %d\n", dif);
+		if(dif < 0)
+			while(dif)
+			{
+				sem_wait(&sem_multiprogramacion);
+				dif++;
+			}
+		if(dif > 0)
+			while(dif--)
+				sem_post(&sem_multiprogramacion);
+		int a = 0;
+		sem_getvalue(&sem_multiprogramacion, &a);
+		printf("sem_multiprogramacion es %d\n", a);
 	}
-
-	obtener_valores_archivo_configuracion();
-	list_iterate(lista_cpu, enviar_valores_config);
-
-	int dif = MULTIPROGRAMACION - multip_vieja;
-	if(dif < 0)
-		for(int i = 0; dif == i; i--)
-			sem_wait(&sem_multiprogramacion);
-	if(dif > 0)
-		for(int i = 0; dif == i; i++)
-			sem_post(&sem_multiprogramacion);
-
-	inotify_rm_watch(fd_config, watch_descriptor);
-	close(fd_config);
 }
 
 void enviar_valores_config(void *_cpu)
@@ -695,8 +729,7 @@ void enviar_valores_config(void *_cpu)
 
 int main(void)
 {
-	crear_logger();
-	crear_logger_finalizados();
+	crear_loggers();
 	obtener_valores_archivo_configuracion();
 	imprimir_archivo_configuracion();
 	inicializar_variables();
@@ -705,8 +738,6 @@ int main(void)
 	sem_getvalue(&sem_multiprogramacion, &a);
 	printf("sem_multiprogramacion es %d", a);
 	
-	log_info(logger, "Iniciando SAFA.log");
-	log_info(logger_fin, "***INFORMACION DE ARCHIVOS FINALIZADOS***");
 	clock_t t = clock();
 	clock_t t2 = clock();
 	char* estado_1 = "EJECUTANDO";
