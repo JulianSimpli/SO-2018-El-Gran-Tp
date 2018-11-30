@@ -514,23 +514,7 @@ bool verificar_si_murio(DTB *dtb, t_list *lista_origen)
 	return info_dtb->kill;
 }
 
-<<<<<<< c1581bff553efbaa734d803d9064c51291fc8165
-void *serializar_pid_y_pc(u_int32_t pid, u_int32_t pc, int *tam_pid_y_pc)
-{
-	void *payload = malloc(sizeof(u_int32_t) * 2);
-
-	memcpy(payload + *tam_pid_y_pc, &pid, sizeof(u_int32_t));
-	*tam_pid_y_pc += sizeof(u_int32_t);
-	memcpy(payload + *tam_pid_y_pc, &pc, sizeof(u_int32_t));
-	*tam_pid_y_pc += sizeof(u_int32_t);
-
-	return payload;
-}
-
-void seguir_ejecutando(int socket)
-=======
 void segui_ejecutando(u_int32_t pid, u_int32_t pc, int socket)
->>>>>>> Termine las primitivas de cpu, cambie un par de funciones de safa al helper y agregue mensajes a sockets.h
 {
 	Paquete *paquete = malloc(sizeof(Paquete));
 	paquete->header = cargar_header(0, SIGASIGA, SAFA);
