@@ -417,8 +417,8 @@ void dtb_imprimir_basico(void *_dtb)
         case GDT:
         {
             ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
-            printf( "PID: %i\n"
-                    "Escriptorio: %s",
+            printf( "PID: %i"
+                    "			Escriptorio: %s",
                     dtb->gdtPID, escriptorio->path);
             if (escriptorio->cantLineas)
                 printf(", cantidad de lineas: %d", escriptorio->cantLineas);
@@ -613,20 +613,24 @@ void loggear_finalizacion(DTB* dtb, DTB_info* info_dtb)
 
 	FILE* logger_fin = fopen("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src/logs/DTB_finalizados.log", "a");
     
-    fprintf(logger_fin, "Archivos abiertos: %d\n", list_size(dtb->archivosAbiertos));
+    fprintf(logger_fin, "\n								Archivos abiertos: %d\n", list_size(dtb->archivosAbiertos));
     for(int i = 0; i < list_size(dtb->archivosAbiertos); i++)
     {
         ArchivoAbierto* archivo;
         archivo = list_get(dtb->archivosAbiertos, i);
-        fprintf(logger_fin, "Archivo n° %i: %s\n", i, archivo->path);
+        if(i==0){
+         fprintf(logger_fin, "											 Path Escriptorio: %s\n", i, archivo->path);
+        }else{
+        fprintf(logger_fin, "											 Archivo n° %i: %s\n", i, archivo->path);
+        }
     }
     
-    fprintf(logger_fin, "Recursos retenidos: %d\n", list_size(info_dtb->recursos_asignados));
+    fprintf(logger_fin, "											 Recursos retenidos: %d\n", list_size(info_dtb->recursos_asignados));
     for(int i = 0; i < list_size(info_dtb->recursos_asignados); i++)
     {
         t_recurso* recurso;
         recurso = list_get(info_dtb->recursos_asignados, i);
-        fprintf(logger_fin, "\nRecurso retenido n° %i: %s\n", i, recurso->id);
+        fprintf(logger_fin, "											 Recurso retenido n° %i: %s\n", i, recurso->id);
     }
 	fclose(logger_fin);
 }
