@@ -1,6 +1,4 @@
 #include "safa.h"
-#include "planificador.h"
-#include <sys/inotify.h>
 
 /*Creación de Logger*/
 void crear_loggers()
@@ -237,10 +235,20 @@ void manejar_desconexion_cpu(int socket)
 	log_info(logger, "Cpu %d removida del sistema", socket);
 	printf("Cpu %d removida del sistema\n", socket);
 
-	if(!list_size(lista_cpu))
+	if(list_is_empty(lista_cpu))
 	{
-		log_info(logger, "Se desconecto la ultima cpu del sistema");
-		printf("Se desconecto la ultima cpu del sistema\n");
+		log_info(logger, "Se desconecto la ultima cpu del sistema. Esperando 30 segundos por la conexion de otras.");
+		printf("Se desconecto la ultima cpu del sistema.\n"
+				"Si no se conecta otra en 30 segundos, el sistema finalizara\n");
+		sleep(30);
+		if(list_is_empty(lista_cpu))
+		{
+			log_info(logger, "Sistema terminado correctamente tras la desconexion de todas las CPUs");
+			printf("Terminando SAFA.\n"
+					"Hasta la proxima!\n");
+			exit(1)
+		}	
+
 		// Esperar a que conecte otra por x tiempo?
 		// sleep(30) Si sigue siendo 0 el list size exit(1)
 		// Si entro otra cpu, continua ejecutando
@@ -259,22 +267,18 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			enviar_handshake_diego(socketFD);
 			break;
 		}
+
 		case DUMMY_SUCCES:
 		{
 			// Mensaje contiene pid, posicion en memoria, largo path, cantidad lineas
 			u_int32_t pid;
 			memcpy(&pid, paquete->Payload, sizeof(u_int32_t));
-			log_info(logger, "Proceso con PID %d fue cargado en memoria", pid);
+			log_info(logger, "GDT %d fue cargado en memoria correctamente", pid);
 			DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
 			DTB_info *info_dtb = info_asociada_a_pid(pid);
 			if(verificar_si_murio(dtb, lista_nuevos))
-			{
-				sem_post(&sem_multiprogramacion);
 				break;
-			}
 			pasaje_a_ready(pid);
-			liberar_cpu(socketFD);
-			log_info(logger, "Cpu %d liberada", socketFD);
 			break;
 		}
 		case DUMMY_FAIL:
@@ -372,19 +376,19 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 			dtb_actualizar(dtb, lista_ejecutando, lista_listos, dtb->PC, DTB_LISTO, socketFD);
 			break;
         }
-        case DTB_EJECUTO: // No veo diferencias con Process_timeout
+        case DTB_EJECUTO:
 		{
+			liberar_cpu(socketFD);
             DTB* dtb = DTB_deserializar(paquete->Payload);
 			metricas_actualizar(dtb, 0);
 			DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
 			if(verificar_si_murio(dtb, lista_ejecutando))
 				break;
 
-			liberar_cpu(socketFD);
 			dtb_actualizar(dtb, lista_ejecutando, lista_listos, dtb->PC, DTB_LISTO, socketFD);
 			break;
         }
-		case DTB_FINALIZAR: //Aca es cuando el dtb finaliza "normalmente"
+		case DTB_FINALIZAR: //Aca es cuando el dtb finaliza "normalmente". Lo detecta CPU
 		{
 			liberar_cpu(socketFD);
             DTB* dtb = DTB_deserializar(paquete->Payload);
@@ -406,7 +410,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 			if(verificar_si_murio(dtb, lista_ejecutando))
 			{
 				dtb->PC = pc;
-				avisar_desalojo_a_cpu(dtb->gdtPID, pc, socketFD);
+				avisar_desalojo_a_cpu(socketFD);
 				break;
 			}
 			recurso_wait(recurso, dtb->gdtPID, pc, socketFD);
@@ -422,7 +426,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 			if(verificar_si_murio(dtb, lista_ejecutando))
 			{
 				dtb->PC = pc;
-				avisar_desalojo_a_cpu(dtb->gdtPID, pc, socketFD);
+				avisar_desalojo_a_cpu(socketFD);
 				break;
 			}
 			recurso_signal(recurso, dtb->gdtPID, pc, socketFD);
@@ -517,37 +521,31 @@ void *serializar_pid_y_pc(u_int32_t pid, u_int32_t pc, int *tam_pid_y_pc)
 	return payload;
 }
 
-void seguir_ejecutando(u_int32_t pid, u_int32_t pc, int socket)
+void seguir_ejecutando(int socket)
 {
 	Paquete *paquete = malloc(sizeof(Paquete));
-	int tamanio_payload = 0;
-	paquete->Payload = serializar_pid_y_pc(pid, pc, &tamanio_payload);
-	paquete->header = cargar_header(tamanio_payload, SIGASIGA, SAFA);
+	paquete->header = cargar_header(0, SIGASIGA, SAFA);
 
 	EnviarPaquete(socket, paquete);
-	free(paquete->Payload);
 	free(paquete);
 }
 
 DTB *dtb_bloquear(u_int32_t pid, u_int32_t pc, int socket)
 {
-	avisar_desalojo_a_cpu(pid, pc, socket);
+	avisar_desalojo_a_cpu(socket);
 	DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 	dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, pc, DTB_BLOQUEADO, socket);
 
 	return dtb;
 }
 
-void avisar_desalojo_a_cpu(u_int32_t pid, u_int32_t pc, int socket)
+void avisar_desalojo_a_cpu(int socket)
 {
 	Paquete *paquete = malloc(sizeof(Paquete));
-	int tamanio_payload = 0;
-	paquete->Payload = serializar_pid_y_pc(pid, pc, &tamanio_payload);
-	paquete->header = cargar_header(tamanio_payload, ROJADIRECTA, SAFA);
+	paquete->header = cargar_header(0, ROJADIRECTA, SAFA);
 
 	EnviarPaquete(socket, paquete);
 	free(paquete);
-	free(paquete->Payload);
 }
 
 void recurso_wait(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket)
@@ -561,7 +559,7 @@ void recurso_wait(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket)
 	else
 	{
 		recurso_asignar_a_pid(recurso, pid);
-		seguir_ejecutando(pid, pc, socket);
+		seguir_ejecutando(socket);
 	}
 }
 
@@ -571,10 +569,10 @@ void recurso_signal(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket)
 	if (recurso->semaforo <= 0)
 	{
 		dtb_signal(recurso);
-		seguir_ejecutando(pid, pc, socket);
+		seguir_ejecutando(socket);
 	}
 	else
-		seguir_ejecutando(pid, pc, socket);
+		seguir_ejecutando(socket);
 }
 
 t_recurso *recurso_recibir(void *payload, int *pid, int *pc, Tipo senial)

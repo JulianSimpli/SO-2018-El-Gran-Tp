@@ -34,6 +34,7 @@
 #include <readline/history.h>
 #include <stdbool.h>
 
+// Estos define es lo que hace stdbool.h
 #define true 1
 #define false 0
 
