@@ -36,7 +36,18 @@ typedef struct {
 	t_list* segmentos; //tabla segmentos/lista de 'SegmentoArchivo' que posee un proceso
 } ProcesoArchivo;
 
+typedef struct {
+	int idProceso;
+	char* pathArchivo;
+} PidPath;
+
 //void ejemploCargarArchivoAMemoria();
 //void inicializarFramesMemoria();
+void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo);
+void printGloriosoSegmentacion(int pid);
+void imprimirMemoria();
+void printGloriosoSegmentacion(int pid);
+void liberarMemoriaDesdeHasta(int nroLineaInicio, int nroLineaFin);
+bool archivoAbierto(char* path);
 
 #endif /* FM9_H_ */
