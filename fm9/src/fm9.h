@@ -49,5 +49,6 @@ void imprimirMemoria();
 void printGloriosoSegmentacion(int pid);
 void liberarMemoriaDesdeHasta(int nroLineaInicio, int nroLineaFin);
 bool archivoAbierto(char* path);
+void liberarArchivoSEG(int pid, char* path);
 
 #endif /* FM9_H_ */
