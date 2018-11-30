@@ -56,6 +56,7 @@ void bloquear_dummy(t_list *lista, u_int32_t pid)
         return dtb_coincide_pid(dtb, pid, DUMMY);
     }
     list_remove_and_destroy_by_condition(lista, compara_dummy, dtb_liberar);
+    log_info(logger, "Dummy del GDT %d bloqueado", pid);
 }
 
 void desbloquear_dummy(DTB* dtb_nuevo)
@@ -185,6 +186,7 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
         {
             dtb_nuevo->gdtPID = pid;
             list_add(lista_listos, dtb_nuevo);
+            log_info(logger, "Dummy del GDT %d creado correctamente", dtb_nuevo->gdtPID);
             break;
         }
         case GDT:
@@ -192,6 +194,7 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
             dtb_nuevo->gdtPID = ++numero_pid;
             info_dtb_crear(dtb_nuevo->gdtPID);
             list_add(lista_nuevos, dtb_nuevo);
+            log_info(logger, "GDT %d creado correctamente", dtb_nuevo->gdtPID);
             break;
         }
         default:
@@ -240,12 +243,15 @@ DTB *dtb_actualizar(DTB *dtb, t_list *source, t_list *dest, u_int32_t pc, Estado
             case DTB_FINALIZADO:
             {
                 procesos_finalizados++;
-                printf("El proceso de PID %d se ha movido a la cola de Finalizados\n", dtb->gdtPID);
+                printf("GDT %d se ha movido a estado finalizado\n", dtb->gdtPID);
                 advertencia();
                 break;
             }
             default:
+            {
+                log_info(logger, "GDT %d se ha movido a estado %s", dtb->gdtPID, Estados[estado]);
                 break;
+            }
         }
     }
 
@@ -417,8 +423,7 @@ void dtb_imprimir_basico(void *_dtb)
         case GDT:
         {
             ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
-            printf( "PID: %i"
-                    "			Escriptorio: %s",
+            printf( "PID: %i\tEscriptorio: %s",
                     dtb->gdtPID, escriptorio->path);
             if (escriptorio->cantLineas)
                 printf(", cantidad de lineas: %d", escriptorio->cantLineas);
@@ -438,11 +443,11 @@ void dtb_imprimir_polenta(void *_dtb)
             "Program Counter: %i\n"
             "Ultima CPU: %i\n"
             "Tiempo de respuesta: %f\n"
-            "Proceso finalizado por usuario: %s\n"
+            "%s"
             "Archivos Abiertos: %i\n",
             Estados[info_dtb->estado], dtb->PC, info_dtb->socket_cpu,
             info_dtb->tiempo_respuesta,
-            (info_dtb->kill) ? "si" : "no",
+            (info_dtb->kill) ? "Proceso finalizado por usuario\n" : "",
             list_size(dtb->archivosAbiertos) - 1);
 }
 
@@ -465,19 +470,22 @@ void mostrar_proceso(void *_dtb)
         }
     }
 
+// Muestra archivos desde el indice 1 (todos menos el escriptorio)
     for(int i = 1; i < list_size(dtb->archivosAbiertos); i++)
     {
         ArchivoAbierto *archivo = list_get(dtb->archivosAbiertos, i);
         mostrar_archivo(archivo, i);
     }
-    if(list_size(info_dtb->recursos_asignados))
+
+// Muestra la cantidad de recursos que tiene retenidos y que recurso y cuantas instancias del mismo tiene
+    printf("Recursos retenidos por el proceso: %d\n", list_size(info_dtb->recursos_asignados));
+    if(!list_is_empty(info_dtb->recursos_asignados))
     {
-        printf("Recursos retenidos por el proceso: %d\n", list_size(info_dtb->recursos_asignados));
         for(int j = 0; j < list_size(info_dtb->recursos_asignados); j++)
         {
             t_recurso_asignado *recurso_asignado = list_get(info_dtb->recursos_asignados, j);
-            printf( "Recurso %d: %s\n",
-                    j, recurso_asignado->recurso->id);
+            printf( "Recurso %d: %s\n en %d instancias",
+                    j, recurso_asignado->recurso->id, recurso_asignado->instancias);
         }
     }
 }

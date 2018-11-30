@@ -270,24 +270,29 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 
 		case DUMMY_SUCCES:
 		{
-			// Mensaje contiene pid, posicion en memoria, largo path, cantidad lineas
+			// Mensaje contiene pid, cantidad lineas y Capaz direccion logica
 			u_int32_t pid;
 			memcpy(&pid, paquete->Payload, sizeof(u_int32_t));
-			log_info(logger, "GDT %d fue cargado en memoria correctamente", pid);
 			DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
-			DTB_info *info_dtb = info_asociada_a_pid(pid);
+			log_info(logger, "GDT %d fue cargado en memoria correctamente", dtb->gdtPID);
+
+			ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
+			memcpy(&escriptorio->cantLineas, paquete->Payload + sizeof(u_int32_t), sizeof(u_int32_t));
+			
+			bloquear_dummy(lista_ejecutando, dtb->gdtPID);
+
 			if(verificar_si_murio(dtb, lista_nuevos))
 				break;
-			pasaje_a_ready(pid);
+			pasaje_a_ready(dtb->gdtPID);
 			break;
 		}
 		case DUMMY_FAIL:
 		{
 			u_int32_t pid;
-			DTB_info *info_dtb;
 			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
-			bloquear_dummy(lista_ejecutando, pid);
-			log_error(logger, "Fallo la carga en memoria del GDT %d", pid);
+			DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
+			log_error(logger, "Fallo la carga en memoria del GDT %d", dtb->gdtPID);
+			bloquear_dummy(lista_ejecutando, dtb->gdtPID);
 			break;
 		}
 //		case DTB_SUCCES:
