@@ -246,7 +246,7 @@ void manejar_desconexion_cpu(int socket)
 			log_info(logger, "Sistema terminado correctamente tras la desconexion de todas las CPUs");
 			printf("Terminando SAFA.\n"
 					"Hasta la proxima!\n");
-			exit(1)
+			exit(1);
 		}	
 
 		// Esperar a que conecte otra por x tiempo?

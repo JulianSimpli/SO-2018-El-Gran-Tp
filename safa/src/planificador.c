@@ -602,10 +602,11 @@ t_recurso *recurso_bloqueando_pid(u_int32_t pid)
 
 void loggear_finalizacion(DTB* dtb, DTB_info* info_dtb)
 {
-	log_info(logger_fin, "El proceso con PID %d fue finalizado."
-"\n											 Tiempo de respuesta final: %f milisegundos"
-"\n											 Proceso Finalizado por Usuario: %s"
-"\n											 Ultimo Estado: %s",
+	log_info(logger_fin,
+    "\nEl proceso con PID %d fue finalizado.\n"
+    "Tiempo de respuesta final: %f milisegundos\n"
+    "Proceso Finalizado por Usuario: %s\n"
+    "Ultimo Estado: %s",
     dtb->gdtPID,
 	info_dtb->tiempo_respuesta,
 	(info_dtb->kill)? "Si" : "No",
@@ -613,24 +614,23 @@ void loggear_finalizacion(DTB* dtb, DTB_info* info_dtb)
 
 	FILE* logger_fin = fopen("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src/logs/DTB_finalizados.log", "a");
     
-    fprintf(logger_fin, "\n								Archivos abiertos: %d\n", list_size(dtb->archivosAbiertos));
+    fprintf(logger_fin, "Archivos abiertos: %d\n", list_size(dtb->archivosAbiertos));
     for(int i = 0; i < list_size(dtb->archivosAbiertos); i++)
     {
         ArchivoAbierto* archivo;
         archivo = list_get(dtb->archivosAbiertos, i);
-        if(i==0){
-         fprintf(logger_fin, "											 Path Escriptorio: %s\n", i, archivo->path);
-        }else{
-        fprintf(logger_fin, "											 Archivo n° %i: %s\n", i, archivo->path);
-        }
+        if(i==0)
+            fprintf(logger_fin, "Path Escriptorio: %s\n", archivo->path);
+        else
+            fprintf(logger_fin, "Archivo n° %i: %s\n", i, archivo->path);
     }
     
-    fprintf(logger_fin, "											 Recursos retenidos: %d\n", list_size(info_dtb->recursos_asignados));
+    fprintf(logger_fin,"Recursos retenidos: %d\n", list_size(info_dtb->recursos_asignados));
     for(int i = 0; i < list_size(info_dtb->recursos_asignados); i++)
     {
         t_recurso* recurso;
         recurso = list_get(info_dtb->recursos_asignados, i);
-        fprintf(logger_fin, "											 Recurso retenido n° %i: %s\n", i, recurso->id);
+        fprintf(logger_fin, "Recurso retenido n° %i: %s\n", i, recurso->id);
     }
 	fclose(logger_fin);
 }
