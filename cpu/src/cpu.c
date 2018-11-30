@@ -46,7 +46,7 @@ void *hilo_safa()
 
 int ejecutar(char *linea, DTB *dtb)
 {
-	int i = 0, existe = 0, flag=1;
+	int i = 0, existe = 0, flag = 1;
 	//Calcula la cantidad de primitivas que hay en el array
 	size_t cantidad_primitivas = sizeof(primitivas) / sizeof(primitivas[0]) - 1;
 
@@ -357,13 +357,15 @@ int ejecutar_abrir(char **parameters, DTB *dtb)
 	pedido_a_dam->Payload = malloc(pedido_a_dam->header.tamPayload);
 	memcpy(pedido_a_dam->Payload, &dtb->gdtPID, sizeof(u_int32_t));
 	memcpy(pedido_a_dam->Payload + sizeof(u_int32_t), path_serializado, len);
-
+	//mensaje a DAM
 	EnviarPaquete(socket_dam, pedido_a_dam);
+
 	Paquete *bloqueate_safa = malloc(sizeof(Paquete));
 	bloqueate_safa->header.tipoMensaje = DTB_BLOQUEAR;
 	bloqueate_safa->header.emisor = CPU;
-	bloqueate_safa->header.tamPayload = 0;
-	//TODO: me falta agregar el PID y el PC
+	int tam_pid_y_pc = 0;
+	bloqueate_safa->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
+	bloqueate_safa->header.tamPayload = tam_pid_y_pc;
 	EnviarPaquete(socket_safa, bloqueate_safa);
 
 	//Cuando se realiza esta operatoria, el CPU desaloja al DTB indicando a S-AFA
@@ -399,7 +401,9 @@ int ejecutar_asignar(char **parametros, DTB *dtb)
 		abortar_gdt->header.tamPayload = 0;
 		abortar_gdt->header.emisor = CPU;
 		abortar_gdt->header.tipoMensaje = ABORTAR;
-		//TODO: falta agregar el PID y el PC
+		int tam_pid_y_pc = 0;
+		abortar_gdt->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
+		abortar_gdt->header.tamPayload = tam_pid_y_pc;
 
 		EnviarPaquete(socket_safa, abortar_gdt);
 		//mandar mensaje a SAFA
@@ -485,22 +489,174 @@ int ejecutar_signal(char **parametros, DTB *dtb)
 	return paquete_recibido->header.tipoMensaje == SIGASIGA;
 }
 
-int ejecutar_flush(char *linea, DTB *dtb)
+int ejecutar_flush(char **parametros, DTB *dtb)
 {
 	printf("FLUSH\n");
+
+	char *path = parametros[1];
+
+	ArchivoAbierto *archivo_encontrado = _DTB_encontrar_archivo(dtb, path);
+
+	if (archivo_encontrado == NULL)
+	{
+		Paquete *abortar_gdt = malloc(sizeof(Paquete));
+		abortar_gdt->header.tamPayload = 0;
+		abortar_gdt->header.emisor = CPU;
+		abortar_gdt->header.tipoMensaje = ABORTARF;
+		int tam_pid_y_pc = 0;
+		abortar_gdt->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
+		abortar_gdt->header.tamPayload = tam_pid_y_pc;
+
+		EnviarPaquete(socket_safa, abortar_gdt);
+		//mandar mensaje a SAFA
+		//abortar GDT
+		//Error 30001: El archivo no se encuentra abierto
+	}
+	else
+	{
+		Paquete *flush_a_dam = malloc(sizeof(Paquete));
+		flush_a_dam->header.emisor = CPU;
+		flush_a_dam->header.tipoMensaje = FLUSH;
+		//mensaje al DAM
+
+		int len = 0;
+		void *path_serializado = string_serializar(path, &len);
+		flush_a_dam->header.tamPayload = len;
+		flush_a_dam->Payload = malloc(flush_a_dam->header.tamPayload);
+		memcpy(flush_a_dam->Payload, path_serializado, len);
+		EnviarPaquete(socket_dam, flush_a_dam);
+
+		//mensaje a SAFA
+		Paquete *bloqueate_safa = malloc(sizeof(Paquete));
+		bloqueate_safa->header.tipoMensaje = DTB_BLOQUEAR;
+		bloqueate_safa->header.emisor = CPU;
+		int tam_pid_y_pc = 0;
+		bloqueate_safa->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
+		bloqueate_safa->header.tamPayload = tam_pid_y_pc;
+		EnviarPaquete(socket_safa, bloqueate_safa);
+	}
+	return 1;
+	/*
+	Verificará que el archivo solicitado esté abierto por el G.DT.
+	En caso que no se encuentre, se abortará el G.DT.
+	Se enviará una solicitud a El Diego indicando que se requiere hacer
+ 	un Flush del archivo, enviando los parámetros necesarios para que 
+ 	pueda obtenerlo desde FM9 y guardarlo en MDJ.
+	TODO: Se comunicará al proceso S-AFA que el G.DT se encuentra a la espera
+ 	de una respuesta por parte de El Diego y S-AFA lo bloqueará.
+	*/
 }
 
-int ejecutar_close(char *linea, DTB *dtb)
+int ejecutar_close(char **parametros, DTB *dtb)
 {
 	printf("CLOSE\n");
+
+	char *path = parametros[1];
+
+	ArchivoAbierto *archivo_encontrado = _DTB_encontrar_archivo(dtb, path);
+
+	if (archivo_encontrado == NULL)
+	{
+		Paquete *abortar_gdt = malloc(sizeof(Paquete));
+		abortar_gdt->header.tamPayload = 0;
+		abortar_gdt->header.emisor = CPU;
+		abortar_gdt->header.tipoMensaje = ABORTARC;
+		int tam_pid_y_pc = 0;
+		abortar_gdt->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
+		abortar_gdt->header.tamPayload = tam_pid_y_pc;
+		EnviarPaquete(socket_safa, abortar_gdt);
+		//mandar mensaje a SAFA
+		//abortar GDT
+		//Error 40001: El archivo no se encuentra abierto
+	}
+	else
+	{
+		Paquete *liberar_memoria = malloc(sizeof(Paquete));
+		liberar_memoria->header.emisor = CPU;
+		liberar_memoria->header.tipoMensaje = CLOSE;
+		int len = 0;
+		void *path_serializado = string_serializar(path, &len);
+		liberar_memoria->header.tamPayload = len + sizeof(u_int32_t);
+		liberar_memoria->Payload = malloc(liberar_memoria->header.tamPayload);
+		memcpy(liberar_memoria->Payload, &dtb->gdtPID, sizeof(u_int32_t));
+		memcpy(liberar_memoria->Payload + sizeof(u_int32_t), path_serializado, len);
+		//mensaje a FM9
+		EnviarPaquete(socket_fm9, liberar_memoria);
+	}
+	return 1;
+	/*
+	Verificará que el archivo solicitado esté abierto por el G.DT. 
+	En caso que no se encuentre, se abortará el G.DT.
+	Se enviará a FM9 la solicitud para liberar la memoria del archivo deseado.
+ 	TODO: Se liberará de las estructuras administrativas del DTB la referencia
+	a dicho archivo.
+	*/
 }
 
-int ejecutar_crear(char *linea, DTB *dtb)
+int ejecutar_crear(char **parametros, DTB *dtb)
 {
 	printf("CREAR\n");
+
+	char *path = parametros[1];
+	int lineas = atoi(parametros[2]);
+
+	Paquete *crear_archivo = malloc(sizeof(Paquete));
+	crear_archivo->header.emisor = CPU;
+	crear_archivo->header.tipoMensaje = CREAR_ARCHIVO;
+	int len = 0;
+	void *path_serializado = string_serializar(path, &len);
+	crear_archivo->header.tamPayload = len + sizeof(u_int32_t);
+	crear_archivo->Payload = malloc(crear_archivo->header.tamPayload);
+	memcpy(crear_archivo->Payload, path_serializado, sizeof(len));
+	memcpy(crear_archivo->Payload + len, &lineas, sizeof(u_int32_t));
+	//mensaje a DAM
+	EnviarPaquete(socket_dam, crear_archivo);
+
+	//mensaje a SAFA
+	Paquete *bloqueate_safa = malloc(sizeof(Paquete));
+	bloqueate_safa->header.tipoMensaje = DTB_BLOQUEAR;
+	bloqueate_safa->header.emisor = CPU;
+	int tam_pid_y_pc = 0;
+	bloqueate_safa->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
+	bloqueate_safa->header.tamPayload = tam_pid_y_pc;
+	EnviarPaquete(socket_safa, bloqueate_safa);
+
+	/*
+	Se deberá enviar a El Diego el archivo a crear
+	con la cantidad de líneas necesarias. 
+	El CPU desalojará el programa G.DT y S-AFA lo bloqueará.
+	*/
+	return 1;
 }
 
-int ejecutar_borrar(char *linea, DTB *dtb)
+int ejecutar_borrar(char **parametros, DTB *dtb)
 {
 	printf("BORRAR\n");
+	char *path = parametros[1];
+
+	Paquete *borrar_archivo = malloc(sizeof(Paquete));
+	borrar_archivo->header.emisor = CPU;
+	borrar_archivo->header.tipoMensaje = BORRAR_ARCHIVO;
+	int len = 0;
+	void *path_serializado = string_serializar(path, &len);
+	borrar_archivo->header.tamPayload = len;
+	borrar_archivo->Payload = malloc(borrar_archivo->header.tamPayload);
+	memcpy(borrar_archivo->Payload, path_serializado, borrar_archivo->header.tamPayload);
+	//mensaje a DAM
+	EnviarPaquete(socket_dam, borrar_archivo);
+
+	//mensaje a SAFA
+	Paquete *bloqueate_safa = malloc(sizeof(Paquete));
+	bloqueate_safa->header.tipoMensaje = DTB_BLOQUEAR;
+	bloqueate_safa->header.emisor = CPU;
+	int tam_pid_y_pc = 0;
+	bloqueate_safa->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
+	bloqueate_safa->header.tamPayload = tam_pid_y_pc;
+	EnviarPaquete(socket_safa, bloqueate_safa);
+
+
+	return 1;
+	/*Se deberá enviar a El Diego el archivo a borrar 
+	y se desalojará el programa G.DT para bloquearlo.
+	*/
 }

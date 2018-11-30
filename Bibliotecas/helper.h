@@ -44,5 +44,6 @@ char* integer_to_string(char*string,int x);
 size_t getFileSize(const char* filename);
 void *string_serializar(char *string, int *desplazamiento);
 char *string_deserializar(void *data, int *desplazamiento);
+void *serializar_pid_y_pc(u_int32_t pid, u_int32_t pc, int *tam_pid_y_pc);
 
 #endif /* HELPER_*/

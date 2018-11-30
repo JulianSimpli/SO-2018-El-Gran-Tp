@@ -32,6 +32,8 @@ typedef enum {
 	ABRIR, FLUSH,									 //Emisor: DIEGO, Receptor: FM9
 	LINEA_PEDIDA,									//Emisor: FM9, Receptor: CPU
 	ABORTAR=20001, 										//Errores ASIGNAR
+	ABORTARF=30001,										//Errores FLUSH
+	ABORTARC=40001,										//Errores CLOSE
 	} Tipo;													
 
 typedef struct {

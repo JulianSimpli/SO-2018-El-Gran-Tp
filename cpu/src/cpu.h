@@ -53,10 +53,10 @@ int ejecutar_concentrar(char **,DTB*);
 int ejecutar_asignar(char **,DTB*);
 int ejecutar_wait(char **,DTB*);
 int ejecutar_signal(char **,DTB*);
-int ejecutar_flush(char *,DTB*);
-int ejecutar_close(char *,DTB*);
-int ejecutar_crear(char *,DTB*);
-int ejecutar_borrar(char *,DTB*);
+int ejecutar_flush(char **,DTB*);
+int ejecutar_close(char **,DTB*);
+int ejecutar_crear(char **,DTB*);
+int ejecutar_borrar(char **,DTB*);
 
 /* A structure which contains information on the commands this program
    can understand. */

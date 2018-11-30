@@ -59,9 +59,14 @@ t_recurso *recurso_recibir(void *payload, int *pid, int *pc, Tipo senial);
 void recurso_signal(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket);
 void recurso_wait(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket);
 DTB *dtb_bloquear(u_int32_t pid, u_int32_t pc, int socket);
+<<<<<<< c1581bff553efbaa734d803d9064c51291fc8165
 void avisar_desalojo_a_cpu(int socket);
 void seguir_ejecutando(int socket);
 void *serializar_pid_y_pc(u_int32_t pid, u_int32_t pc, int *tam_pid_y_pc);
+=======
+void avisar_desalojo_a_cpu(u_int32_t pid, u_int32_t pc, int socket);
+void seguir_ejecutando(u_int32_t pid, u_int32_t pc, int socket);
+>>>>>>> Termine las primitivas de cpu, cambie un par de funciones de safa al helper y agregue mensajes a sockets.h
 
 // Event watcher (inotify)
 void event_watcher();

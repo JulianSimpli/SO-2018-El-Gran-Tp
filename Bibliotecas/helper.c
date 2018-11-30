@@ -45,3 +45,15 @@ char *string_deserializar(void *data, int *desplazamiento)
 	return string;
 }
 
+void *serializar_pid_y_pc(u_int32_t pid, u_int32_t pc, int *tam_pid_y_pc)
+{
+	void *payload = malloc(sizeof(u_int32_t) * 2);
+
+	memcpy(payload + *tam_pid_y_pc, &pid, sizeof(u_int32_t));
+	*tam_pid_y_pc += sizeof(u_int32_t);
+	memcpy(payload + *tam_pid_y_pc, &pc, sizeof(u_int32_t));
+	*tam_pid_y_pc += sizeof(u_int32_t);
+
+	return payload;
+}
+
