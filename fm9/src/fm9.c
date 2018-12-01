@@ -51,10 +51,6 @@ void imprimirArchivoConfiguracion() {
  * flush: envio archivo modificado
  */
 
-void enviarOperacionOK(int Receptor) {
-
-}
-
 char* lineaDeUnaPosicion(int pid, int pc) {
 	int pcReal = pc-1; //porque la linea 1 del archivo esta guardada en la posicion 0
 	ProcesoArchivo* unProceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pid;}));
@@ -66,6 +62,26 @@ char* lineaDeUnaPosicion(int pid, int pc) {
 		return ((char*) list_get(unSegmento->lineas, pcReal));
 }
 
+int asignarSEG(int pid, char* path, int pos, char* dato) {
+	int posReal = pos - 1; //dado que la linea 1 de un archivo, se persiste la posicion 0
+	//posee el archivo?
+	if(list_count_satisfying(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return pp->idProceso == pid && strcpy(pp->pathArchivo, path);}))) {
+		//la posicion solicitada le pertenece?
+		ProcesoArchivo* proceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pid;}));
+		SegmentoArchivoSEG* segmento = list_find(proceso->segmentos, LAMBDA(bool _(SegmentoArchivoSEG* s) {return !strcpy(s->idArchivo, path);}));
+		if((segmento->inicio + posReal) < segmento->fin) {
+			list_replace(segmento->lineas, posReal, dato);
+			return 1;
+		} else {
+			printf("Segmentation fault (cored dumped)");
+			return 0;
+		}
+	} else {
+		printf("el proceso no posee tal archivo");
+	}
+	return 0;
+}
+
 void accion(void* socket) {
 	int socketFD = *(int*) socket;
 	Paquete paquete;
@@ -74,17 +90,19 @@ void accion(void* socket) {
 		if (paquete.header.emisor == ELDIEGO) {
 			switch (paquete.header.tipoMensaje) {
 				case ABRIR: {
+					//el payload debe ser: int(id)+char*(path)\0+char*(archivo)
+					int pid;
+					memcpy(&pid, paquete.Payload, sizeof(pid));
+					paquete.Payload += sizeof(pid);
+					char* fid = malloc(strlen(paquete.Payload)+1);
+					strcpy(fid, paquete.Payload);
+					paquete.Payload += strlen(fid)+1;
+					char* file = malloc(strlen(paquete.Payload)+1);
+					strcpy(file, paquete.Payload);
 					if(!strcmp(MODO, "SEG")) {
-						//el payload debe ser: int(id)+char*(path)\0+char*(archivo)
-						int pid;
-						memcpy(&pid, paquete.Payload, sizeof(pid));
-						paquete.Payload += sizeof(pid);
-						char* fid = malloc(strlen(paquete.Payload)+1);
-						strcpy(fid, paquete.Payload);
-						paquete.Payload += strlen(fid)+1;
-						char* file = malloc(strlen(paquete.Payload)+1);
-						strcpy(file, paquete.Payload);
-						cargarArchivoAMemoriaSEG(pid, fid, file);
+						if (cargarArchivoAMemoriaSEG(pid, fid, file)) {
+							EnviarDatosTipo(socketFD, ELDIEGO, NULL, 0, SUCCESS);
+						} else EnviarDatosTipo(socketFD, ELDIEGO, NULL, 0, ERROR);
 					} else if(!strcmp(MODO, "TPI")) {
 
 					} else if(!strcmp(MODO, "SPA")) {
@@ -93,7 +111,20 @@ void accion(void* socket) {
 				}
 				break;
 				case FLUSH: {
+					//el payload viene con el path
+					char* path = malloc(strlen(paquete.Payload)+ 1);
+					strcpy(path, paquete.Payload);
+					if(!strcmp(MODO, "SEG")) {
+						if(flushSEG(path)) {
+							EnviarDatosTipo(socketFD, ELDIEGO, NULL, 0, SUCCESS);
+						} else {
+							EnviarDatosTipo(socketFD, ELDIEGO, NULL, 0, ERROR);
+						}
+					} else if(!strcmp(MODO, "TPI")) {
 
+					} else if(!strcmp(MODO, "SPA")) {
+
+					}
 				}
 				break;
 			}
@@ -110,21 +141,55 @@ void accion(void* socket) {
 					linea = lineaDeUnaPosicion(pid, pc);
 					linea = realloc(linea, strlen(linea)+1);
 					datos = linea;
-					EnviarDatosTipo(socketFD, CPU, datos, sizeof(linea), LINEA_PEDIDA);
+					if(!strcmp(MODO, "SEG")) {
+						EnviarDatosTipo(socketFD, CPU, datos, sizeof(linea), LINEA_PEDIDA);
+					} else if(!strcmp(MODO, "TPI")) {
+
+					} else if(!strcmp(MODO, "SPA")) {
+
+					}
 				}
 				break;
 				case ASIGNAR: {
+					//el payload debe ser int+char\0+int+char\0
+					int pid, pos;
+					memcpy(&pid, paquete.Payload, sizeof(pid));
+					paquete.Payload += sizeof(pid);
+					char* path = malloc(strlen(paquete.Payload)+1);
+					strcpy(path, paquete.Payload);
+					paquete.Payload += strlen(path)+1;
+					memcpy(&pos, paquete.Payload, sizeof(pos));
+					paquete.Payload += sizeof(pos);
+					char* dato = malloc(strlen(paquete.Payload)+1);
+					strcpy(dato, paquete.Payload);
+					if(!strcmp(MODO, "SEG")) {
+						if(asignarSEG(pid, path, pos, dato)) {
+							EnviarDatosTipo(socketFD, CPU, NULL, 0, SUCCESS);
+						} else {
+							EnviarDatosTipo(socketFD, CPU, NULL, 0, ERROR);
+						}
+					} else if(!strcmp(MODO, "TPI")) {
 
+					} else if(!strcmp(MODO, "SPA")) {
+
+					}
 				}
 				break;
 				case CLOSE: {
+					//el payload debe ser int+char\0
 					int pid;
 					memcpy(&pid, paquete.Payload, sizeof(pid));
 					paquete.Payload += sizeof(pid);
-					char* path = malloc(paquete.header.tamPayload - sizeof(pid));
+					char* path = malloc(paquete.header.tamPayload-sizeof(pid));
 					strcpy(path, paquete.Payload);
-					liberarArchivoSEG(pid, path);
-					EnviarDatosTipo(socketFD, CPU, NULL, 0, SUCCESS);
+					if(!strcmp(MODO, "SEG")) {
+						liberarArchivoSEG(pid, path);
+						EnviarDatosTipo(socketFD, CPU, NULL, 0, SUCCESS);
+					} else if(!strcmp(MODO, "TPI")) {
+
+					} else if(!strcmp(MODO, "SPA")) {
+
+					}
 				}
 				break;
 			}
@@ -193,15 +258,21 @@ void EnviarHandshakeELDIEGO(int socketFD) {
 	free(paquete);
 }
 
-/*
-typedef struct DTB{
-	u_int32_t gdtPID; // me importa
-	u_int32_t PC; // me importa
-	u_int32_t flagInicializacion;
-	char *pathEscriptorio;
-	t_list *archivosAbiertos; // me importa
-} DTB;
-*/
+char* flushSEG(char* path) {
+	//archivo abierto?
+	if(list_count_satisfying(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path);}))) {
+		PidPath* pp = list_find(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path);}));
+		ProcesoArchivo* proceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pp->idProceso;}));
+		SegmentoArchivoSEG* segmento = list_find(proceso->segmentos, LAMBDA(bool _(SegmentoArchivoSEG* s) {return !strcmp(s->idArchivo, path);}));
+		for(int x = 0; x < list_size(segmento->lineas); x++) {
+			//debo concatenar las lineas en un string
+		}
+	} else {
+		printf("el archivo no se encuentra abierto");
+		return NULL;
+	}
+}
+
 int cantidadDeProcesosConUnArchivo(char* path) {
 	return list_count_satisfying(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path);}));
 }
@@ -308,9 +379,10 @@ int contarElementosArray(char** array) {
 	return contador;
 }
 
-void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo) {
+int cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo) {
 	if(list_find(archivosPorProceso, LAMBDA(bool _(PidPath* p) {return p->idProceso == idProceso && !strcmp(p->pathArchivo, path);}))) {
 		printf("ya tiene ese archivo tal proceso\n");
+		return 0;
 	//me fijo si el archivo ya lo posee un proceso y se lo asigno al nuevo. Lo COMPARTEN (VALIDAR EN CLOSE)
 	} else if(list_find(archivosPorProceso, LAMBDA(bool _(PidPath* p) {return !strcmp(p->pathArchivo, path);}))) {
 		//me traigo el proceso que contiene el archivo pedido
@@ -344,6 +416,7 @@ void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo) {
 		}
 		agregarArhivoYProcesoATabla(idProceso, path);
 		log_info(logger, "El archivo ya cargado fue agregado a los archivos abiertos del proceso: %d", idProceso);
+		return 1;
 	} else {
 		char** arrayLineas = string_split(archivo, "\n"); //deja un elemento con NULL al final
 		int cantidadDeLineas = contarElementosArray(arrayLineas);
@@ -368,6 +441,8 @@ void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo) {
 					strcpy(memoria[inicioDeLinea], arrayLineas[x]);
 					inicioDeLinea++;
 				}
+				printf("archivo cargado correctamente");
+				return 1;
 			} else {
 				ProcesoArchivo* procesoArchivo = malloc(sizeof(procesoArchivo));
 				procesoArchivo->idProceso = idProceso;
@@ -390,9 +465,11 @@ void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo) {
 			}
 			log_info(logger, "Archivo cargado con éxito...");
 			agregarArhivoYProcesoATabla(idProceso, path);
+			return 1;
 		} else {
 			printf("No hay espacio suficiente para cargar tal segmento...\n");
 			log_info(logger, "No hay espacio suficiente para cargar tal segmento...");
+			return 0;
 		}
 	}
 }

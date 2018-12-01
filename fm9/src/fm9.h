@@ -43,7 +43,7 @@ typedef struct {
 
 //void ejemploCargarArchivoAMemoria();
 //void inicializarFramesMemoria();
-void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo);
+int cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo);
 void printGloriosoSegmentacion(int pid);
 void imprimirMemoria();
 void printGloriosoSegmentacion(int pid);
