@@ -23,14 +23,14 @@
 
 	void crear_dummy()
 	{
-		log_info(logger, "Empiezo a crear dummys");
+		log_info(logger, "Empiezo a buscar dummy para crear");
 	    for(int i = 0; i < list_size(lista_nuevos); i++)
 	    {
 		DTB *dtb_cargar = list_get(lista_nuevos, i);
-			log_info(logger, " crear dummys");
+			log_info(logger, "Voy a intentar crear el dummy del GDT %d", dtb_cargar->gdtPID);
 		if(!dummy_creado(dtb_cargar))
 		{   
-			log_info(logger, " a crear dummys");
+			log_info(logger, "Voy a crear el dummy del GDT %d", dtb_cargar->gdtPID);
 		    desbloquear_dummy(dtb_cargar);
 		    break;
 		}
@@ -243,7 +243,7 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
 	    dtb->PC = pc;
 
     DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
-    if(info_dtb != NULL)
+    if(dtb->flagInicializacion)
     {
         switch(estado)
         {
@@ -261,7 +261,7 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
                 break;
             }
         }
-    info_dtb_actualizar(estado, socket, info_dtb);
+    	info_dtb_actualizar(estado, socket, info_dtb);
     }
 
 	    return dtb;

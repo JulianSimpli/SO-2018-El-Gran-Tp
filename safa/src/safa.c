@@ -693,7 +693,6 @@ void enviar_handshake_diego(int socketFD)
 	paquete->header = cargar_header(0, ESHANDSHAKE, SAFA);
 	log_info(logger, "Handshake a diego: %d", socketFD );
 	EnviarPaquete(socketFD, paquete);
-	free(paquete->Payload);
 	free(paquete);
 }
 
@@ -707,7 +706,7 @@ void event_watcher()
 
 		int fd_config = inotify_init();
 		if(fd_config < 0)
-			log_error(logger, "Fallo creacion de File Descriptor para config.cfg (inotify_init)");
+			log_error(logger, "Fallo creacion de File Descriptor para SAFA.config (inotify_init)");
 		
 		int watch_descriptor = inotify_add_watch(fd_config, "/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src", IN_MODIFY);
 		if(watch_descriptor < 0)
@@ -742,7 +741,7 @@ void event_watcher()
 		sleep(1);
 
 		obtener_valores_archivo_configuracion();
-		printf("Los nuevos valores del archivo config.cfg son: \n");
+		printf("Los nuevos valores del archivo SAFA.cfg son: \n");
 		imprimir_archivo_configuracion();
 		list_iterate(lista_cpu, enviar_valores_config);
 		
@@ -781,11 +780,12 @@ int main(void)
 	obtener_valores_archivo_configuracion();
 	imprimir_archivo_configuracion();
 	inicializar_variables();
-	// Prueba de que carga el valor correcto.
+	// Prueba de que carga el valor correcto. Se borra despues
 	int a = 0;
 	sem_getvalue(&sem_multiprogramacion, &a);
-	printf("sem_multiprogramacion es %d", a);
+	printf("sem_multiprogramacion es %d\n", a);
 	
+	// Esto creo lo usa @nicoPosty para 1 metrica
 	clock_t t = clock();
 	clock_t t2 = clock();
 	char* estado_1 = "EJECUTANDO";
