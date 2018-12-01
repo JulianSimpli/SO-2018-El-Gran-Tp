@@ -3,22 +3,27 @@
 #include <readline/history.h>
 #include <commons/string.h>
 
+void *interpretar_consola(void *args);
+
 int main(int argc, char **argv)
 {
 	inicializar(argv);
 
-	pthread_t p_thread;
-	pthread_create(&p_thread, NULL, atender_dam, NULL);
-	/*
-	Mensaje *misLadrillos = malloc(sizeof(Mensaje));
-	misLadrillos->paquete.Payload = malloc(strlen("/torneo/equipos/Racing.txt") + 1);
-	strcpy(misLadrillos->paquete.Payload, "/torneo/equipos/Racing.txt");
-	validar_archivo(misLadrillos, file_path);
-	*/
-	//t_config *metadata = crear_archivo("/home/daniel/FileSystemMock/Archivos/alumnos/alumno.bin");
-	//marcarbitarray(metadata);
-	log_info(logger, "Marco el bitarray");
+	//TODO: Tiene que cargar desde el bitarray toda la estructura del filesystem existente
 
+	pthread_t dam;
+	pthread_create(&dam, NULL, atender_dam, NULL);
+
+	pthread_t consola;
+	pthread_create(&consola, NULL, interpretar_consola, NULL);
+
+	pthread_join(dam, NULL);
+	pthread_join(consola, NULL);
+	return 0;
+}
+
+void *interpretar_consola(void *args) 
+{
 	char *linea;
 	while (1)
 	{
@@ -28,43 +33,35 @@ int main(int argc, char **argv)
 		interpretar(linea);
 		free(linea);
 	}
-	return 0;
 }
 
 void *atender_dam()
 {
-	int conexion = escuchar_conexiones();
-
-	//Hace el handshake y empieza a recibir mensajes
-	Mensaje *mensaje = recibir_mensaje(conexion);
-
-	if (mensaje->paquete.header.tipoMensaje != ESHANDSHAKE)
-	{
-		_exit_with_error(conexion, "No se logro el handshake", NULL);
-	}
-
-	handshake(conexion, MDJ);
-	log_info(logger, "Se concreto el handshake con DAM, empiezo a recibir mensajes");
+	//Hace el handshake y empieza a recibir paquetes
+	handshake_dam();
+	log_info(logger, "Se concreto el handshake con DAM, empiezo a recibir paquetes");
 
 	while (1)
 	{
-		Mensaje *mensaje = recibir_mensaje(conexion);
+		Paquete paquete;
+		RecibirPaqueteCliente(socket_dam, &paquete);
 		pthread_t p_thread;
-		pthread_create(&p_thread, NULL, atender_peticion, mensaje);
+		pthread_create(&p_thread, NULL, atender_peticion, &paquete);
 	}
 }
 
-void *atender_peticion(void *mensaje)
+void *atender_peticion(void *args)
 {
+	Paquete *paquete = (Paquete*) args;
 	//esto deberia usar semaforos porque ahora admite peticiones concurrentes y pueden querer escribir dos procesos el mismo arhivo
-	Mensaje *respuesta = interpretar_mensaje(mensaje);
-	log_info(logger, "Respuesta %d", respuesta->paquete.header.tipoMensaje);
-	enviar_mensaje(*respuesta);
+	Paquete *respuesta = interpretar_paquete(paquete);
+	log_debug(logger, "Respuesta %d", respuesta->header.tipoMensaje);
+	EnviarPaquete(socket_dam, respuesta);
 }
 
 void leer_config(char *path)
 {
-	config = config_create(strcat(path, "/MDJ.config"));
+	config = config_create("/home/utnso/tp-2018-2c-Nene-Malloc/mdj/src/MDJ.config");
 	char *mnt_config = config_get_string_value(config, "PUNTO_MONTAJE");
 	mnt_path = malloc(strlen(mnt_config) + 1);
 	strcpy(mnt_path, mnt_config);
@@ -76,17 +73,6 @@ void leer_config(char *path)
 void inicializar_log(char *program)
 {
 	logger = log_create("MDJ.log", program, true, LOG_LEVEL_DEBUG);
-}
-
-void crear_bitarray()
-{
-	t_config *bitarray_metadata = config_create("/home/daniel/FileSystemMock/Metadata/Metadata.bin");
-	int cantidad_bloques = config_get_int_value(bitarray_metadata, "CANTIDAD_BLOQUES");
-	config_destroy(bitarray_metadata);
-	bitarray = bitarray_create_with_mode("/home/daniel/FileSystemMock/Metadata/bitarray.bin", cantidad_bloques / 8, LSB_FIRST);
-	bitarray_set_bit(bitarray, 1);
-	size_t n = bitarray_get_max_bit(bitarray);
-	log_info(logger, "El bitarray tiene %d bits", n);
 }
 
 void inicializar(char **argv)
@@ -196,47 +182,49 @@ int escuchar_conexiones()
 	return conexion_aceptada;
 }
 
-Mensaje *interpretar_mensaje(Mensaje *mensaje)
+Paquete *interpretar_paquete(Paquete *paquete)
 {
-	Mensaje *respuesta = (Mensaje *)malloc(sizeof(Mensaje));
-	respuesta->paquete.header.emisor = MDJ;
+	Paquete *respuesta = malloc(sizeof(Paquete));
+	respuesta->header.emisor = MDJ;
 	//TODO: Poner destinatario DAM
 
-	int accion = mensaje->paquete.header.tipoMensaje;
+	int accion = paquete->header.tipoMensaje;
 
 	switch (accion)
 	{
 	case VALIDAR_ARCHIVO:
 		log_info(logger, "Validar archivo");
 		//TODO: Preguntar si mdj es el unico que llama a este proceso
-		respuesta->paquete.Payload = (void*)(__intptr_t)(mensaje, file_path);
+		respuesta->Payload = (void*)(__intptr_t)(paquete, file_path);
 		//TODO: Cambiar firma de validar_archivo
 		break;
 	case CREAR_ARCHIVO:
 		log_info(logger, "Crear archivo");
-		crear_archivo(mensaje);
+		crear_archivo(paquete);
 		break;
 	case OBTENER_DATOS:
 		log_info(logger, "Obtener datos");
-		obtener_datos(mensaje);
+		obtener_datos(paquete);
 		break;
 	case GUARDAR_DATOS:
 		log_info(logger, "Guardar datos");
-		guardar_datos(mensaje);
+		guardar_datos(paquete);
 		break;
 	case BORRAR_ARCHIVO:
 		log_info(logger, "Borrar archivos");
 
-		char **parametros = string_split(mensaje->paquete.Payload, " ");
+		char **parametros = string_split(paquete->Payload, " ");
 		char *ruta = parametros[1];
 
 		//Primero verifica que el archivo todavia no exista
-		int existe = validar_archivo(mensaje, file_path);
+		int existe = validar_archivo(paquete, file_path);
 
 		if (existe)
 		{
-			respuesta->paquete.header.tamPayload = sizeof(uint32_t);
-			respuesta->paquete.Payload = (void *)10001;
+			respuesta->header.tamPayload = sizeof(uint32_t);
+			respuesta->Payload = malloc(sizeof(u_int32_t));
+			u_int32_t error = 10001;
+			memcpy(respuesta->Payload, &error, sizeof(u_int32_t));
 			break;
 		}
 		t_config *metadata = config_create(ruta);
@@ -252,7 +240,7 @@ Mensaje *interpretar_mensaje(Mensaje *mensaje)
 		//TODO: Modifica el bitarray
 		//TODO: Borra los .bin
 		//TODO: Borra los metadata
-		//TODO: Crear mensaje OK
+		//TODO: Crear paquete OK
 		break;
 	default:
 		log_warning(logger, "La accion %d no tiene respuesta posible", accion);
@@ -295,11 +283,11 @@ t_list *get_space(int size)
 	return conseguir_lista_de_bloques(blocks);
 }
 
-int validar_archivo(Mensaje *mensaje, char *current_path)
+int validar_archivo(Paquete *paquete, char *current_path)
 {
 	DIR *dir;
 	struct dirent *ent;
-	char *search_file = string_duplicate(mensaje->paquete.Payload);
+	char *search_file = string_duplicate(paquete->Payload);
 	char *route = strtok(search_file, "/");
 	log_info(logger, "Busco: %s", route);
 
@@ -313,11 +301,11 @@ int validar_archivo(Mensaje *mensaje, char *current_path)
 			if (ent->d_type == DT_DIR)
 			{
 				int position = strlen(route) + 1;
-				route = string_substring_from(mensaje->paquete.Payload, position);
+				route = string_substring_from(paquete->Payload, position);
 				strcat(current_path, "/");
 				strcat(current_path, ent->d_name);
-				mensaje->paquete.Payload = route;
-				if (validar_archivo(mensaje, current_path))
+				paquete->Payload = route;
+				if (validar_archivo(paquete, current_path))
 				{
 					return 1;
 				}
@@ -329,7 +317,7 @@ int validar_archivo(Mensaje *mensaje, char *current_path)
 				return 1;
 			}
 		}
-		//Agarra el path del mensaje
+		//Agarra el path del paquete
 		//Recorrer el directorio Archivos
 		//Verificar con strcmp si ya existe
 	}
@@ -352,19 +340,19 @@ void marcarbitarray(t_config *metadata)
 	bitarray_set_bit(bitarray, atoi(bloques[3]));
 }
 
-void crear_archivo(Mensaje *mensaje)
+void crear_archivo(Paquete *paquete)
 {
-	Mensaje *respuesta = malloc(sizeof(Mensaje));
-	char **parametros = string_split(mensaje->paquete.Payload, " ");
+	Paquete respuesta;
+	char **parametros = string_split(paquete->Payload, " ");
 	char *ruta = parametros[1];
 	int bytes_a_crear = atoi(parametros[2]);
 	//Primero verifica que el archivo todavia no exista
-	int existe = validar_archivo(mensaje, file_path);
+	int existe = validar_archivo(paquete, file_path);
 
 	if (existe)
 	{
-		respuesta->paquete.header.tamPayload = sizeof(uint32_t);
-		respuesta->paquete.Payload = (void *)50001;
+		respuesta.header.tamPayload = sizeof(uint32_t);
+		respuesta.Payload = (void *)50001;
 	}
 
 	//TODO: Calcular size segun tamanio de linea que paso fm9
@@ -374,8 +362,8 @@ void crear_archivo(Mensaje *mensaje)
 
 	if (list_size(bloques_libres) == 0)
 	{
-		respuesta->paquete.header.tipoMensaje = ERROR;
-		respuesta->paquete.Payload = (void *)50002;
+		respuesta.header.tipoMensaje = ERROR;
+		respuesta.Payload = (void *)50002;
 	}
 	int retorno = crear_bloques(bloques_libres, &bytes_a_crear);
 
@@ -395,30 +383,32 @@ void crear_archivo(Mensaje *mensaje)
 	//Responde a dam un ok
 	if (resultado == 0)
 	{
-		respuesta->paquete.header.tamPayload = 0;
-		respuesta->paquete.header.tipoMensaje = SUCCESS;
+		respuesta.header.tamPayload = 0;
+		respuesta.header.tipoMensaje = SUCCESS;
 	}
+
+	EnviarPaquete(socket_dam, &respuesta);
 }
 
-void obtener_datos(Mensaje *mensaje)
+void obtener_datos(Paquete *paquete)
 {
-	Mensaje *respuesta = malloc(sizeof(Mensaje));
-	char **parametros = string_split(mensaje->paquete.Payload, " ");
+	Paquete respuesta;
+	char **parametros = string_split(paquete->Payload, " ");
 	char *ruta = parametros[1];
 	int bytes_offset = atoi(parametros[2]);
 	int bytes_a_devolver = atoi(parametros[3]);
 	//Primero verifica que el archivo todavia no exista
-	int existe = validar_archivo(mensaje, file_path);
+	int existe = validar_archivo(paquete, file_path);
 
 	if (existe)
 	{
-		respuesta->paquete.header.tamPayload = sizeof(uint32_t);
-		respuesta->paquete.Payload = (void *)10001;
+		respuesta.header.tamPayload = sizeof(uint32_t);
+		respuesta.Payload = (void *)10001;
 	}
 	//TODO: Validar archivo y reponder error si no existe
 	//TODO: Lee metadata del archivo pasado por el path
 	//TODO: Calcular en que bloque cae segun el offset y cuantos bloques va leer segun el size
-	//TODO: Crear mensaje de payload del tamanio leido y cargar el contenido de los bloques con un for
+	//TODO: Crear paquete de payload del tamanio leido y cargar el contenido de los bloques con un for
 	t_config *metadata = config_create(ruta);
 	char **bloques_ocupados = config_get_array_value(metadata, "BLOQUES");
 
@@ -446,27 +436,27 @@ void obtener_datos(Mensaje *mensaje)
 
 	if (buffer != NULL)
 	{
-		respuesta->paquete.header.tamPayload = strlen(buffer + 1);
-		respuesta->paquete.Payload = buffer;
-		respuesta->paquete.header.tipoMensaje = SUCCESS;
+		respuesta.header.tamPayload = strlen(buffer + 1);
+		respuesta.Payload = buffer;
+		respuesta.header.tipoMensaje = SUCCESS;
 	}
 }
 
-void guardar_datos(Mensaje *mensaje)
+void guardar_datos(Paquete *paquete)
 {
-	Mensaje *respuesta = malloc(sizeof(Mensaje));
-	char **parametros = string_split(mensaje->paquete.Payload, " ");
+	Paquete respuesta;
+	char **parametros = string_split(paquete->Payload, " ");
 	char *ruta = parametros[1];
 	int bytes_offset = atoi(parametros[2]);
 	int buffer_size = atoi(parametros[3]);
 	char *datos_a_guardar = parametros[4];
 	//Primero verifica que el archivo todavia no exista
-	int existe = validar_archivo(mensaje, file_path);
+	int existe = validar_archivo(paquete, file_path);
 
 	if (existe)
 	{
-		respuesta->paquete.header.tamPayload = sizeof(uint32_t);
-		respuesta->paquete.Payload = (void *)10001;
+		respuesta.header.tamPayload = sizeof(uint32_t);
+		respuesta.Payload = (void *)10001;
 	}
 	t_config *metadata = config_create(ruta);
 	char **bloques_ocupados = config_get_array_value(metadata, "BLOQUES");
@@ -542,11 +532,12 @@ void guardar_datos(Mensaje *mensaje)
 	}
 	//datos_a_guardar
 
-	respuesta->paquete.header.tipoMensaje = SUCCESS;
+	respuesta.header.tipoMensaje = SUCCESS;
 
 	//TODO: Validar archivo y reponder error si no existe
 	//TODO: Lee metadata del archivo pasado por el path
 	//TODO: Calcular en que bloque cae segun el offset y cuantos bloques va escribir segun el size
 	//TODO: Ir consumiendo el buffer segun tamanio de bloque
-	//TODO: Crear mensaje OK
+	//TODO: Crear paquete OK
+	EnviarPaquete(socket_dam, &respuesta);
 }

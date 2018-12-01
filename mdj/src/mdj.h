@@ -37,27 +37,29 @@ int interpretar(char *linea);
 int escuchar_conexiones();
 Mensaje *recibir_mensaje(int conexion);
 void *atender_dam();
-void *atender_peticion(void *);
-Mensaje *interpretar_mensaje(Mensaje *);
+void *atender_peticion(void *args);
+Paquete *interpretar_paquete(Paquete *paquete);
 void handshake(int, int);
 void enviar_mensaje(Mensaje);
 void marcarBitarray(t_config *metadata);
 int create_block(int index, int cantidad_bytes);
 t_list *get_space(int size);
 char *convertir_bloques_a_string(Archivo_metadata *fm);
+void crear_bitarray();
 char *mnt_path;
 char *file_path;
 char *blocks_path;
 char *metadata_path;
 int cantidad_bloques;
 int tamanio_bloques;
+int socket_dam;
 
 void _exit_with_error(int socket, char *error_msg, void *buffer);
 void exit_gracefully(int return_nr);
-int validar_archivo(Mensaje *mensaje, char *);
-void crear_archivo(Mensaje *mensaje);
-void obtener_datos(Mensaje *mensaje);
-void guardar_datos(Mensaje *mensaje);
+int validar_archivo(Paquete *paquete, char *);
+void crear_archivo(Paquete *paquete);
+void obtener_datos(Paquete *paquete);
+void guardar_datos(Paquete *paquete);
 
 //Estas son las funciones que ejecuta cada comando respectivamente
 //Todas tienen que tener la misma firma o se podria ampliar recibiendo void*
@@ -74,15 +76,20 @@ void enviar_mensaje(Mensaje mensaje)
     log_error(logger, "No pudo enviar el mensaje");
 }
 
-void handshake(int socket, int emisor)
+/**
+ * Se encarga de crear el socket y mandar el primer mensaje
+ * Devuelve el socket 
+ */
+void handshake_dam()
 {
-  Mensaje *mensaje = malloc(sizeof(Mensaje));
-  mensaje->socket = socket;
-  mensaje->paquete.header.tipoMensaje = ESHANDSHAKE;
-  mensaje->paquete.header.tamPayload = 0;
-  mensaje->paquete.header.emisor = emisor;
-  enviar_mensaje(*mensaje);
+	socket_dam = escuchar_conexiones();
+	Paquete paquete;
+  RecibirPaqueteCliente(socket_dam, &paquete);
+	if (paquete.header.tipoMensaje != ESHANDSHAKE)
+		_exit_with_error(socket_dam, "No se logro el handshake", NULL);
+	EnviarHandshake(socket_dam, MDJ);
 }
+
 
 void com_list(char *linea)
 {
@@ -229,6 +236,19 @@ char *convertir_bloques_a_string(Archivo_metadata *fm)
   }
 
   return strcat(bloques, "]");
+}
+
+void crear_bitarray()
+{
+  	//t_config *bitarray_metadata = config_create(strcat(mnt_path, "Metadata/Metadata.bin"));
+  	t_config *bitarray_metadata = config_create("/home/utnso/fifa/Metadata/Metadata.bin");
+	int tamanio_bloques = config_get_int_value(bitarray_metadata, "TAMANIO_BLOQUES");
+	int cantidad_bloques = config_get_int_value(bitarray_metadata, "CANTIDAD_BLOQUES");
+	config_destroy(bitarray_metadata);
+	//bitarray = bitarray_create_with_mode(strcat(mnt_path, "Metadata/Bitmap.bin"), cantidad_bloques / 8, MSB_FIRST);
+	bitarray = bitarray_create_with_mode("/home/utnso/fifa/Metadata/Bitmap.bin", cantidad_bloques / 8, MSB_FIRST);
+	size_t n = bitarray_get_max_bit(bitarray);
+	log_info(logger, "El bitarray tiene %d bits", n);
 }
 
 void _exit_with_error(int socket, char *error_msg, void *buffer)

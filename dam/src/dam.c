@@ -25,16 +25,20 @@ int main(int argc, char **argv)
 	//Crea por unica vez los sockets con los que tiene conexiones permanentes
 	//Primero hago el handshake con fm9 para poder tener el tamanio de linea
 	handshake_safa();
-	//socket_mdj = handshake_mdj();
-	//socket_fm9 = handshake_fm9();
+	log_info(logger, "Se concreto handshake SAFA");
+	handshake_mdj();
+	log_info(logger, "Se concreto handshake MDJ");
+	//handshake_fm9();
 
 	//inicializamos el semaforo en maximas_conexiones - 3 que son fijas
 
 	pthread_t safa = levantar_hilo(interpretar_mensajes_de_safa);
-	//levantar_hilo(interpretar_mensajes_de_mdj);
-	//levantar_hilo(interpretar_mensajes_de_fm9);
+	pthread_t mdj = levantar_hilo(interpretar_mensajes_de_mdj);
+	//pthread_t fm9 = levantar_hilo(interpretar_mensajes_de_fm9);
 	aceptar_cpus();
 	pthread_join(safa, NULL);
+	pthread_join(mdj, NULL);
+	//pthread_join(fm9, NULL);
 	return 0;
 }
 
@@ -53,26 +57,38 @@ void aceptar_cpus()
 			_exit_with_error(socket_ligado, "Fallo el accept", NULL);
 
 		log_info(logger, "Acepto cpu en socket: %d", socket);
+		handshake_cpu(socket);
+		log_info(logger, "Concrete handshake con cpu %d", socket);
 
 		pthread_t p_thread;
-		pthread_create(&p_thread, NULL, interpretar_mensajes_de_cpu, &socket);
+		pthread_create(&p_thread, NULL, interpretar_mensajes_de_cpu, (void*)(intptr_t)socket);
 	}
+}
+
+/**
+ * Este handshake es el unico distinto porque recibe el nuevo socket
+ */
+void handshake_cpu(int socket)
+{
+	Paquete paquete;
+	RecibirPaqueteCliente(socket, &paquete);
+	if (paquete.header.tipoMensaje != ESHANDSHAKE)
+		_exit_with_error(socket, "No se logro el handshake", NULL);
+	EnviarHandshake(socket, ELDIEGO);
 }
 
 /**
  * Se encarga de crear el socket y mandar el primer mensaje
  * Devuelve el socket 
  */
-int handshake_mdj()
+void handshake_mdj()
 {
-	int mdj = crear_socket_mdj();
-	EnviarHandshake(mdj, ELDIEGO);
+	socket_mdj = crear_socket_mdj();
+	EnviarHandshake(socket_mdj, ELDIEGO);
 	Paquete paquete;
 	RecibirPaqueteCliente(socket_mdj, &paquete);
 	if (paquete.header.tipoMensaje != ESHANDSHAKE)
-		_exit_with_error(mdj, "No se logro el handshake", NULL);
-	log_info(logger, "Se concreto el handshake con MDJ, empiezo a recibir mensajes");
-	return mdj;
+		_exit_with_error(socket_mdj, "No se logro el handshake", NULL);
 }
 
 /**
@@ -80,26 +96,25 @@ int handshake_mdj()
  * Recibir de fm9 el tamanio de linea que tiene el sistema
  * Devuelve el socket 
  */
-int handshake_fm9()
+void handshake_fm9()
 {
-	int fm9 = crear_socket_fm9();
-	EnviarHandshake(fm9, ELDIEGO);
+	socket_fm9 = crear_socket_fm9();
+	EnviarHandshake(socket_fm9, ELDIEGO);
 	Paquete paquete;
 	RecibirPaqueteCliente(socket_mdj, &paquete);
 	if (paquete.header.tipoMensaje != ESHANDSHAKE)
-		_exit_with_error(fm9, "No se logro el primer paso de datos", NULL);
+		_exit_with_error(socket_fm9, "No se logro el primer paso de datos", NULL);
 	//Guardo en la global tamanio de linea que tiene fm9
 	memcpy(&tamanio_linea, paquete.Payload, sizeof(u_int32_t));
 	log_info(logger, "Se concreto el handshake con FM9, me pasa el tamanio de linea %d", tamanio_linea);
 	free(paquete.Payload);
-	return fm9;
 }
 
 /**
  * Se encarga de crear el socket, mandar el primer mensaje
  * Devuelve el socket 
  */
-int handshake_safa()
+void handshake_safa()
 {
 	socket_safa = crear_socket_safa();
 	EnviarHandshake(socket_safa, ELDIEGO);
@@ -109,8 +124,6 @@ int handshake_safa()
 
 	if (paquete->header.tipoMensaje != ESHANDSHAKE)
 		_exit_with_error(socket_safa, "No se logro el primer paso de datos", NULL);
-	log_info(logger, "Handshake con safa.");
-	return socket_safa;
 }
 
 // void * mensajes_mdj()
@@ -155,6 +168,10 @@ void *interpretar_mensajes_de_mdj(void *args)
 	switch (accion)
 	{
 	case VALIDAR_ARCHIVO:
+		RecibirPaqueteCliente(socket_mdj, &paquete);
+		log_debug(logger, "El archivo tiene el tamanio");
+		break;
+	case ARCHIVO:
 		break;
 	default:
 		log_warning(logger, "No se pudo interpretar el mensaje enviado por MDJ");
@@ -170,7 +187,7 @@ void *interpretar_mensajes_de_mdj(void *args)
 int recibir_todo(Paquete *paquete, int socketFD, uint32_t cantARecibir)
 {
 	int ret = recibir_partes(paquete, socketFD, sizeof(Header));
-	if (ret <= 0) 
+	if (ret <= 0)
 		return ret;
 	paquete->Payload = malloc(paquete->header.tamPayload);
 	ret = recibir_partes(paquete->Payload, socketFD, paquete->header.tamPayload);
@@ -186,7 +203,8 @@ int recibir_partes(void *paquete, int socketFD, u_int32_t cant_a_recibir)
 
 	while (totalRecibido != cant_a_recibir)
 	{
-		if (cant_a_recibir < transfer_size) {
+		if (cant_a_recibir < transfer_size)
+		{
 			len = cant_a_recibir;
 		}
 
@@ -214,25 +232,29 @@ int recibir_partes(void *paquete, int socketFD, u_int32_t cant_a_recibir)
 void *interpretar_mensajes_de_safa(void *args)
 {
 	Paquete paquete;
-	RecibirPaqueteCliente(socket_safa, &paquete);	
-	switch(paquete.header.tipoMensaje){
-		case DTB_FAIL:
+	RecibirPaqueteCliente(socket_safa, &paquete);
+	switch (paquete.header.tipoMensaje)
+	{
+	case DTB_FAIL:
 		break;
-
-	}	
+	default:
+		log_error(logger, "No pude interpretar el mensaje");
+		break;
+	}
 }
 
 void *interpretar_mensajes_de_fm9(void *args)
 {
-	int socket = args;
+	int socket = (intptr_t) args;
 	//For para recibir mensaje de cpu, interpretarlo y enviar la respuesta
 	log_info(logger, "Soy el hilo %d, recibi una conexion en el socket: %d", process_get_thread_id(), socket);
 	log_info(logger, "Interpreto mensaje");
 	Paquete paquete;
 	RecibirPaqueteCliente(socket, &paquete);
-	switch(paquete.header.tipoMensaje){
-		case :
-			log_info(logger, "Envio paquete a mdj");
+	switch (paquete.header.tipoMensaje)
+	{
+	case CARGADO:
+		log_info(logger, "FM9 alerto que ya cargo el archivo");
 		break;
 	}
 }
@@ -287,17 +309,30 @@ pthread_t levantar_hilo(void *funcion)
  * El proximo mensaje que se reciba de CPU va aparecer en el select del hilo principal
  * Y luego generara uno nuevo para que lo atiende otra vez 
  */
-void *interpretar_mensajes_de_cpu(void *args)
+void *interpretar_mensajes_de_cpu(void *arg)
 {
-	int socket = args;
+	int socket = (intptr_t) arg; 
 	//For para recibir mensaje de cpu, interpretarlo y enviar la respuesta
 	log_info(logger, "Soy el hilo %d, recibi una conexion en el socket: %d", process_get_thread_id(), socket);
 	log_info(logger, "Interpreto mensaje");
 	Paquete paquete;
 	RecibirPaqueteCliente(socket, &paquete);
-	switch(paquete.header.tipoMensaje){
-		case ESDTBDUMMY:
-			log_info(logger, "Pido que me devuelva el escriptorio");
+	switch (paquete.header.tipoMensaje)
+	{
+	case ESDTBDUMMY:
+		log_info(logger, "Pido que me devuelva el escriptorio");
+		Paquete pedido_escriptorio; 
+		pedido_escriptorio.header.emisor = ELDIEGO;
+		pedido_escriptorio.header.tamPayload = 0;
+		pedido_escriptorio.header.tipoMensaje = OBTENER_DATOS;
+		EnviarPaquete(socket_mdj, &pedido_escriptorio);
+		log_debug(logger, "Le envie el pedido a mdj");
+		RecibirPaqueteCliente(socket_mdj, &paquete);
+		log_debug(logger, "Le envie el pedido a mdj");
+		log_debug(logger, "Recibi %s", (char*) paquete.Payload);
+		break;
+	default:
+		log_error(logger, "No entiendo el mensaje");
 		break;
 	}
 }

@@ -42,9 +42,10 @@ int  connect_to_server(char*, char*);
 void _exit_with_error(int , char* , void * );
 void exit_gracefully(int return_nr);
 
-int handshake_fm9();
-int handshake_mdj();
-int handshake_safa();
+void handshake_fm9();
+void handshake_mdj();
+void handshake_safa();
+void handshake_cpu(int socket);
 int crear_socket_safa();
 
 int connect_to_server(char * ip, char * port) {
