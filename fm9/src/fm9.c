@@ -67,8 +67,8 @@ int asignarSEG(int pid, char* path, int pos, char* dato) {
 	//posee el archivo?
 	if(list_count_satisfying(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return pp->idProceso == pid && strcpy(pp->pathArchivo, path);}))) {
 		//la posicion solicitada le pertenece?
-		ProcesoArchivo* proceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pid;}));
-		SegmentoArchivoSEG* segmento = list_find(proceso->segmentos, LAMBDA(bool _(SegmentoArchivoSEG* s) {return !strcpy(s->idArchivo, path);}));
+		ProcesoArchivo* proceso = (ProcesoArchivo*) list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pid;}));
+		SegmentoArchivoSEG* segmento = (SegmentoArchivoSEG*) list_find(proceso->segmentos, LAMBDA(bool _(SegmentoArchivoSEG* s) {return !strcpy(s->idArchivo, path);}));
 		if((segmento->inicio + posReal) < segmento->fin) {
 			list_replace(segmento->lineas, posReal, dato);
 			return 1;
@@ -115,9 +115,28 @@ void accion(void* socket) {
 					char* path = malloc(strlen(paquete.Payload)+ 1);
 					strcpy(path, paquete.Payload);
 					if(!strcmp(MODO, "SEG")) {
-						if(flushSEG(path)) {
-							EnviarDatosTipo(socketFD, ELDIEGO, NULL, 0, SUCCESS);
+						//archivo abierto?
+						if(list_count_satisfying(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path);}))) {
+							PidPath* pp = list_find(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path);}));
+							ProcesoArchivo* proceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pp->idProceso;}));
+							SegmentoArchivoSEG* segmento = list_find(proceso->segmentos, LAMBDA(bool _(SegmentoArchivoSEG* s) {return !strcmp(s->idArchivo, path);}));
+							char* texto = malloc(MAX_LINEA*sizeof(segmento->lineas));
+							int flag = 1;
+							for(int x = segmento->inicio; x < segmento->inicio + list_size(segmento->lineas); x++) {
+								//transformo la lista de lineas en un char* concatenado por \n
+								if (flag == 1) {
+									strcpy(texto, list_get(segmento->lineas, x));
+									flag = 0;
+								} else {
+									strcat(texto, "\n");
+									strcat(texto, list_get(segmento->lineas, x));
+								}
+							}
+							strcat(texto, "\n\n");
+							texto = realloc(texto, strlen(texto)+1);
+							EnviarDatosTipo(socketFD, ELDIEGO, texto, strlen(texto)+1, SUCCESS);
 						} else {
+							printf("el archivo no se encuentra abierto");
 							EnviarDatosTipo(socketFD, ELDIEGO, NULL, 0, ERROR);
 						}
 					} else if(!strcmp(MODO, "TPI")) {
@@ -256,21 +275,6 @@ void EnviarHandshakeELDIEGO(int socketFD) {
 	memcpy(paquete->Payload, &MAX_LINEA, sizeof(u_int32_t));
 	bool valor_retorno=EnviarPaquete(socketFD, paquete);
 	free(paquete);
-}
-
-char* flushSEG(char* path) {
-	//archivo abierto?
-	if(list_count_satisfying(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path);}))) {
-		PidPath* pp = list_find(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path);}));
-		ProcesoArchivo* proceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pp->idProceso;}));
-		SegmentoArchivoSEG* segmento = list_find(proceso->segmentos, LAMBDA(bool _(SegmentoArchivoSEG* s) {return !strcmp(s->idArchivo, path);}));
-		for(int x = 0; x < list_size(segmento->lineas); x++) {
-			//debo concatenar las lineas en un string
-		}
-	} else {
-		printf("el archivo no se encuentra abierto");
-		return NULL;
-	}
 }
 
 int cantidadDeProcesosConUnArchivo(char* path) {
@@ -442,7 +446,6 @@ int cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo) {
 					inicioDeLinea++;
 				}
 				printf("archivo cargado correctamente");
-				return 1;
 			} else {
 				ProcesoArchivo* procesoArchivo = malloc(sizeof(procesoArchivo));
 				procesoArchivo->idProceso = idProceso;
@@ -489,15 +492,15 @@ void modoDeEjecucion(char* modo) {
 
 	} else if(!strcmp(modo, "SPA")) {
 		framesTotales = TAMANIO/TAM_PAGINA;
-		lineasPorFrame = lineasTotales/framesTotales; //lineasPorFrame= lineasPorPagina
-
+		lineasPorFrame = lineasTotales/framesTotales; //lineasPorFrame = lineasPorPagina
+		inicializarFramesMemoria();
 	}
 }
 
 void inicializarFramesMemoria() {
 	framesMemoria = list_create();
 	int inicio = 0;
-	for(int x = 0; x < (lineasTotales/lineasPorFrame); x++) {
+	for(int x = 0; x < framesTotales; x++) {
 		Frame* frame = malloc(sizeof(Frame));
 		frame->disponible = 1;
 		frame->inicio = inicio;
@@ -509,24 +512,18 @@ void inicializarFramesMemoria() {
 }
 
 int framesSuficientes(int lineasAGuardar) {
-	int flag = 0;
 	bool disponible(void* frame) {
 		return ((Frame*)frame)->disponible == 1;
 	}
 	int lineasDisponibles = lineasPorFrame * list_count_satisfying(framesMemoria, disponible);
-	if(lineasDisponibles >= lineasAGuardar) {
-		flag = 1;
-	}
-	return flag;
+	return lineasDisponibles >= lineasAGuardar;
 }
 
 int primerFrameLibre() {
-	int posicion = 0;
+	int posicion = -1;
 	for(int x = 0; x < list_size(framesMemoria); x++) {
 		Frame* frame = (Frame*) list_get(framesMemoria, x);
 		if(frame->disponible) {
-			posicion = -1;
-		} else {
 			posicion = x;
 			break;
 		}
@@ -534,48 +531,78 @@ int primerFrameLibre() {
 	return posicion;
 }
 
-void persistirArchivoEnPaginas() {
-	//supongo:
-	//un archivo de 15 lineas
-	//5 frames totales de memoria principal de 5 lineas cada uno
-	//por ende tengo 1 segmento de 15 lineas que debo guardar en 3 frames
-	int idProc = 1;
-	char* idArch = "path";
-	char* archivo = "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15";
-	int cantidadLineasArchivo = 15;
-	int framesTotales = 5;
-	int lineasPorframe = 5;
-	//-----------------------
-	char** arrayLineas = string_n_split(archivo, cantidadLineasArchivo, "\n");
-	if(framesSuficientes(cantidadLineasArchivo)) {
-		ProcesoArchivo* procesoArchivo = malloc(sizeof(ProcesoArchivo));
-		procesoArchivo->idProceso = idProc;
-		t_list* segmentos = list_create();
-		SegmentoArchivoSPA* SegmentoArchivoSPA = malloc(sizeof(SegmentoArchivoSPA));
-		SegmentoArchivoSPA->idArchivo = malloc(strlen(idArch)+1);
-		strcpy(SegmentoArchivoSPA->idArchivo, idArch);
-		t_list* paginas = list_create();
-		int cantidadPaginasAUsar = ceil(cantidadLineasArchivo/lineasPorframe); //si rompe, ver agregar -lm math.h o 'm' a libraries (eclipse)
-		SegmentoArchivoSPA->cantidadPaginas = cantidadPaginasAUsar;
-		int lineas = 0;
-		for(int x = 0; x < cantidadPaginasAUsar; x++) {
-			Frame* frame = (Frame*) list_get(framesMemoria, primerFrameLibre());
-			int inicioFrame = frame->inicio;
-			while(lineas < cantidadLineasArchivo || inicioFrame <= frame->fin) {
-				list_add(frame->lineas, arrayLineas[lineas]);
-				strcpy(memoria[inicioFrame], arrayLineas[lineas]);
-				inicioFrame++;
-				lineas++;
-			}
-			frame->disponible = 0;
-			list_add(paginas, frame);
-		}
-		SegmentoArchivoSPA->paginas = paginas;
-		list_add(segmentos, SegmentoArchivoSPA);
-		list_add(procesos, procesoArchivo);
-	} else {
-		//no hay espacio ):
+void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo) {
+	char** arrayLineas = string_split(archivo, "\n"); //deja un elemento con NULL al final
+	int cantidadDeLineas = contarElementosArray(arrayLineas);
+	//ya tiene el archivo el proceso?
+	if(list_find(archivosPorProceso, LAMBDA(bool _(PidPath* p) {return p->idProceso == pid && !strcmp(p->pathArchivo, path);}))) {
+		printf("ya tiene ese archivo tal proceso\n");
 	}
+	//el archivo ya existe?
+	else if(list_count_satisfying(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path);}))) {
+		//obtengo el segmento y sus paginas que contienen al archivo (Se COMPARTE, ver CLOSE)
+		PidPath* pidPathConElPath = list_find(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path);}));
+		ProcesoArchivo* procesoConElPath = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pidPathConElPath->idProceso;}));
+		SegmentoArchivoSPA* segmentoConElPath = list_find(procesoConElPath->segmentos, LAMBDA(bool _(SegmentoArchivoSPA* s) {return !strcmp(s->idArchivo, path);}));
+		//el proceso es nuevo o ya existe?
+		if(list_count_satisfying(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return pp->idProceso == pid;}))) {
+			//sólo le agrego el archivo
+			PidPath* pp = list_find(archivosPorProceso, LAMBDA(bool _(PidPath* p) {return p->idProceso == pid;}));
+			ProcesoArchivo* proceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pp->idProceso;}));
+			SegmentoArchivoSPA* segmento = malloc(sizeof(SegmentoArchivoSPA));
+			segmento->idArchivo = malloc(strlen(path)+1);
+			strcpy(segmento->idArchivo, path);
+			segmento->paginas = list_duplicate(segmentoConElPath->paginas);
+			segmento->cantidadPaginas = segmentoConElPath->cantidadPaginas;
+			list_add(proceso->segmentos, segmento);
+		} else {
+			//cargo nueva estructura de proceso y le agrego el archivo
+			ProcesoArchivo* procesoNuevo = malloc(sizeof(ProcesoArchivo));
+			procesoNuevo->idProceso = pid;
+			procesoNuevo->segmentos = list_create();
+			SegmentoArchivoSPA* segmento = malloc(sizeof(SegmentoArchivoSPA));
+			segmento->idArchivo = malloc(strlen(path)+1);
+			strcpy(segmento->idArchivo, path);
+			segmento->paginas = list_create();
+			segmento->paginas = list_duplicate(segmentoConElPath->paginas);
+			segmento->cantidadPaginas = segmentoConElPath->cantidadPaginas;
+			list_add(procesoNuevo->segmentos, segmento);
+			list_add(procesos, procesoNuevo);
+		}
+		agregarArhivoYProcesoATabla(pid, path);
+	} else {
+		//hay frames libres para cargar el archivo? (espacio en memoria)
+		if(framesSuficientes(cantidadDeLineas)) {
+			ProcesoArchivo* procesoNuevo = malloc(sizeof(ProcesoArchivo));
+			procesoNuevo->idProceso = pid;
+			procesoNuevo->segmentos = list_create();
+			SegmentoArchivoSPA* segmento = malloc(sizeof(SegmentoArchivoSPA));
+			segmento->idArchivo = malloc(strlen(path)+1);
+			strcpy(segmento->idArchivo, path);
+			segmento->paginas = list_create();
+			int cantidadPaginasAUsar = ceil(cantidadDeLineas/lineasPorFrame); //si rompe, ver agregar -lm math.h o 'm' a libraries (eclipse)
+			segmento->cantidadPaginas = cantidadPaginasAUsar;
+			int lineas = 0;
+			for(int x = 0; x < cantidadPaginasAUsar; x++) {
+				Frame* frame = (Frame*) list_get(framesMemoria, primerFrameLibre());
+				int inicioFrame = frame->inicio;
+				while(lineas < cantidadDeLineas || inicioFrame <= frame->fin) {
+					list_add(frame->lineas, arrayLineas[lineas]);
+					strcpy(memoria[inicioFrame], arrayLineas[lineas]);
+					inicioFrame++;
+					lineas++;
+				}
+				frame->disponible = 0;
+				list_add(segmento->paginas, frame);
+			}
+			list_add(procesoNuevo->segmentos, segmento);
+			list_add(procesos, procesoNuevo);
+			agregarArhivoYProcesoATabla(pid, path);
+		} else {
+			printf("No hay frames libres para cargar el archivo indicado");
+		}
+	}
+
 }
 
 int main() {

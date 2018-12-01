@@ -20,7 +20,7 @@ typedef struct {
 
 typedef struct {
 	char* idArchivo; //path del archivo
-	t_list* paginas; //tabla de paginas cuyo contenido de cada elemento es un nro de frame
+	t_list* paginas; //tabla de paginas cuyo contenido de cada elemento es un frame
 	int cantidadPaginas; //cantidad de paginas que representa ese segmento
 } SegmentoArchivoSPA;
 
@@ -41,14 +41,15 @@ typedef struct {
 	char* pathArchivo;
 } PidPath;
 
-//void ejemploCargarArchivoAMemoria();
-//void inicializarFramesMemoria();
+void inicializarFramesMemoria();
 int cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo);
+void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo);
 void printGloriosoSegmentacion(int pid);
 void imprimirMemoria();
 void printGloriosoSegmentacion(int pid);
 void liberarMemoriaDesdeHasta(int nroLineaInicio, int nroLineaFin);
 bool archivoAbierto(char* path);
 void liberarArchivoSEG(int pid, char* path);
+char* lineaDeUnaPosicion(int pid, int pc);
 
 #endif /* FM9_H_ */
