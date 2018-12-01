@@ -57,3 +57,12 @@ void *serializar_pid_y_pc(u_int32_t pid, u_int32_t pc, int *tam_pid_y_pc)
 	return payload;
 }
 
+void deserializar_pid_y_pc(void *payload, u_int32_t *pid, u_int32_t *pc, int *desplazamiento)
+{
+	int tamanio = sizeof(u_int32_t);
+	memcpy(pid, payload + *desplazamiento, tamanio);
+	*desplazamiento += tamanio;
+	memcpy(pc, payload + *desplazamiento, tamanio);
+	*desplazamiento += tamanio;
+
+}

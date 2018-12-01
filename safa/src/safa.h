@@ -43,7 +43,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD);
 void *config_cpu_serializar(int *tamanio_payload);
 void enviar_handshake_cpu(int socketFD);
 void enviar_handshake_diego(int socketFD);
-bool verificar_si_murio(DTB *dtb, t_list *lista_origen);
+bool verificar_si_murio(DTB *dtb, t_list *lista_origen, u_int32_t pc);
 
 // Metricas
 void metricas_actualizar(DTB *dtb, u_int32_t pc);
@@ -58,9 +58,8 @@ bool es_nuevo(void * _info_dtb);
 t_recurso *recurso_recibir(void *payload, int *pid, int *pc, Tipo senial);
 void recurso_signal(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket);
 void recurso_wait(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket);
-DTB *dtb_bloquear(u_int32_t pid, u_int32_t pc, int socket);
-void avisar_desalojo_a_cpu(u_int32_t pid, u_int32_t pc, int socket);
-void seguir_ejecutando(u_int32_t pid, u_int32_t pc, int socket);
+void avisar_desalojo_a_cpu(int socket);
+void seguir_ejecutando(int socket);
 
 // Event watcher (inotify)
 void event_watcher();

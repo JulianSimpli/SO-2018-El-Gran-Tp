@@ -288,8 +288,9 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			
 			bloquear_dummy(lista_ejecutando, dtb->gdtPID);
 
-			if(verificar_si_murio(dtb, lista_nuevos))
+			if(verificar_si_murio(dtb, lista_nuevos, dtb->PC))
 				break;
+			
 			pasaje_a_ready(dtb->gdtPID);
 			break;
 		}
@@ -302,28 +303,26 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			bloquear_dummy(lista_ejecutando, dtb->gdtPID);
 			break;
 		}
-//		case DTB_SUCCES:
-//		{	METRICAS CLOCK
-//			break;
-//			//Me manda pid, archivos abiertos, datos de memoria virtual para buscar el archivo.
-//		}
+
 		case DTB_SUCCES: //DTB_DESBLOQUEAR?
 		{
 			u_int32_t pid;
 			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
 
-			// DTB_info *info_dtb;
-			// t_list *lista_actual;
-			// DTB *dtb = dtb_buscar_en_todos_lados(pid, &info_dtb, &lista_actual);
-			// Hay que usar dtb_actualizar. Lo puede buscar en bloqueados directamente.
-			// En algun caso no estaria en bloqueados?
-
 			DTB *dtb = dtb_encuentra(lista_bloqueados, pid, GDT);
 			DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
-			if(verificar_si_murio(dtb, lista_bloqueados))
-				break;
-			dtb_actualizar(dtb, lista_bloqueados, lista_listos, dtb->PC, DTB_BLOQUEADO, info_dtb->socket_cpu);
+			log_info(logger, "GDT %d realizo la operacion bloqueante correctamente");
+
 			info_dtb->tiempo_respuesta = medir_tiempo(0, (info_dtb->tiempo_ini), (info_dtb->tiempo_fin));
+
+			if(verificar_si_murio(dtb, lista_bloqueados, dtb->PC))
+				break;
+			
+			if(info_dtb->quantum_faltante)
+				dtb_actualizar(dtb, lista_bloqueados, lista_prioridad, dtb->PC, DTB_LISTO, info_dtb->socket_cpu);
+			else
+				dtb_actualizar(dtb, lista_bloqueados, lista_listos, dtb->PC, DTB_LISTO, info_dtb->socket_cpu);
+			
 			break;
 		}
 		case DTB_FAIL:
@@ -345,6 +344,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			DTB_info *info_dtb;
 			t_list *lista_actual;
 			DTB *dtb = dtb_buscar_en_todos_lados(pid, &info_dtb, &lista_actual);
+			log_info(logger, "GDT %d removido de memoria", dtb->gdtPID);
 			dtb_actualizar(dtb, lista_actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
 		}
 	}
@@ -368,14 +368,19 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 
         case DTB_BLOQUEAR:
 		{
-			// Habria que ver si algoritmo es rr o vrr para recibir quantum que queda
 			liberar_cpu(socketFD);
-			DTB *dtb = DTB_deserializar(paquete->Payload);
+			u_int32_t pid = 0;
+			u_int32_t pc = 0;
+			int desplazamiento = 0;
+			deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
+
+			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
+			memcpy(&dtb->entrada_salidas, paquete->Payload + desplazamiento, sizeof(u_int32_t));
 			actualizar_sentencias_al_diego(dtb);
 			sentencias_globales_del_diego++;
-			metricas_actualizar(dtb, 0);
+			metricas_actualizar(dtb, pc);
 			DTB_info* info_dtb = info_asociada_a_pid(dtb->gdtPID);			
-			dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, dtb->PC, DTB_BLOQUEADO, socketFD);
+			dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, pc, DTB_BLOQUEADO, socketFD);
 			medir_tiempo(1,(info_dtb->tiempo_ini), (info_dtb->tiempo_fin));
 			break;
     	}
@@ -383,33 +388,60 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
         case PROCESS_TIMEOUT:
 		{
 			liberar_cpu(socketFD);
-            DTB* dtb = DTB_deserializar(paquete->Payload);
-			metricas_actualizar(dtb, 0);
-			dtb_actualizar(dtb, lista_ejecutando, lista_listos, dtb->PC, DTB_LISTO, socketFD);
+			u_int32_t pid = 0;
+			u_int32_t pc = 0;
+			int desplazamiento = 0;
+			deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
+			
+			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
+			metricas_actualizar(dtb, pc);
+			dtb_actualizar(dtb, lista_ejecutando, lista_listos, pc, DTB_LISTO, socketFD);
 			break;
         }
+
+		case QUANTUM_FALTANTE:
+		{
+			liberar_cpu(socketFD);
+			u_int32_t pid = 0;
+			u_int32_t pc = 0;
+			int desplazamiento = 0;
+			deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
+			
+			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
+			metricas_actualizar(dtb, pc);
+
+			DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
+			info_dtb->quantum_faltante = QUANTUM - (pc - dtb->PC);
+			dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, pc, DTB_BLOQUEADO, socketFD);
+			break;
+		}
         case DTB_EJECUTO:
 		{
 			liberar_cpu(socketFD);
-            DTB* dtb = DTB_deserializar(paquete->Payload);
-			metricas_actualizar(dtb, 0);
-			DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
-			if(verificar_si_murio(dtb, lista_ejecutando))
+			u_int32_t pid = 0;
+			u_int32_t pc = 0;
+			int desplazamiento = 0;
+			deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
+			
+			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
+			metricas_actualizar(dtb, pc);
+			if(verificar_si_murio(dtb, lista_ejecutando, pc))
 				break;
 
-			dtb_actualizar(dtb, lista_ejecutando, lista_listos, dtb->PC, DTB_LISTO, socketFD);
+			dtb_actualizar(dtb, lista_ejecutando, lista_listos, pc, DTB_LISTO, socketFD);
 			break;
         }
 		case DTB_FINALIZAR: //Aca es cuando el dtb finaliza "normalmente". Lo detecta CPU
 		{
 			liberar_cpu(socketFD);
-            DTB* dtb = DTB_deserializar(paquete->Payload);
-			metricas_actualizar(dtb, 0);
-			DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
-			dtb_actualizar(dtb, lista_ejecutando, lista_finalizados, dtb->PC, DTB_FINALIZADO, socketFD);
-	        loggear_finalizacion(dtb, info_dtb);
-			limpiar_recursos(info_dtb);
-			enviar_finalizar_dam(dtb->gdtPID);
+			u_int32_t pid = 0;
+			u_int32_t pc = 0;
+			int desplazamiento = 0;
+			deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
+
+			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
+			metricas_actualizar(dtb, pc);
+			dtb_finalizar(dtb, lista_ejecutando, pc);
 			break;
 		}
 		case WAIT:
@@ -419,9 +451,8 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 			t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc, WAIT);
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 			metricas_actualizar(dtb, pc);
-			if(verificar_si_murio(dtb, lista_ejecutando))
+			if(verificar_si_murio(dtb, lista_ejecutando, pc))
 			{
-				dtb->PC = pc;
 				avisar_desalojo_a_cpu(socketFD);
 				break;
 			}
@@ -435,13 +466,57 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 			t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc, SIGNAL);
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 			metricas_actualizar(dtb, pc);
-			if(verificar_si_murio(dtb, lista_ejecutando))
+			if(verificar_si_murio(dtb, lista_ejecutando, pc))
 			{
-				dtb->PC = pc;
 				avisar_desalojo_a_cpu(socketFD);
 				break;
 			}
 			recurso_signal(recurso, dtb->gdtPID, pc, socketFD);
+			break;
+		}
+		case ABORTAR:
+		{
+			u_int32_t pid = 0;
+			u_int32_t pc = 0;
+			int desplazamiento = 0;
+			deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
+
+			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
+			log_error(logger, "Asignar Error 20001: El archivo no se encuentra abierto por GDT %d", dtb->gdtPID);
+			printf("Asignar Error 20001: El archivo no se encuentra abierto por GDT %d", dtb->gdtPID);
+			metricas_actualizar(dtb, pc);
+			
+			dtb_finalizar(dtb, lista_ejecutando, pc);
+			break;
+		}
+		case ABORTARF:
+		{
+			u_int32_t pid = 0;
+			u_int32_t pc = 0;
+			int desplazamiento = 0;
+			deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
+
+			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
+			log_error(logger, "Flush Error 30001: El archivo no se encuentra abierto por GDT %d", dtb->gdtPID);
+			printf("Flush Error 30001: El archivo no se encuentra abierto por GDT %d", dtb->gdtPID);
+			metricas_actualizar(dtb, pc);
+			
+			dtb_finalizar(dtb, lista_ejecutando, pc);
+			break;
+		}
+		case ABORTARC:
+		{
+			u_int32_t pid = 0;
+			u_int32_t pc = 0;
+			int desplazamiento = 0;
+			deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
+
+			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
+			log_error(logger, "Cerrar Error 40001: El archivo no se encuentra abierto por GDT %d", dtb->gdtPID);
+			printf("Cerrar Error 40001: El archivo no se encuentra abierto por GDT %d", dtb->gdtPID);
+			metricas_actualizar(dtb, pc);
+			
+			dtb_finalizar(dtb, lista_ejecutando, pc);
 			break;
 		}
 	}
@@ -449,15 +524,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 
 void metricas_actualizar(DTB *dtb, u_int32_t pc)
 {
-	u_int32_t sentencias_ejecutadas;
-
-	if(pc)
-		sentencias_ejecutadas = pc - dtb->PC;
-	else
-	{
-		DTB *dtb_viejo = dtb_encuentra(lista_ejecutando, dtb->gdtPID, GDT);
-		sentencias_ejecutadas = dtb->PC - dtb_viejo->PC;
-	}
+	u_int32_t sentencias_ejecutadas = pc - dtb->PC;
 
 	actualizar_sentencias_en_nuevos(sentencias_ejecutadas);
 	actualizar_sentencias_en_no_finalizados(sentencias_ejecutadas);
@@ -506,37 +573,23 @@ bool es_nuevo(void * _info_dtb)
 	return info_dtb->estado == DTB_NUEVO;
 }
 
-bool verificar_si_murio(DTB *dtb, t_list *lista_origen)
+bool verificar_si_murio(DTB *dtb, t_list *lista_origen, u_int32_t pc)
 {
 	DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
 	
 	if(info_dtb->kill)
-	{
-		loggear_finalizacion(dtb, info_dtb);
-		limpiar_recursos(info_dtb);
-		dtb_actualizar(dtb, lista_origen, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
-		enviar_finalizar_dam(dtb->gdtPID);
-	}
+		dtb_finalizar(dtb, lista_origen, pc);
 
 	return info_dtb->kill;
 }
 
-void segui_ejecutando(u_int32_t pid, u_int32_t pc, int socket)
+void seguir_ejecutando(int socket)
 {
 	Paquete *paquete = malloc(sizeof(Paquete));
 	paquete->header = cargar_header(0, SIGASIGA, SAFA);
 
 	EnviarPaquete(socket, paquete);
 	free(paquete);
-}
-
-DTB *dtb_bloquear(u_int32_t pid, u_int32_t pc, int socket)
-{
-	avisar_desalojo_a_cpu(socket);
-	DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
-	dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, pc, DTB_BLOQUEADO, socket);
-
-	return dtb;
 }
 
 void avisar_desalojo_a_cpu(int socket)
@@ -554,7 +607,7 @@ void recurso_wait(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket)
 	if (recurso->semaforo < 0)
 	{
 		list_add(recurso->pid_bloqueados, &pid);
-		dtb_bloquear(pid, pc, socket);
+		avisar_desalojo_a_cpu(socket);
 	}
 	else
 	{
@@ -580,10 +633,7 @@ t_recurso *recurso_recibir(void *payload, int *pid, int *pc, Tipo senial)
 	int desplazamiento = 0;
 	char *id_recurso = string_deserializar(payload, &desplazamiento);
 
-	memcpy(pid, payload + desplazamiento, sizeof(u_int32_t));
-	desplazamiento += sizeof(u_int32_t);
-	memcpy(pc, payload + desplazamiento, sizeof(u_int32_t));
-	desplazamiento += sizeof(u_int32_t);
+	deserializar_pid_y_pc(payload, pid, pc, &desplazamiento);
 
 	t_recurso *recurso = recurso_encontrar(id_recurso);
 	if (recurso == NULL)
