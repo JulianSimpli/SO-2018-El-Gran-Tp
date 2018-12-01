@@ -185,6 +185,8 @@ void handshake_safa()
 	cargar_config_safa(paquete);
 
 	log_info(logger, "Se concreto el handshake con SAFA, empiezo a recibir mensajes");
+	log_debug(logger, "Quantum: %d", quantum);
+	log_debug(logger, "Algoritmo de planificacion: %s", algoritmo);
 }
 
 void handshake_dam()
