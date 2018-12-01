@@ -1,4 +1,5 @@
 #include "fm9.h"
+#include <commons/collections/list.h>
 
 char *MODO, *IP_FM9;
 int PUERTO_FM9, TAMANIO, MAX_LINEA, TAM_PAGINA, socketElDiego, lineasTotales, framesTotales, lineasPorFrame;

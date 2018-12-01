@@ -9,7 +9,7 @@
 #define FM9_H_
 #define LAMBDA(c_) ({ c_ _;}) //Para funciones lambda
 
-#include "sockets.h"
+#include "../../Bibliotecas/sockets.h"
 
 typedef struct {
 	char* idArchivo; //path del archivo

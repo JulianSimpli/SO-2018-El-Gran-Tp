@@ -18,16 +18,15 @@ context(test_leer_filesystem) {
 			mnt_path = malloc(strlen(mnt_config) + 1);
 			strcpy(mnt_path, mnt_config);
 			*/
-			crear_bitarray();
+			//crear_bitarray();
+	  		bitarray = bitarray_create_with_mode("Bitmap.bin", cantidad_bloques / 8, MSB_FIRST);
 		} end
 
 		after
 		{
 			log_destroy(logger);
 			config_destroy(config);
-			/*
 			bitarray_destroy(bitarray);
-			*/
 		} end
 
 		it("should find a file in the mount point")

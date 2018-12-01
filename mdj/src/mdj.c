@@ -277,12 +277,30 @@ t_list *conseguir_lista_de_bloques(int bloques)
 	return free_blocks;
 }
 
+//Calcula size segun tamanio de linea que paso fm9
 t_list *get_space(int size)
 {
 	int blocks = calcular_bloques(size);
 	log_debug(logger, "Necesita %d bloques", blocks);
 	return conseguir_lista_de_bloques(blocks);
 }
+
+int file_size(char *path) 
+{
+	FILE *f = fopen(path, "rb");
+	fseek(f, 0, SEEK_END);
+	int size = ftell(f);
+	fclose(f);
+	return size;
+}
+
+void enviar_error(Tipo tipo)
+{
+	Paquete error;
+	error.header = cargar_header(0, tipo, MDJ);
+	EnviarPaquete(socket_dam, &error);
+}
+
 
 //TODO: Controlar el tamanio que tiene el paquete en la segunda call
 //TODO: Liberar los que son punteros al finalizar cada recursividad
@@ -310,15 +328,12 @@ int validar_archivo(Paquete *paquete, char *current_path)
 				strcat(current_path, ent->d_name);
 				paquete->Payload = route;
 				if (validar_archivo(paquete, current_path))
-				{
 					return 1;
-				}
 			}
 			else
 			{
 				log_info(logger, "Encontré el archivo %s", ent->d_name);
-
-				return 1;
+				return file_size(ent->d_name);
 			}
 		}
 		//Agarra el path del paquete
@@ -347,50 +362,35 @@ void marcarbitarray(t_config *metadata)
 void crear_archivo(Paquete *paquete)
 {
 	Paquete respuesta;
-	char **parametros = string_split(paquete->Payload, " ");
-	char *ruta = parametros[1];
-	int bytes_a_crear = atoi(parametros[2]);
-	//Primero verifica que el archivo todavia no exista
-	int existe = validar_archivo(paquete, file_path);
+	int offset = 0;
+	char *ruta = string_deserializar(paquete->Payload, &offset);
+	int bytes_a_crear = 0;
+	memcpy(&bytes_a_crear, paquete->Payload + offset, sizeof(u_int32_t));
 
-	if (existe)
-	{
-		respuesta.header.tamPayload = sizeof(uint32_t);
-		respuesta.Payload = (void *)50001;
-	}
-
-	//TODO: Calcular size segun tamanio de linea que paso fm9
+	//Devuelve lista de bloques libres o lista empty
 	t_list *bloques_libres = get_space(bytes_a_crear);
+
 	//Valida que tenga espacio suficiente
-	//TODO: Devuelve lista de bloques libres o lista empty
-
 	if (list_size(bloques_libres) == 0)
-	{
-		respuesta.header.tipoMensaje = ERROR;
-		respuesta.Payload = (void *)50002;
-	}
-	int retorno = crear_bloques(bloques_libres, &bytes_a_crear);
-
-	Archivo_metadata *nuevo_archivo = malloc(sizeof(Archivo_metadata));
-	nuevo_archivo->nombre = malloc(strlen(ruta + 1));
-	strcpy(nuevo_archivo->nombre, ruta);
-	nuevo_archivo->bloques = bloques_libres;
-	nuevo_archivo->tamanio = (__intptr_t)parametros[2];
-
-	int resultado = guardar_metadata(nuevo_archivo);
+		enviar_error(ESPACIO_INSUFICIENTE_CREAR);
 
 	//for que recorrra la lista de bloques libres, llame a la funcion create_block y marque el bitarray
 	//Va decrementando la cantidad de lineas que le resten escribir con \n necesarios en c/u
+	int retorno = crear_bloques(bloques_libres, &bytes_a_crear);
+
+	Archivo_metadata nuevo_archivo;
+	nuevo_archivo.nombre = malloc(strlen(ruta) + 1);
+	strcpy(nuevo_archivo.nombre, ruta);
+	nuevo_archivo.bloques = bloques_libres;
+	nuevo_archivo.tamanio = bytes_a_crear;
 
 	//Crea el archivo metadata con la informacion de donde estan los bloques
+	int resultado = guardar_metadata(&nuevo_archivo);
 
-	//Responde a dam un ok
-	if (resultado == 0)
-	{
-		respuesta.header.tamPayload = 0;
-		respuesta.header.tipoMensaje = SUCCESS;
-	}
+	if (resultado != 0)
+		enviar_error(ESPACIO_INSUFICIENTE_CREAR);
 
+	respuesta.header = cargar_header(0, SUCCESS, MDJ);
 	EnviarPaquete(socket_dam, &respuesta);
 }
 

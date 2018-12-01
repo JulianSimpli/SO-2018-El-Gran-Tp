@@ -242,13 +242,13 @@ void crear_bitarray()
 {
   	//t_config *bitarray_metadata = config_create(strcat(mnt_path, "Metadata/Metadata.bin"));
   	t_config *bitarray_metadata = config_create("/home/utnso/fifa/Metadata/Metadata.bin");
-	int tamanio_bloques = config_get_int_value(bitarray_metadata, "TAMANIO_BLOQUES");
-	int cantidad_bloques = config_get_int_value(bitarray_metadata, "CANTIDAD_BLOQUES");
-	config_destroy(bitarray_metadata);
-	//bitarray = bitarray_create_with_mode(strcat(mnt_path, "Metadata/Bitmap.bin"), cantidad_bloques / 8, MSB_FIRST);
-	bitarray = bitarray_create_with_mode("/home/utnso/fifa/Metadata/Bitmap.bin", cantidad_bloques / 8, MSB_FIRST);
-	size_t n = bitarray_get_max_bit(bitarray);
-	log_info(logger, "El bitarray tiene %d bits", n);
+  	int tamanio_bloques = config_get_int_value(bitarray_metadata, "TAMANIO_BLOQUES");
+	  int cantidad_bloques = config_get_int_value(bitarray_metadata, "CANTIDAD_BLOQUES");
+	  config_destroy(bitarray_metadata);
+	  //bitarray = bitarray_create_with_mode(strcat(mnt_path, "Metadata/Bitmap.bin"), cantidad_bloques / 8, MSB_FIRST);
+	  bitarray = bitarray_create_with_mode("/home/utnso/fifa/Metadata/Bitmap.bin", cantidad_bloques / 8, MSB_FIRST);
+	  size_t n = bitarray_get_max_bit(bitarray);
+	  log_info(logger, "El bitarray tiene %d bits", n);
 }
 
 void _exit_with_error(int socket, char *error_msg, void *buffer)

@@ -328,14 +328,16 @@ int cargar_a_memoria(char *file)
 	EnviarPaquete(socket_fm9, &cargar);
 	Paquete respuesta;
 	RecibirPaqueteCliente(socket_fm9, &respuesta);
-	return respuesta.header.tipoMensaje != ESPACIO_INSUFICIENTE;
+	return respuesta.header.tipoMensaje != ESPACIO_INSUFICIENTE_ABRIR;
 }
 
-
-void enviar_error(int socket,Tipo tipo)
+void enviar_error(int socket, Tipo tipo, int pid)
 {
 	Paquete error;
-	error.header = cargar_header(0, tipo, ELDIEGO);
+	int size = sizeof(u_int32_t);
+	error.Payload = malloc(size);
+	memcpy(error.Payload, pid, size);
+	error.header = cargar_header(size, tipo, ELDIEGO);
 	EnviarPaquete(socket, &error);
 }
 
@@ -363,11 +365,11 @@ void *interpretar_mensajes_de_cpu(void *arg)
 		int validar = pedir_validar(escriptorio->path);
 
 		if (!validar)
-			enviar_error(socket_safa, DUMMY_FAIL);
+			enviar_error(socket_safa, DUMMY_FAIL, dummy->gdtPID);
 
 		Paquete pedido_escriptorio;
 		pedido_escriptorio.header = cargar_header(0, OBTENER_DATOS, ELDIEGO); 
-		pedido_escriptorio.Payload = malloc(); 
+		char *primitiva = escriptorio->path;
 		EnviarPaquete(socket_mdj, &pedido_escriptorio);
 
 		log_debug(logger, "Le envie el pedido a mdj");
@@ -378,7 +380,7 @@ void *interpretar_mensajes_de_cpu(void *arg)
 		int cargado = cargar_a_memoria(escriptorio->path);
 
 		if (!cargado)
-			enviar_error(socket_safa, DUMMY_FAIL);
+			enviar_error(socket_safa, DUMMY_FAIL, dummy->gdtPID);
 
 		Paquete respuesta;
 		respuesta.header = cargar_header(0, DUMMY_SUCCESS, ELDIEGO);
@@ -386,19 +388,24 @@ void *interpretar_mensajes_de_cpu(void *arg)
 
 		break;
 	case ABRIR:
-
-		char *path = string_deserializar(paquete.Payload, 0);
+		int pid = 0;
+		memcpy(pid, paquete.Payload, sizeof(u_int32_t));
+		char *path = string_deserializar(paquete.Payload, sizeof(u_int32_t));
 		log_debug(logger, "Recibi el payload %s", path);
 
 		int validar = pedir_validar(path);
 
 		if (!validar)
-			enviar_error(socket_safa, PATH_INEXISTENTE);
+			enviar_error(socket_safa, PATH_INEXISTENTE, pid);
 
 		int cargado = cargar_a_memoria(escriptorio->path);
 
 		if (!cargado)
-			enviar_error(socket_safa, ESPACIO_INSUFICIENTE);
+			enviar_error(socket_safa, ESPACIO_INSUFICIENTE_ABRIR, pid);
+
+		Paquete respuesta;
+		respuesta.header = cargar_header(0, DUMMY_SUCCESS, ELDIEGO);
+		EnviarPaquete(socket_safa, &respuesta);
 
 		break;
 	default:
