@@ -46,13 +46,14 @@ void *atender_dam()
 		Paquete paquete;
 		RecibirPaqueteCliente(socket_dam, &paquete);
 		pthread_t p_thread;
-		pthread_create(&p_thread, NULL, atender_peticion, &paquete);
+		pthread_create(&p_thread, NULL, atender_peticion, (void*)&paquete);
 	}
 }
 
 void *atender_peticion(void *args)
 {
 	Paquete *paquete = (Paquete*) args;
+	log_debug(logger, "Tamanio %d", paquete->header.tamPayload);
 	//esto deberia usar semaforos porque ahora admite peticiones concurrentes y pueden querer escribir dos procesos el mismo arhivo
 	Paquete *respuesta = interpretar_paquete(paquete);
 	log_debug(logger, "Respuesta %d", respuesta->header.tipoMensaje);
@@ -283,11 +284,14 @@ t_list *get_space(int size)
 	return conseguir_lista_de_bloques(blocks);
 }
 
+//TODO: Controlar el tamanio que tiene el paquete en la segunda call
+//TODO: Liberar los que son punteros al finalizar cada recursividad
 int validar_archivo(Paquete *paquete, char *current_path)
 {
 	DIR *dir;
 	struct dirent *ent;
-	char *search_file = string_duplicate(paquete->Payload);
+	char *search_file = malloc(paquete->header.tamPayload + 1);
+	strcpy(search_file, paquete->Payload);
 	char *route = strtok(search_file, "/");
 	log_info(logger, "Busco: %s", route);
 
@@ -393,28 +397,24 @@ void crear_archivo(Paquete *paquete)
 void obtener_datos(Paquete *paquete)
 {
 	Paquete respuesta;
-	char **parametros = string_split(paquete->Payload, " ");
+	char *payload = malloc(paquete->header.tamPayload + 1);
+	strcpy(payload, paquete->Payload);
+	log_debug(logger, "Recibi el payload %s", paquete->Payload);
+
+	char **parametros = string_split(payload, " ");
 	char *ruta = parametros[1];
 	int bytes_offset = atoi(parametros[2]);
 	int bytes_a_devolver = atoi(parametros[3]);
-	//Primero verifica que el archivo todavia no exista
-	int existe = validar_archivo(paquete, file_path);
 
-	if (existe)
-	{
-		respuesta.header.tamPayload = sizeof(uint32_t);
-		respuesta.Payload = (void *)10001;
-	}
-	//TODO: Validar archivo y reponder error si no existe
-	//TODO: Lee metadata del archivo pasado por el path
 	//TODO: Calcular en que bloque cae segun el offset y cuantos bloques va leer segun el size
-	//TODO: Crear paquete de payload del tamanio leido y cargar el contenido de los bloques con un for
+	//Lee metadata del archivo pasado por el path
 	t_config *metadata = config_create(ruta);
 	char **bloques_ocupados = config_get_array_value(metadata, "BLOQUES");
 
 	int bloque_inicial = bytes_offset / tamanio_bloques;
 	int offset_interno = bytes_offset % tamanio_bloques;
 
+	//Crear paquete de payload del tamanio leido y cargar el contenido de los bloques con un for
 	char *buffer = malloc(bytes_a_devolver);
 
 	for (int i = bloque_inicial; bytes_a_devolver > 0; i++)
@@ -440,6 +440,8 @@ void obtener_datos(Paquete *paquete)
 		respuesta.Payload = buffer;
 		respuesta.header.tipoMensaje = SUCCESS;
 	}
+
+	EnviarPaquete(socket_dam, &respuesta);
 }
 
 void guardar_datos(Paquete *paquete)

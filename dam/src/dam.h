@@ -15,6 +15,7 @@
 #include <pthread.h>
 #include <commons/process.h>
 #include "../../Bibliotecas/sockets.h"
+#include "../../Bibliotecas/dtb.h"
 
 // Definimos algunas variables globales
 t_log * logger;

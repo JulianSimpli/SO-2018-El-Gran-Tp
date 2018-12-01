@@ -303,6 +303,42 @@ pthread_t levantar_hilo(void *funcion)
 	return p_thread;
 }
 
+
+//TODO: Abstraer estas dos funciones
+int pedir_validar(char *path)
+{
+	int len = strlen(path);
+	Paquete validar;
+	validar.header = cargar_header(len, VALIDAR_ARCHIVO, ELDIEGO); 
+	validar.Payload = malloc(len);
+	memcpy(validar.Payload, path, len);
+	EnviarPaquete(socket_mdj, &validar);
+	Paquete respuesta;
+	RecibirPaqueteCliente(socket_mdj, &respuesta);
+	return respuesta.header.tipoMensaje != PATH_INEXISTENTE;
+}
+
+int cargar_a_memoria(char *file)
+{
+	int len = strlen(file);
+	Paquete cargar;
+	cargar.header = cargar_header(len, ABRIR, ELDIEGO); 
+	cargar.Payload = malloc(len);
+	memcpy(cargar.Payload, file, len);
+	EnviarPaquete(socket_fm9, &cargar);
+	Paquete respuesta;
+	RecibirPaqueteCliente(socket_fm9, &respuesta);
+	return respuesta.header.tipoMensaje != ESPACIO_INSUFICIENTE;
+}
+
+
+void enviar_error(int socket,Tipo tipo)
+{
+	Paquete error;
+	error.header = cargar_header(0, tipo, ELDIEGO);
+	EnviarPaquete(socket, &error);
+}
+
 /**
  * Recibe el mensaje en el socket, interpreta que es lo que require
  * Genera la respuesta y muere el hilo al enviarla
@@ -320,16 +356,50 @@ void *interpretar_mensajes_de_cpu(void *arg)
 	switch (paquete.header.tipoMensaje)
 	{
 	case ESDTBDUMMY:
-		log_info(logger, "Pido que me devuelva el escriptorio");
-		Paquete pedido_escriptorio; 
-		pedido_escriptorio.header.emisor = ELDIEGO;
-		pedido_escriptorio.header.tamPayload = 0;
-		pedido_escriptorio.header.tipoMensaje = OBTENER_DATOS;
+		DTB *dummy = DTB_deserializar(paquete.Payload);
+		ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dummy);
+		log_debug(logger, "Pido que me devuelva el escriptorio %s", escriptorio->path);
+
+		int validar = pedir_validar(escriptorio->path);
+
+		if (!validar)
+			enviar_error(socket_safa, DUMMY_FAIL);
+
+		Paquete pedido_escriptorio;
+		pedido_escriptorio.header = cargar_header(0, OBTENER_DATOS, ELDIEGO); 
+		pedido_escriptorio.Payload = malloc(); 
 		EnviarPaquete(socket_mdj, &pedido_escriptorio);
+
 		log_debug(logger, "Le envie el pedido a mdj");
 		RecibirPaqueteCliente(socket_mdj, &paquete);
 		log_debug(logger, "Le envie el pedido a mdj");
 		log_debug(logger, "Recibi %s", (char*) paquete.Payload);
+
+		int cargado = cargar_a_memoria(escriptorio->path);
+
+		if (!cargado)
+			enviar_error(socket_safa, DUMMY_FAIL);
+
+		Paquete respuesta;
+		respuesta.header = cargar_header(0, DUMMY_SUCCESS, ELDIEGO);
+		EnviarPaquete(socket_safa, &respuesta);
+
+		break;
+	case ABRIR:
+
+		char *path = string_deserializar(paquete.Payload, 0);
+		log_debug(logger, "Recibi el payload %s", path);
+
+		int validar = pedir_validar(path);
+
+		if (!validar)
+			enviar_error(socket_safa, PATH_INEXISTENTE);
+
+		int cargado = cargar_a_memoria(escriptorio->path);
+
+		if (!cargado)
+			enviar_error(socket_safa, ESPACIO_INSUFICIENTE);
+
 		break;
 	default:
 		log_error(logger, "No entiendo el mensaje");

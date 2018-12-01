@@ -70,9 +70,7 @@ int ejecutar(char *linea, DTB *dtb)
 	}
 
 	if (!existe)
-	{
 		exit_gracefully(1);
-	}
 
 	return flag;
 }

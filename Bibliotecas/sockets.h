@@ -31,6 +31,7 @@ typedef enum {
 	FIN_BLOQUEADO,									// Emisor: SAFA, Receptor: DIEGO
 	ABRIR, FLUSH,									 //Emisor: DIEGO, Receptor: FM9
 	LINEA_PEDIDA,									//Emisor: FM9, Receptor: CPU
+	PATH_INEXISTENTE = 10001, ESPACIO_INSUFICIENTE,	//Errores ASIGNAR
 	ABORTAR=20001, 										//Errores ASIGNAR
 	ABORTARF=30001,										//Errores FLUSH
 	ABORTARC=40001,										//Errores CLOSE
