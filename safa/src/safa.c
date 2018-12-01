@@ -17,7 +17,7 @@ void crear_loggers()
 
 void obtener_valores_archivo_configuracion()
 {
-	t_config *arch = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src/SAFA.config");
+	t_config *arch = config_create("/home/utnso/TPSO/tp-2018-2c-Nene-Malloc/safa/src/logs/SAFA.config");
 	IP = "127.0.0.1";
 	log_info(logger, "IP: %s", IP);
 	PUERTO = config_get_int_value(arch, "PUERTO");

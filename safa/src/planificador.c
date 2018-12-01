@@ -418,84 +418,86 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
 	    printf("Cantidad de GDTs: %i\n", cant_gdt);
 	}
 
-    void dtb_imprimir_basico(void *_dtb)
-    {
-        DTB *dtb = (DTB *)_dtb;
-        DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
-        switch(dtb->flagInicializacion)
-        {
-            case DUMMY:
-            {
-                printf("DTB Dummy asociado a GDT %d\n", dtb->gdtPID);
-                break;
-            }
-            case GDT:
-            {
-                ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
-                printf( "PID: %i\tEscriptorio: %s",
-                        dtb->gdtPID, escriptorio->path);
-                if (escriptorio->cantLineas)
-                    printf(", cantidad de lineas: %d", escriptorio->cantLineas);
-                printf("\n");
-                break;
-            }
-        }
-    }
+	void dtb_imprimir_basico(void *_dtb)
+	{
+	    DTB *dtb = (DTB *)_dtb;
+	    DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
+	    switch(dtb->flagInicializacion)
+	    {
+	        case DUMMY:
+	        {
+	            printf("DTB Dummy asociado a GDT %d\n", dtb->gdtPID);
+	            break;
+	        }
+	        case GDT:
+	        {
+	            ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
+	            printf( "PID: %i\tEscriptorio: %s",
+	                    dtb->gdtPID, escriptorio->path);
+	            if (escriptorio->cantLineas)
+	                printf(", cantidad de lineas: %d", escriptorio->cantLineas);
+	            printf("\n");
+	            break;
+	        }
+	    }
+	}
 
-    void dtb_imprimir_polenta(void *_dtb)
-    {
-        DTB *dtb = (DTB *)_dtb;
-        DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
-        printf( "Estado: %s\n"
-                "Program Counter: %i\n"
-                "Ultima CPU: %i\n"
-                "Tiempo de respuesta: %f\n",
-                Estados[info_dtb->estado], dtb->PC, info_dtb->socket_cpu,
-                info_dtb->tiempo_respuesta);
-        if(info_dtb->kill)
-            printf("Proceso finalizado por consola.\n");
+	void dtb_imprimir_polenta(void *_dtb)
+	// Agregar lista de recursos.
+	{
+	    DTB *dtb = (DTB *)_dtb;
+	    DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
+	    dtb_imprimir_basico(dtb);
+	    printf( "Estado: %s\n"
+	            "Program Counter: %i\n"
+	            "Ultima CPU: %i\n"
+	            "Tiempo de respuesta: %f\n"
+	            "%s"
+	            "Archivos Abiertos: %i\n",
+	            Estados[info_dtb->estado], dtb->PC, info_dtb->socket_cpu,
+	            info_dtb->tiempo_respuesta,
+	            (info_dtb->kill) ? "Proceso finalizado por usuario\n" : "",
+	            list_size(dtb->archivosAbiertos) - 1);
+	}
 
-    // Muestra archivos desde el indice 1 (todos menos el escriptorio)
-        printf("Archivos abiertos: %d\n", list_size(dtb->archivosAbiertos) - 1);
-        for(int i = 1; i < list_size(dtb->archivosAbiertos); i++)
-        {
-            ArchivoAbierto *archivo = list_get(dtb->archivosAbiertos, i);
-            mostrar_archivo(archivo, i);
-        }
+	void mostrar_proceso(void *_dtb)
+	{
+		DTB* dtb = (DTB *)_dtb;
+	    DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
+	    switch(info_dtb->estado)
+	    {
+	        case DTB_NUEVO:
+	        {
+	            dtb_imprimir_basico(dtb);
+	            printf("Estado: %s\n", Estados[info_dtb->estado]);
+	            break;
+	        }
+	        default:
+	        {
+	            dtb_imprimir_polenta(dtb);
+	            break;
+	        }
+	    }
 
-    // Muestra la cantidad de recursos que tiene retenidos y que recurso y cuantas instancias del mismo tiene
-        printf("Recursos retenidos por el proceso: %d\n", list_size(info_dtb->recursos_asignados));
-        if(!list_is_empty(info_dtb->recursos_asignados))
-        {
-            for(int j = 0; j < list_size(info_dtb->recursos_asignados); j++)
-            {
-                t_recurso_asignado *recurso_asignado = list_get(info_dtb->recursos_asignados, j);
-                printf( "Recurso %d: %s\n en %d instancias",
-                        j, recurso_asignado->recurso->id, recurso_asignado->instancias);
-            }
-        }
-    }
+	// Muestra archivos desde el indice 1 (todos menos el escriptorio)
+	    for(int i = 1; i < list_size(dtb->archivosAbiertos); i++)
+	    {
+	        ArchivoAbierto *archivo = list_get(dtb->archivosAbiertos, i);
+	        mostrar_archivo(archivo, i);
+	    }
 
-    void mostrar_proceso(void *_dtb)
-    { 
-        DTB* dtb = (DTB *)_dtb;
-        DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
-        switch(info_dtb->estado)
-        {
-            case DTB_NUEVO:
-            {
-                dtb_imprimir_basico(dtb);
-                printf("Estado: %s\n", Estados[info_dtb->estado]);
-                break;
-            }
-            default:
-            {
-                dtb_imprimir_basico(dtb);
-                dtb_imprimir_polenta(dtb);
-                break;
-            }
-        }
-    }
+	// Muestra la cantidad de recursos que tiene retenidos y que recurso y cuantas instancias del mismo tiene
+	    printf("Recursos retenidos por el proceso: %d\n", list_size(info_dtb->recursos_asignados));
+	    if(!list_is_empty(info_dtb->recursos_asignados))
+	    {
+	        for(int j = 0; j < list_size(info_dtb->recursos_asignados); j++)
+	        {
+	            t_recurso_asignado *recurso_asignado = list_get(info_dtb->recursos_asignados, j);
+	            printf( "Recurso %d: %s\n en %d instancias",
+	                    j, recurso_asignado->recurso->id, recurso_asignado->instancias);
+	        }
+	    }
+	}
 
 	void mostrar_archivo(void *_archivo, int index) // queda en void *_archivo por si volvemos a list_iterate
 	{
