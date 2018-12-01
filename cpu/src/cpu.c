@@ -369,7 +369,9 @@ int ejecutar_abrir(char **parameters, DTB *dtb)
 	bloqueate_safa->header.emisor = CPU;
 	int tam_pid_y_pc = 0;
 	bloqueate_safa->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
-	bloqueate_safa->header.tamPayload = tam_pid_y_pc;
+	bloqueate_safa->header.tamPayload = tam_pid_y_pc + sizeof(u_int32_t);
+	dtb->entrada_salidas++;
+	memcpy(bloqueate_safa + tam_pid_y_pc, &dtb->entrada_salidas, sizeof(u_int32_t));
 	EnviarPaquete(socket_safa, bloqueate_safa);
 
 	//Cuando se realiza esta operatoria, el CPU desaloja al DTB indicando a S-AFA
@@ -431,6 +433,7 @@ int ejecutar_asignar(char **parametros, DTB *dtb)
 
 		EnviarPaquete(socket_fm9, datos_a_fm9);
 		//mandar mensaje a FM9
+		//TODO:mandar PID a FM9?
 		//enviar parametros. El string sin splitear? o separados?
 	}
 	return 1;
@@ -461,8 +464,11 @@ int ejecutar_wait(char **parametros, DTB *dtb)
 	{
 		Paquete *bloquear_safa = malloc(sizeof(Paquete));
 		bloquear_safa->header.tipoMensaje = DTB_BLOQUEAR;
-		bloquear_safa->header.tamPayload = 0;
 		bloquear_safa->header.emisor = CPU;
+		int tam_pid_y_pc = 0;
+		bloquear_safa->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
+		bloquear_safa->header.tamPayload = tam_pid_y_pc + sizeof(u_int32_t);
+		memcpy(bloquear_safa + tam_pid_y_pc, &dtb->entrada_salidas, sizeof(u_int32_t));
 		//TODO: me falta agregar el PID y el PC
 		EnviarPaquete(socket_safa, bloquear_safa);
 		return 0; //agarrar este false en el ejecutar
@@ -536,7 +542,9 @@ int ejecutar_flush(char **parametros, DTB *dtb)
 		bloqueate_safa->header.emisor = CPU;
 		int tam_pid_y_pc = 0;
 		bloqueate_safa->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
-		bloqueate_safa->header.tamPayload = tam_pid_y_pc;
+		bloqueate_safa->header.tamPayload = tam_pid_y_pc + sizeof(u_int32_t);
+		dtb->entrada_salidas++;
+		memcpy(bloqueate_safa->Payload + tam_pid_y_pc, &dtb->entrada_salidas, sizeof(u_int32_t));
 		EnviarPaquete(socket_safa, bloqueate_safa);
 	}
 	return 1;
@@ -622,7 +630,9 @@ int ejecutar_crear(char **parametros, DTB *dtb)
 	bloqueate_safa->header.emisor = CPU;
 	int tam_pid_y_pc = 0;
 	bloqueate_safa->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
-	bloqueate_safa->header.tamPayload = tam_pid_y_pc;
+	bloqueate_safa->header.tamPayload = tam_pid_y_pc + sizeof(u_int32_t);
+	dtb->entrada_salidas++;
+	memcpy(bloqueate_safa + tam_pid_y_pc, &dtb->entrada_salidas, sizeof(u_int32_t));
 	EnviarPaquete(socket_safa, bloqueate_safa);
 
 	/*
@@ -655,9 +665,10 @@ int ejecutar_borrar(char **parametros, DTB *dtb)
 	bloqueate_safa->header.emisor = CPU;
 	int tam_pid_y_pc = 0;
 	bloqueate_safa->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
-	bloqueate_safa->header.tamPayload = tam_pid_y_pc;
+	bloqueate_safa->header.tamPayload = tam_pid_y_pc+sizeof(u_int32_t);
+	dtb->entrada_salidas++;
+	memcpy(bloqueate_safa + tam_pid_y_pc, &dtb->entrada_salidas, sizeof(u_int32_t));
 	EnviarPaquete(socket_safa, bloqueate_safa);
-
 
 	return 1;
 	/*Se deberá enviar a El Diego el archivo a borrar 

@@ -46,6 +46,7 @@ int create_block(int index, int cantidad_bytes);
 t_list *get_space(int size);
 char *convertir_bloques_a_string(Archivo_metadata *fm);
 void crear_bitarray();
+void imprimir_directorios(char *);
 char *mnt_path;
 char *file_path;
 char *blocks_path;
@@ -53,6 +54,7 @@ char *metadata_path;
 int cantidad_bloques;
 int tamanio_bloques;
 int socket_dam;
+char *current_path;
 
 void _exit_with_error(int socket, char *error_msg, void *buffer);
 void exit_gracefully(int return_nr);
@@ -82,24 +84,82 @@ void enviar_mensaje(Mensaje mensaje)
  */
 void handshake_dam()
 {
-	socket_dam = escuchar_conexiones();
-	Paquete paquete;
+  socket_dam = escuchar_conexiones();
+  Paquete paquete;
   RecibirPaqueteCliente(socket_dam, &paquete);
-	if (paquete.header.tipoMensaje != ESHANDSHAKE)
-		_exit_with_error(socket_dam, "No se logro el handshake", NULL);
-	EnviarHandshake(socket_dam, MDJ);
+  if (paquete.header.tipoMensaje != ESHANDSHAKE)
+    _exit_with_error(socket_dam, "No se logro el handshake", NULL);
+  EnviarHandshake(socket_dam, MDJ);
 }
 
-
-void com_list(char *linea)
+void imprimir_directorios(char *path_a_imprimir)
 {
-  //fijarse en que path está y mostrar que es directorio y que es archivo
+  DIR *dir;
+  struct dirent *ent;
+
+  dir = opendir(path_a_imprimir);
+  while ((ent = readdir(dir)) != NULL)
+  {
+    printf(ent->d_name);
+  }
+}
+
+void com_list(char **parametros)
+{
   printf("The folder has this currents files: \n");
-  system("ls -la");
+
+  char *punto_montaje;
+  strcpy(punto_montaje, mnt_path);
+  char *path = parametros[1];
+  if (path == NULL)
+  {
+    imprimir_directorios(punto_montaje);
+  }
+  else
+  {
+    if (path[0] == '/')
+    {
+      imprimir_directorios(path);
+    }
+    else
+    {
+      strcat(punto_montaje, path);
+      imprimir_directorios(punto_montaje);
+    }
+  }
+  //fijarse en que path está y mostrar que es directorio y que es archivo
 }
 
-void com_cat(char *linea)
+void com_cat(char **parametros)
 {
+  char *directorio_actual;
+  //cd tiene que actualizar el directorio actual
+  strcpy(directorio_actual, current_path);
+  char *nuevo_path = parametros[1];
+
+  if (nuevo_path[0] == '/')
+  {
+    directorio_actual = nuevo_path;
+  }
+  else
+  {
+    strcat(directorio_actual, nuevo_path);
+  }
+
+  FILE *f = fopen(directorio_actual, "rb");
+
+  if (f == NULL)
+    perror("Fallo al abrir el archivo: ");
+
+  fseek(f, 0, SEEK_END);
+  int size = ftell(f);
+  fseek(f, 0, SEEK_SET);
+
+  char *cadena_a_devolver = malloc(size + 1);
+  fread(cadena_a_devolver, size, 1, f);
+  fclose(f);
+  cadena_a_devolver[size]='\0';
+  printf(cadena_a_devolver);
   printf("CAT\n");
 }
 

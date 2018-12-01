@@ -98,6 +98,7 @@ int interpretar(char *linea)
 	//Calcula la cantidad de comandos que hay en el array
 	size_t command_size = sizeof(commands) / sizeof(commands[0]) - 1;
 
+	char **parametros = string_split(linea, " ");
 	//Deberia parsear la linea, separar la primer palabra antes del espacio del resto
 	//Para poder identificar el comando y que el resto son parametros necesarios para que ejecute
 	//Por ej: linea = cd /home/utnso/
@@ -112,7 +113,7 @@ int interpretar(char *linea)
 			existe = 1;
 			log_info(logger, commands[i].doc);
 			//llama a la funcion que tiene guardado ese comando en la estructura
-			commands[i].func(linea);
+			commands[i].func(parametros);
 			break;
 		}
 	}
