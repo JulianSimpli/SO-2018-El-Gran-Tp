@@ -1,53 +1,41 @@
 #include "planificador.h"
+#include <commons/collections/list.h>
 
-u_int32_t numero_pid = 0, 
-procesos_finalizados = 0,
-sentencias_globales_del_diego = 0, sentencias_totales = 0;
-int procesos_a_esperar = 0;
+	u_int32_t numero_pid = 0, 
+	procesos_finalizados = 0,
+	sentencias_globales_del_diego = 0, sentencias_totales = 0;
+	int procesos_a_esperar = 0;
 
-char* Estados[5] = {"Nuevo", "Listo", "Ejecutando", "Bloqueado", "Finalizado"};
+	char* Estados[5] = {"Nuevo", "Listo", "Ejecutando", "Bloqueado", "Finalizado"};
 
-//Hilo planificador largo plazo
-void planificador_largo_plazo()
-{
-    while(true)
-    {
-        sem_wait(&sem_ejecutar);
-        sem_wait(&sem_multiprogramacion);
-        crear_dummy();
-    }
-}
+	//Hilo planificador largo plazo
+	void planificador_largo_plazo()
+	{
+	    while(true)
+	    {
+		sem_wait(&sem_ejecutar);
+		log_debug(logger, "Tengo uno a ejecutar");
+		sem_wait(&sem_multiprogramacion);
+		log_debug(logger, "El grado de multiplogramacion es suficiente");
+		crear_dummy();
+	    }
+	}
 
-void crear_dummy()
-{
-    for(int i = 0; i < list_size(lista_nuevos); i++)
-    {
-        DTB *dtb_cargar = list_get(lista_nuevos, i);
-        if(!dummy_creado(dtb_cargar))
-        {   
-            desbloquear_dummy(dtb_cargar);
-            break;
-        }
-    }
-}
-
-void pasaje_a_ready(u_int32_t pid)
-{
-    bloquear_dummy(lista_ejecutando, pid);
-    notificar_al_plp(pid);
-    log_info(logger, "%d pasa a lista de procesos listos", pid);
-}
-
-void notificar_al_plp(u_int32_t pid)
-{
-    DTB* DTB_a_mover = dtb_remueve(lista_nuevos, pid, 1);
-    list_add(lista_listos, DTB_a_mover);
-}
-
-bool dummy_creado(DTB *dtb)
-{
-    return (dtb_encuentra(lista_listos, dtb->gdtPID, DUMMY) != NULL) || (dtb_encuentra(lista_ejecutando, dtb->gdtPID, DUMMY) != NULL);
-}
+	void crear_dummy()
+	{
+		log_info(logger, "Empiezo a crear dummys");
+	    for(int i = 0; i < list_size(lista_nuevos); i++)
+	    {
+		DTB *dtb_cargar = list_get(lista_nuevos, i);
+			log_info(logger, " crear dummys");
+		if(!dummy_creado(dtb_cargar))
+		{   
+			log_info(logger, " a crear dummys");
+		    desbloquear_dummy(dtb_cargar);
+		    break;
+		}
+	    }
+	}
 
 void bloquear_dummy(t_list *lista, u_int32_t pid)
 {
@@ -59,116 +47,138 @@ void bloquear_dummy(t_list *lista, u_int32_t pid)
     log_info(logger, "Dummy del GDT %d bloqueado", pid);
 }
 
-void desbloquear_dummy(DTB* dtb_nuevo)
-{
-    ArchivoAbierto* escriptorio = DTB_obtener_escriptorio(dtb_nuevo);
-    DTB *dtb_dummy = dtb_crear(dtb_nuevo->gdtPID, escriptorio->path, DUMMY);
-}
+	void notificar_al_plp(u_int32_t pid)
+	{
+	    DTB* DTB_a_mover = dtb_remueve(lista_nuevos, pid, 1);
+	    list_add(lista_listos, DTB_a_mover);
+	}
 
-//Hilo planificador corto plazo
-void planificador_corto_plazo()
-{
-    while(true)
-    {
-        if(hay_cpu_libre() && !list_is_empty(lista_listos))
-        {
-            if(!strcmp(ALGORITMO_PLANIFICACION, "FIFO")) planificar_fifo();
-            else if(!strcmp(ALGORITMO_PLANIFICACION, "RR")) planificar_rr();
-            else if(!strcmp(ALGORITMO_PLANIFICACION, "VRR")) planificar_vrr();
-            else if(!strcmp(ALGORITMO_PLANIFICACION, "IOBF")) planificar_iobound();
-            else
-            {
-                printf("No se conoce el algoritmo. Cambielo desde SAFA.config\n");
-                sleep(10);
-            }
-        }
-        sleep(1);
-    }
-}
+	bool dummy_creado(DTB *dtb)
+	{
+	    return (dtb_encuentra(lista_listos, dtb->gdtPID, DUMMY) != NULL) || (dtb_encuentra(lista_ejecutando, dtb->gdtPID, DUMMY) != NULL);
+	}
 
-void planificar_fifo()
-{
-    ejecutar_primer_dtb_listo();
-}
-void planificar_rr()
-{
-    // rearma cola listo y luego 
-    ejecutar_primer_dtb_listo();
-}
-void planificar_vrr()
-{
-    if(!list_is_empty(lista_prioridad))
-        ejecutar_primer_dtb_prioridad();
-    else
-        ejecutar_primer_dtb_listo();
-}
-void planificar_iobound()
-{
-    bool io_bound_first(void *_dtb_mayor, void *_dtb_menor)
-    {
-        return ((DTB *)_dtb_mayor)->entrada_salidas > ((DTB *)_dtb_menor)->entrada_salidas;
-    }
-    list_sort(lista_listos, io_bound_first);
-    ejecutar_primer_dtb_listo();
-}
+	void bloquear_dummy(t_list *lista, u_int32_t pid)
+	{
+	    bool compara_dummy(void *dtb)
+	    {
+		return dtb_coincide_pid(dtb, pid, DUMMY);
+	    }
+	    list_remove_and_destroy_by_condition(lista, compara_dummy, dtb_liberar);
+	}
 
-//Funciones planificador corto plazo
-void ejecutar_primer_dtb_listo() {
-    t_cpu *cpu_libre = cpu_buscar_libre();
-    DTB *dtb_exec = list_get(lista_listos, 0);
-    
-    Paquete *paquete = malloc(sizeof(Paquete));
-    int tamanio_DTB = 0;
-    paquete->Payload = DTB_serializar(dtb_exec, &tamanio_DTB);
+	void desbloquear_dummy(DTB* dtb_nuevo)
+	{
+	    ArchivoAbierto* escriptorio = DTB_obtener_escriptorio(dtb_nuevo);
+		log_debug(logger, "El escriptorio a ejecutar es %s\n", escriptorio->path);
+	    dtb_crear(dtb_nuevo->gdtPID, escriptorio->path, DUMMY); //Tambien lo agrega a la lista
+	}
 
-    switch(dtb_exec->flagInicializacion)
-    {
-        case DUMMY:
-        {
-            paquete->header = cargar_header(tamanio_DTB, ESDTBDUMMY, SAFA);
-            EnviarPaquete(cpu_libre->socket, paquete);
-            printf("Dummy %d ejecutando en cpu %d\n", dtb_exec->gdtPID, cpu_libre->socket);
-            break;
-        }
-        case GDT:
-        { 
-            paquete->header = cargar_header(tamanio_DTB, ESDTB, SAFA);
-            EnviarPaquete(cpu_libre->socket, paquete);
-            printf("GDT %d ejecutando en cpu %d\n", dtb_exec->gdtPID, cpu_libre->socket);
-            break;
-        }
-    }
-    dtb_actualizar(dtb_exec, lista_listos, lista_ejecutando, dtb_exec->PC, DTB_EJECUTANDO, cpu_libre->socket);
-    free(paquete->Payload);
-    free(paquete);
-}
+	//Hilo planificador corto plazo
+	void planificador_corto_plazo()
+	{
+	    while(true)
+	    {
+		if(hay_cpu_libre() && !list_is_empty(lista_listos))
+		{
+		    if(!strcmp(ALGORITMO_PLANIFICACION, "FIFO")) planificar_fifo();
+		    else if(!strcmp(ALGORITMO_PLANIFICACION, "RR")) planificar_rr();
+		    else if(!strcmp(ALGORITMO_PLANIFICACION, "VRR")) planificar_vrr();
+		    else if(!strcmp(ALGORITMO_PLANIFICACION, "IOBF")) planificar_iobound();
+		    else
+		    {
+			printf("No se conoce el algoritmo. Cambielo desde SAFA.config\n");
+			sleep(10);
+		    }
+		}
+		sleep(1);
+	    }
+	}
 
-void ejecutar_primer_dtb_prioridad()
-{
-    t_cpu *cpu_libre = cpu_buscar_libre();
-    DTB *dtb = list_get(lista_prioridad, 0);
-    DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
+	void planificar_fifo()
+	{
+	    ejecutar_primer_dtb_listo();
+	}
+	void planificar_rr()
+	{
+	    // rearma cola listo y luego 
+	    ejecutar_primer_dtb_listo();
+	}
+	void planificar_vrr()
+	{
+	    if(!list_is_empty(lista_prioridad))
+		ejecutar_primer_dtb_prioridad();
+	    else
+		ejecutar_primer_dtb_listo();
+	}
+	void planificar_iobound()
+	{
+	    bool io_bound_first(void *_dtb_mayor, void *_dtb_menor)
+	    {
+		return ((DTB *)_dtb_mayor)->entrada_salidas > ((DTB *)_dtb_menor)->entrada_salidas;
+	    }
+	    list_sort(lista_listos, io_bound_first);
+	    ejecutar_primer_dtb_listo();
+	}
 
-    Paquete *paquete = malloc(sizeof(Paquete));
-    int tamanio_dtb = 0;
-    paquete->Payload = DTB_serializar(dtb, &tamanio_dtb);
-    paquete->Payload = realloc(paquete->Payload, tamanio_dtb + sizeof(u_int32_t));
-    memcpy(paquete->Payload + tamanio_dtb, &info_dtb->quantum_faltante, sizeof(u_int32_t));
-    paquete->header = cargar_header(tamanio_dtb + sizeof(u_int32_t), ESDTBQUANTUM, SAFA);
-    EnviarPaquete(cpu_libre->socket, paquete);
-    free(paquete->Payload);
-    free(paquete);
+	//Funciones planificador corto plazo
+	void ejecutar_primer_dtb_listo() {
+	    t_cpu *cpu_libre = cpu_buscar_libre();
+		log_debug(logger, "Tengo libre el cpu %d\n", cpu_libre->socket);
+	    DTB *dtb_exec = list_get(lista_listos, 0);
+	    
+	    Paquete *paquete = malloc(sizeof(Paquete));
+	    int tamanio_DTB = 0;
+	    paquete->Payload = DTB_serializar(dtb_exec, &tamanio_DTB);
 
-    dtb_actualizar(dtb, lista_prioridad, lista_ejecutando, dtb->PC, DTB_EJECUTANDO, cpu_libre->socket);
-}
+	    switch(dtb_exec->flagInicializacion)
+	    {
+		case DUMMY:
+		{
+		    paquete->header = cargar_header(tamanio_DTB, ESDTBDUMMY, SAFA);
+		    EnviarPaquete(cpu_libre->socket, paquete);
+		    log_info(logger, "Dummy %d ejecutando en cpu %d\n", dtb_exec->gdtPID, cpu_libre->socket);
+		    break;
+		}
+		case GDT:
+		{ 
+		    paquete->header = cargar_header(tamanio_DTB, ESDTB, SAFA);
+		    EnviarPaquete(cpu_libre->socket, paquete);
+		    log_info(logger, "GDT %d ejecutando en cpu %d\n", dtb_exec->gdtPID, cpu_libre->socket);
+		    break;
+		}
+	    }
+	    dtb_actualizar(dtb_exec, lista_listos, lista_ejecutando, dtb_exec->PC, DTB_EJECUTANDO, cpu_libre->socket);
+	    free(paquete->Payload);
+	    free(paquete);
+	}
 
-t_cpu *cpu_buscar_libre()
-{
-    t_cpu* cpu_libre = list_find(lista_cpu, esta_libre_cpu);
-    cpu_libre->estado = CPU_OCUPADA;
+	void ejecutar_primer_dtb_prioridad()
+	{
+	    t_cpu *cpu_libre = cpu_buscar_libre();
+	    DTB *dtb = list_get(lista_prioridad, 0);
+	    DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
 
-    return cpu_libre;
-}
+	    Paquete *paquete = malloc(sizeof(Paquete));
+	    int tamanio_dtb = 0;
+	    paquete->Payload = DTB_serializar(dtb, &tamanio_dtb);
+	    paquete->Payload = realloc(paquete->Payload, tamanio_dtb + sizeof(u_int32_t));
+	    memcpy(paquete->Payload + tamanio_dtb, &info_dtb->quantum_faltante, sizeof(u_int32_t));
+	    paquete->header = cargar_header(tamanio_dtb + sizeof(u_int32_t), ESDTBQUANTUM, SAFA);
+	    EnviarPaquete(cpu_libre->socket, paquete);
+	    free(paquete->Payload);
+	    free(paquete);
+
+	    dtb_actualizar(dtb, lista_prioridad, lista_ejecutando, dtb->PC, DTB_EJECUTANDO, cpu_libre->socket);
+	}
+
+	t_cpu *cpu_buscar_libre()
+	{
+	    t_cpu* cpu_libre = list_find(lista_cpu, esta_libre_cpu);
+	    cpu_libre->estado = CPU_OCUPADA;
+
+	    return cpu_libre;
+	}
 
 //Funciones asociadas a DTB
 DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
@@ -201,38 +211,38 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
             printf("flag_inicializacion invalida");
     }
 
-	return dtb_nuevo;
-}
+		return dtb_nuevo;
+	}
 
-DTB_info *info_dtb_crear(u_int32_t pid)
-{
-    DTB_info *info_dtb = malloc(sizeof(DTB_info));
-    info_dtb->gdtPID = pid;
-    info_dtb->estado = DTB_NUEVO;
-    info_dtb->socket_cpu = 0;
-    info_dtb->tiempo_ini = NULL;
-    info_dtb->tiempo_fin = NULL;
-    info_dtb->tiempo_respuesta = 0;
-    info_dtb->kill = false;
-    info_dtb->recursos_asignados = list_create();
-    info_dtb->quantum_faltante = 0;
-    info_dtb->sentencias_en_nuevo = 0;
-    info_dtb->sentencias_al_diego = 0;
-    info_dtb->sentencias_hasta_finalizar = 0;
-    list_add(lista_info_dtb, info_dtb);
+	DTB_info *info_dtb_crear(u_int32_t pid)
+	{
+	    DTB_info *info_dtb = malloc(sizeof(DTB_info));
+	    info_dtb->gdtPID = pid;
+	    info_dtb->estado = DTB_NUEVO;
+	    info_dtb->socket_cpu = 0;
+	    info_dtb->tiempo_ini = NULL;
+	    info_dtb->tiempo_fin = NULL;
+	    info_dtb->tiempo_respuesta = 0;
+	    info_dtb->kill = false;
+	    info_dtb->recursos_asignados = list_create();
+	    info_dtb->quantum_faltante = 0;
+	    info_dtb->sentencias_en_nuevo = 0;
+	    info_dtb->sentencias_al_diego = 0;
+	    info_dtb->sentencias_hasta_finalizar = 0;
+	    list_add(lista_info_dtb, info_dtb);
 
-    return info_dtb;
-}
+	    return info_dtb;
+	}
 
-DTB *dtb_actualizar(DTB *dtb, t_list *source, t_list *dest, u_int32_t pc, Estado estado, int socket)
-{
-    if(dtb_encuentra(source, dtb->gdtPID, dtb->flagInicializacion) != NULL)
-        dtb_remueve(source, dtb->gdtPID, dtb->flagInicializacion);
-    else
-        printf("No se encontro al DTB en la lista de origen.\n");
+	DTB *dtb_actualizar(DTB *dtb, t_list *source, t_list *dest, u_int32_t pc, Estado estado, int socket)
+	{
+	    if(dtb_encuentra(source, dtb->gdtPID, dtb->flagInicializacion) != NULL)
+		dtb_remueve(source, dtb->gdtPID, dtb->flagInicializacion);
+	    else
+		printf("No se encontro al DTB en la lista de origen.\n");
 
-    list_add(dest, dtb);
-    dtb->PC = pc;
+	    list_add(dest, dtb);
+	    dtb->PC = pc;
 
     DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
     if(info_dtb != NULL)
@@ -255,159 +265,159 @@ DTB *dtb_actualizar(DTB *dtb, t_list *source, t_list *dest, u_int32_t pc, Estado
         }
     }
 
-    return dtb;
-}
+	    return dtb;
+	}
 
-DTB_info* info_dtb_actualizar(Estado estado, int socket, DTB_info *info_dtb)
-{
-	info_dtb->socket_cpu = socket;
-	info_dtb->estado = estado;
-    return info_dtb;
-}
+	DTB_info* info_dtb_actualizar(Estado estado, int socket, DTB_info *info_dtb)
+	{
+		info_dtb->socket_cpu = socket;
+		info_dtb->estado = estado;
+	    return info_dtb;
+	}
 
-bool dtb_coincide_pid(void* dtb, u_int32_t pid, u_int32_t flag)
-{
-	return ((DTB *)dtb)->gdtPID == pid && ((DTB *)dtb)->flagInicializacion == flag;
-}
+	bool dtb_coincide_pid(void* dtb, u_int32_t pid, u_int32_t flag)
+	{
+		return ((DTB *)dtb)->gdtPID == pid && ((DTB *)dtb)->flagInicializacion == flag;
+	}
 
-bool info_coincide_pid(u_int32_t pid, void *info_dtb)
-{
-    return ((DTB_info *)info_dtb)->gdtPID == pid;
-}
+	bool info_coincide_pid(u_int32_t pid, void *info_dtb)
+	{
+	    return ((DTB_info *)info_dtb)->gdtPID == pid;
+	}
 
-DTB_info *info_asociada_a_pid(u_int32_t pid)   //No hace lo mismo que la de arriba? COMPLETAR
-{
-    bool compara_con_info(void *info_dtb)
-    {
-        return info_coincide_pid(pid, info_dtb);
-    }
-    return list_find(lista_info_dtb, compara_con_info);
-}
+	DTB_info *info_asociada_a_pid(u_int32_t pid)   //No hace lo mismo que la de arriba? COMPLETAR
+	{
+	    bool compara_con_info(void *info_dtb)
+	    {
+		return info_coincide_pid(pid, info_dtb);
+	    }
+	    return list_find(lista_info_dtb, compara_con_info);
+	}
 
-DTB *dtb_encuentra(t_list* lista, u_int32_t pid, u_int32_t flag)
-{
-    bool compara_con_dtb(void* dtb) {
-        return dtb_coincide_pid(dtb, pid, flag);
-    }
-    return list_find(lista, compara_con_dtb);
-}
+	DTB *dtb_encuentra(t_list* lista, u_int32_t pid, u_int32_t flag)
+	{
+	    bool compara_con_dtb(void* dtb) {
+		return dtb_coincide_pid(dtb, pid, flag);
+	    }
+	    return list_find(lista, compara_con_dtb);
+	}
 
-DTB *dtb_remueve(t_list* lista, u_int32_t pid, u_int32_t flag)
-{
-    bool compara_con_dtb(void* dtb) {
-        return dtb_coincide_pid(dtb, pid, flag);
-    }
-    return list_remove_by_condition(lista, compara_con_dtb);
-}
-// va sin parentesis compara_con_dtb porque tiene que llamar al puntero a la funcion despues de que hacer list_find
+	DTB *dtb_remueve(t_list* lista, u_int32_t pid, u_int32_t flag)
+	{
+	    bool compara_con_dtb(void* dtb) {
+		return dtb_coincide_pid(dtb, pid, flag);
+	    }
+	    return list_remove_by_condition(lista, compara_con_dtb);
+	}
+	// va sin parentesis compara_con_dtb porque tiene que llamar al puntero a la funcion despues de que hacer list_find
 
-void liberar_cpu(int socket)
-{
-    t_cpu* cpu_actual = cpu_con_socket(socket);
-    cpu_actual->estado = CPU_LIBRE;
-}
+	void liberar_cpu(int socket)
+	{
+	    t_cpu* cpu_actual = cpu_con_socket(socket);
+	    cpu_actual->estado = CPU_LIBRE;
+	}
 
-bool dtb_coincide_socket(int socket, void *dtb)
-{
-    DTB_info *info_dtb = info_asociada_a_pid(((DTB *)dtb)->gdtPID);
-    return info_dtb->socket_cpu == socket;
-}
+	bool dtb_coincide_socket(int socket, void *dtb)
+	{
+	    DTB_info *info_dtb = info_asociada_a_pid(((DTB *)dtb)->gdtPID);
+	    return info_dtb->socket_cpu == socket;
+	}
 
-bool cpu_coincide_socket(int socket, void *cpu)
-{
-	return ((t_cpu*)cpu)->socket == socket;
-}
+	bool cpu_coincide_socket(int socket, void *cpu)
+	{
+		return ((t_cpu*)cpu)->socket == socket;
+	}
 
-t_cpu* cpu_con_socket(int socket)
-{
-    bool compara_cpu(void* cpu)
-    {
-        return cpu_coincide_socket(socket, cpu);
-    }
-    return list_find(lista_cpu, compara_cpu);
-}
+	t_cpu* cpu_con_socket(int socket)
+	{
+	    bool compara_cpu(void* cpu)
+	    {
+		return cpu_coincide_socket(socket, cpu);
+	    }
+	    return list_find(lista_cpu, compara_cpu);
+	}
 
-bool esta_libre_cpu (void* cpu)
-{
-	t_cpu* cpu_recv = (t_cpu*) cpu;
-    return (cpu_recv->estado == CPU_LIBRE);
-}
+	bool esta_libre_cpu (void* cpu)
+	{
+		t_cpu* cpu_recv = (t_cpu*) cpu;
+	    return (cpu_recv->estado == CPU_LIBRE);
+	}
 
-bool hay_cpu_libre()
-{
-    return list_any_satisfy(lista_cpu, esta_libre_cpu);
-}
+	bool hay_cpu_libre()
+	{
+	    return list_any_satisfy(lista_cpu, esta_libre_cpu);
+	}
 
-//
+	//
 
-DTB *dtb_buscar_en_todos_lados(u_int32_t pid, DTB_info **info_dtb, t_list **lista_actual)
-{
-    DTB *dtb_encontrado;
-    for(u_int32_t i = 0; i < (list_size(lista_estados)); i++)
-    {   
-        *lista_actual = list_get(lista_estados, i);
-        dtb_encontrado = dtb_encuentra(*lista_actual, pid, 1);
-        if(dtb_encontrado != NULL)
-        {
-            *info_dtb = info_asociada_a_pid(dtb_encontrado->gdtPID); //Devuelve el DTB que se guarda localmente en planificador
-            break;
-        }
-    }
+	DTB *dtb_buscar_en_todos_lados(u_int32_t pid, DTB_info **info_dtb, t_list **lista_actual)
+	{
+	    DTB *dtb_encontrado;
+	    for(u_int32_t i = 0; i < (list_size(lista_estados)); i++)
+	    {   
+		*lista_actual = list_get(lista_estados, i);
+		dtb_encontrado = dtb_encuentra(*lista_actual, pid, 1);
+		if(dtb_encontrado != NULL)
+		{
+		    *info_dtb = info_asociada_a_pid(dtb_encontrado->gdtPID); //Devuelve el DTB que se guarda localmente en planificador
+		    break;
+		}
+	    }
 
-    if(dtb_encontrado == NULL && pid <= numero_pid)
-        printf("El GDT %d ya fue finalizado y removido de memoria.\n"
-                "Ver archivo DTB_finalizados.log, donde encontrara la informacion de todos los dtb finalizados.\n", pid);
-    else if(dtb_encontrado == NULL)
-        printf("Nunca ingreso al sistema un GDT con PID %d\n", pid);
-            
-    return dtb_encontrado;
-}
+	    if(dtb_encontrado == NULL && pid <= numero_pid)
+		printf("El GDT %d ya fue finalizado y removido de memoria.\n"
+			"Ver archivo DTB_finalizados.log, donde encontrara la informacion de todos los dtb finalizados.\n", pid);
+	    else if(dtb_encontrado == NULL)
+		printf("Nunca ingreso al sistema un GDT con PID %d\n", pid);
+		    
+	    return dtb_encontrado;
+	}
 
-//Funciones de Consola
-void ejecutar(char* path)
-{
-    DTB* dtb_nuevo = dtb_crear(0, path, GDT);
-    sem_post(&sem_ejecutar);
-}
+	//Funciones de Consola
+	void ejecutar(char* path)
+	{
+	    DTB* dtb_nuevo = dtb_crear(0, path, GDT);
+	    sem_post(&sem_ejecutar);
+	}
 
-// Status
-void status()
-{
-    for(int i = 0; i < (list_size(lista_estados)); i++)
-    {
-        t_list *lista_mostrar = list_get(lista_estados, i);
-        printf("Cola de Estado %s:\n", Estados[i]);
-	    if (list_size(lista_mostrar) != 0)
-        {
-            contar_dummys_y_gdt(lista_mostrar);
-            list_iterate(lista_mostrar, dtb_imprimir_basico);
-        }
-    }
-    return;
-}
+	// Status
+	void status()
+	{
+	    for(int i = 0; i < (list_size(lista_estados)); i++)
+	    {
+		t_list *lista_mostrar = list_get(lista_estados, i);
+		printf("Cola de Estado %s:\n", Estados[i]);
+		    if (list_size(lista_mostrar) != 0)
+		{
+		    contar_dummys_y_gdt(lista_mostrar);
+		    list_iterate(lista_mostrar, dtb_imprimir_basico);
+		}
+	    }
+	    return;
+	}
 
-void gdt_status(u_int32_t pid)
-{
-    t_list *lista_actual;
-    DTB_info *info_dtb;
-    DTB *dtb_status = dtb_buscar_en_todos_lados(pid, &info_dtb, &lista_actual);
+	void gdt_status(u_int32_t pid)
+	{
+	    t_list *lista_actual;
+	    DTB_info *info_dtb;
+	    DTB *dtb_status = dtb_buscar_en_todos_lados(pid, &info_dtb, &lista_actual);
 
-    if (dtb_status != NULL)
-        mostrar_proceso(dtb_status);
-}
+	    if (dtb_status != NULL)
+		mostrar_proceso(dtb_status);
+	}
 
-void contar_dummys_y_gdt(t_list* lista)
-{
-    bool es_dummy(void* dtb)
-    {
-        return (((DTB*)dtb)->flagInicializacion== DUMMY);
-    }
-        int cant_dummys = list_count_satisfying(lista, es_dummy);
-        int cant_gdt = list_size(lista) - cant_dummys;
-    if(cant_dummys != 0)
-        printf("Cantidad de DUMMYS: %i\n", cant_dummys);
-    printf("Cantidad de GDTs: %i\n", cant_gdt);
-}
+	void contar_dummys_y_gdt(t_list* lista)
+	{
+	    bool es_dummy(void* dtb)
+	    {
+		return (((DTB*)dtb)->flagInicializacion== DUMMY);
+	    }
+		int cant_dummys = list_count_satisfying(lista, es_dummy);
+		int cant_gdt = list_size(lista) - cant_dummys;
+	    if(cant_dummys != 0)
+		printf("Cantidad de DUMMYS: %i\n", cant_dummys);
+	    printf("Cantidad de GDTs: %i\n", cant_gdt);
+	}
 
 void dtb_imprimir_basico(void *_dtb)
 {
@@ -451,24 +461,24 @@ void dtb_imprimir_polenta(void *_dtb)
             list_size(dtb->archivosAbiertos) - 1);
 }
 
-void mostrar_proceso(void *_dtb)
-{ 
-	DTB* dtb = (DTB *)_dtb;
-    DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
-    switch(info_dtb->estado)
-    {
-        case DTB_NUEVO:
-        {
-            dtb_imprimir_basico(dtb);
-            printf("Estado: %s\n", Estados[info_dtb->estado]);
-            break;
-        }
-        default:
-        {
-            dtb_imprimir_polenta(dtb);
-            break;
-        }
-    }
+	void mostrar_proceso(void *_dtb)
+	{ 
+		DTB* dtb = (DTB *)_dtb;
+	    DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
+	    switch(info_dtb->estado)
+	    {
+		case DTB_NUEVO:
+		{
+		    dtb_imprimir_basico(dtb);
+		    printf("Estado: %s\n", Estados[info_dtb->estado]);
+		    break;
+		}
+		default:
+		{
+		    dtb_imprimir_polenta(dtb);
+		    break;
+		}
+	    }
 
 // Muestra archivos desde el indice 1 (todos menos el escriptorio)
     for(int i = 1; i < list_size(dtb->archivosAbiertos); i++)
@@ -490,123 +500,123 @@ void mostrar_proceso(void *_dtb)
     }
 }
 
-void mostrar_archivo(void *_archivo, int index) // queda en void *_archivo por si volvemos a list_iterate
-{
-    ArchivoAbierto *archivo = (ArchivoAbierto *) _archivo;
-    printf( "Archivo %d:\n"
-            "Directorio: %s",
-            // Agregar si se agregan campos a ArchivoAbierto
-            index, archivo->path);
-    if (archivo->cantLineas) 
-        printf(", cantidad de lineas: %i", archivo->cantLineas);
-    printf("\n");
-}
+	void mostrar_archivo(void *_archivo, int index) // queda en void *_archivo por si volvemos a list_iterate
+	{
+	    ArchivoAbierto *archivo = (ArchivoAbierto *) _archivo;
+	    printf( "Archivo %d:\n"
+		    "Directorio: %s",
+		    // Agregar si se agregan campos a ArchivoAbierto
+		    index, archivo->path);
+	    if (archivo->cantLineas) 
+		printf(", cantidad de lineas: %i", archivo->cantLineas);
+	    printf("\n");
+	}
 
-// Finalizar
-void finalizar(u_int32_t pid)
-{
-    t_list *lista_actual;
-    DTB_info *info_dtb;
+	// Finalizar
+	void finalizar(u_int32_t pid)
+	{
+	    t_list *lista_actual;
+	    DTB_info *info_dtb;
 
-    DTB *dtb_finalizar = dtb_buscar_en_todos_lados(pid, &info_dtb, &lista_actual);
-    /* lista_actual queda modificada con la lista donde está el pid que busco */
-    if (dtb_finalizar != NULL)
-        manejar_finalizar(dtb_finalizar, pid, info_dtb, lista_actual);
-}
+	    DTB *dtb_finalizar = dtb_buscar_en_todos_lados(pid, &info_dtb, &lista_actual);
+	    /* lista_actual queda modificada con la lista donde está el pid que busco */
+	    if (dtb_finalizar != NULL)
+		manejar_finalizar(dtb_finalizar, pid, info_dtb, lista_actual);
+	}
 
-void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *lista_actual)
-{
-    info_dtb->kill = true;
-    switch(info_dtb->estado)
-    {
-        case DTB_NUEVO:
-        {
-            printf("El GDT con PID %d esta en nuevos\n", pid);
-            if(!dummy_creado(dtb))
-            {
-                loggear_finalizacion(dtb, info_dtb);
-                dtb_actualizar(dtb, lista_actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);                
-            }
-            else if(dtb_encuentra(lista_listos, pid, DUMMY))
-            {
-                bloquear_dummy(lista_listos, pid);
-                loggear_finalizacion(dtb, info_dtb);
-                dtb_actualizar(dtb, lista_actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
-                sem_post(&sem_multiprogramacion);
-            }
-            break;
-        }
-        case DTB_LISTO:
-        {
-        	printf("El GDT con PID %d esta listo\n", pid);
-        	loggear_finalizacion(dtb, info_dtb);
-            limpiar_recursos(info_dtb);
-            dtb_actualizar(dtb, lista_actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
-            enviar_finalizar_dam(pid);
-            break;
-        }
-        case DTB_EJECUTANDO:
-        {
-        	printf("El GDT con PID %d esta ejecutando\n", pid);
-            enviar_finalizar_cpu(pid, info_dtb->socket_cpu);
-            break;
-        }
-        case DTB_BLOQUEADO:
-        {
-            manejar_finalizar_bloqueado(dtb, pid, info_dtb, lista_actual);
-            break;
-        }
-        case DTB_FINALIZADO:
-        {
-            printf("El GDT con PID %d ya fue finalizado\n", pid);
-            break;
-        }
-        default:
-        {
-            printf("El proceso con PID %d no esta en ninguna cola\n", pid);
-            break;
-        }
-    }
-}
+	void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *lista_actual)
+	{
+	    info_dtb->kill = true;
+	    switch(info_dtb->estado)
+	    {
+		case DTB_NUEVO:
+		{
+		    printf("El GDT con PID %d esta en nuevos\n", pid);
+		    if(!dummy_creado(dtb))
+		    {
+			loggear_finalizacion(dtb, info_dtb);
+			dtb_actualizar(dtb, lista_actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);                
+		    }
+		    else if(dtb_encuentra(lista_listos, pid, DUMMY))
+		    {
+			bloquear_dummy(lista_listos, pid);
+			loggear_finalizacion(dtb, info_dtb);
+			dtb_actualizar(dtb, lista_actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
+			sem_post(&sem_multiprogramacion);
+		    }
+		    break;
+		}
+		case DTB_LISTO:
+		{
+			printf("El GDT con PID %d esta listo\n", pid);
+			loggear_finalizacion(dtb, info_dtb);
+		    limpiar_recursos(info_dtb);
+		    dtb_actualizar(dtb, lista_actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
+		    enviar_finalizar_dam(pid);
+		    break;
+		}
+		case DTB_EJECUTANDO:
+		{
+			printf("El GDT con PID %d esta ejecutando\n", pid);
+		    enviar_finalizar_cpu(pid, info_dtb->socket_cpu);
+		    break;
+		}
+		case DTB_BLOQUEADO:
+		{
+		    manejar_finalizar_bloqueado(dtb, pid, info_dtb, lista_actual);
+		    break;
+		}
+		case DTB_FINALIZADO:
+		{
+		    printf("El GDT con PID %d ya fue finalizado\n", pid);
+		    break;
+		}
+		default:
+		{
+		    printf("El proceso con PID %d no esta en ninguna cola\n", pid);
+		    break;
+		}
+	    }
+	}
 
-void manejar_finalizar_bloqueado(DTB* dtb, u_int32_t pid, DTB_info *info_dtb, t_list *lista_actual)
-{
-    t_recurso *recurso = recurso_bloqueando_pid(pid);
-    if(recurso != NULL)
-    {
-        printf("El GDT %d esta bloqueado esperando por el recurso %s", pid, recurso->id);
-        printf("Se finalizara liberando al recurso, junto a todos los que tiene retenidos");
-        bool coincide_pid(void *_pid_recurso)
-        {
-            int *pid_recurso = (int *)_pid_recurso;
-            return *pid_recurso == pid;
-        }
-        list_remove_by_condition(recurso->pid_bloqueados, coincide_pid);
-        loggear_finalizacion(dtb, info_dtb);
-        limpiar_recursos(info_dtb);
-        dtb_actualizar(dtb, lista_actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
-        enviar_finalizar_dam(pid);
-    }
-    else
-        printf( "El GDT %d esta bloqueado esperando que se realice una operacion\n"
-                "Se esperara a que se desbloquee al proceso para finalizarlo\n", pid);
-}
+	void manejar_finalizar_bloqueado(DTB* dtb, u_int32_t pid, DTB_info *info_dtb, t_list *lista_actual)
+	{
+	    t_recurso *recurso = recurso_bloqueando_pid(pid);
+	    if(recurso != NULL)
+	    {
+		printf("El GDT %d esta bloqueado esperando por el recurso %s", pid, recurso->id);
+		printf("Se finalizara liberando al recurso, junto a todos los que tiene retenidos");
+		bool coincide_pid(void *_pid_recurso)
+		{
+		    int *pid_recurso = (int *)_pid_recurso;
+		    return *pid_recurso == pid;
+		}
+		list_remove_by_condition(recurso->pid_bloqueados, coincide_pid);
+		loggear_finalizacion(dtb, info_dtb);
+		limpiar_recursos(info_dtb);
+		dtb_actualizar(dtb, lista_actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
+		enviar_finalizar_dam(pid);
+	    }
+	    else
+		printf( "El GDT %d esta bloqueado esperando que se realice una operacion\n"
+			"Se esperara a que se desbloquee al proceso para finalizarlo\n", pid);
+	}
 
-t_recurso *recurso_bloqueando_pid(u_int32_t pid)
-{
-    bool tiene_el_pid(void *_recurso)
-    {
-        bool coincide_pid(void *_pid_recurso)
-        {
-            int *pid_recurso = (int *)_pid_recurso;
-            return *pid_recurso == pid;
-        }
-        t_recurso *recurso = (t_recurso *)_recurso;
-        return list_any_satisfy(recurso->pid_bloqueados, coincide_pid);
-    }
-    
-    return list_find(lista_recursos_global, tiene_el_pid);
-}
+	t_recurso *recurso_bloqueando_pid(u_int32_t pid)
+	{
+	    bool tiene_el_pid(void *_recurso)
+	    {
+		bool coincide_pid(void *_pid_recurso)
+		{
+		    int *pid_recurso = (int *)_pid_recurso;
+		    return *pid_recurso == pid;
+		}
+		t_recurso *recurso = (t_recurso *)_recurso;
+		return list_any_satisfy(recurso->pid_bloqueados, coincide_pid);
+	    }
+	    
+	    return list_find(lista_recursos_global, tiene_el_pid);
+	}
 
 void loggear_finalizacion(DTB* dtb, DTB_info* info_dtb)
 {
@@ -849,11 +859,11 @@ float calcular_sentencias_promedio_diego()
 {
     int _sumar_sentencias_al_diego(void *_acum, void * _info_dtb)
     {
-        int acum = (int)_acum;
+        int acum = (intptr_t)_acum;
         DTB_info *info_dtb = (DTB_info *)_info_dtb;
         return acum + info_dtb->sentencias_al_diego;
     }
-    int sentencias_totales = list_fold(lista_info_dtb, 0, (void *)_sumar_sentencias_al_diego);
+    int sentencias_totales = (intptr_t)list_fold(lista_info_dtb, 0, (void *)_sumar_sentencias_al_diego);
     
     return sentencias_totales/numero_pid;
 }
@@ -862,14 +872,14 @@ float calcular_sentencias_promedio_hasta_finalizar()
 {
     int _sumar_sentencias_hasta_finalizar(void *_acum, void *_info_dtb)
     {
-        int acum = (int)_acum;
+        int acum = (intptr_t)_acum;
         DTB_info *info_dtb = (DTB_info *)_info_dtb;
         return acum + info_dtb->sentencias_hasta_finalizar;
     }
     t_list *finalizados = list_filter(lista_info_dtb, ya_finalizo);
     if(finalizados == NULL)
         return 0;
-    int sentencias_hasta_finalizar = list_fold(finalizados, 0, (void*)_sumar_sentencias_hasta_finalizar);
+    int sentencias_hasta_finalizar = (intptr_t)list_fold(finalizados, 0, (void*)_sumar_sentencias_hasta_finalizar);
 
     return sentencias_hasta_finalizar/procesos_finalizados;
 }

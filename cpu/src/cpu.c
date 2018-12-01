@@ -21,7 +21,9 @@ int main(int argc, char **argv)
 	inicializar(argv);
 
 	handshake_safa();
+	log_debug(logger, "Concrete handshake con safa");
 	handshake_dam();
+	log_debug(logger, "Concrete handshake con dam");
 	//handshake_fm9();
 	pthread_t p_thread_one;
 	pthread_create(&p_thread_one, NULL, hilo_safa, NULL);
@@ -39,6 +41,7 @@ void *hilo_safa()
 	while (1)
 	{
 		Paquete *paquete = malloc(sizeof(Paquete));
+		log_info(logger, "Soy el hilo %d, espero paquete de safa", process_get_thread_id());
 		RecibirPaqueteCliente(socket_safa, paquete);
 		interpretar_safa(paquete);
 	}
@@ -148,6 +151,7 @@ char *pedir_primitiva(DTB *dtb)
 
 int interpretar_safa(Paquete *paquete)
 {
+	log_info(logger, "%d: Interpreto el tipo de mensaje", process_get_thread_id());
 	switch (paquete->header.tipoMensaje)
 	{
 	case ESDTBDUMMY:
@@ -155,7 +159,7 @@ int interpretar_safa(Paquete *paquete)
 		EnviarPaquete(socket_dam, paquete); //envia el dtb al diego para que este haga el pedido correspondiente a MDJ
 		break;
 	case ESDTB:
-		log_debug(logger, "ESDTBDUMMY");
+		log_debug(logger, "ESDTB");
 		ejecutar_quantum(paquete);
 		break;
 	case FINALIZAR:

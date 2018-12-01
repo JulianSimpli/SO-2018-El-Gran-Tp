@@ -12,6 +12,7 @@
 #include <commons/config.h>
 #include <commons/collections/list.h>
 #include <string.h>
+#include <commons/process.h>
 #include "../../Bibliotecas/sockets.h"
 #include "../../Bibliotecas/dtb.h"
 #include "../../Bibliotecas/helper.h"

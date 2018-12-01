@@ -1,9 +1,15 @@
 #include "safa.h"
+#include "planificador.h"
+#include <sys/inotify.h>
+#include <commons/string.h>
+#include <string.h>
+#include <readline/readline.h>
+#include <readline/history.h>
 
 /*Creación de Logger*/
 void crear_loggers()
 {
-	logger = log_create("logs/safa.log", "safa", true, LOG_LEVEL_INFO);
+	logger = log_create("logs/safa.log", "safa", true, LOG_LEVEL_DEBUG);
 	logger_fin = log_create ("logs/DTB_finalizados.log", "safa", true, LOG_LEVEL_INFO);
 	log_info(logger, "Iniciando SAFA.log");
 	log_info(logger_fin, "INFORMACION DE ARCHIVOS FINALIZADOS");
@@ -73,12 +79,13 @@ void llenar_lista_estados()
 
 void consola()
 {
-	printf("Esperando que conecte el diego y al menos 1 CPU\nSAFA esta en estado corrupto\n");
-	log_info(logger, "Esperando que conecte el diego y al menos 1 CPU. SAFA esta en estado corrupto\n");
-	// sem_wait(&mutex_handshake_diego);
-	// sem_wait(&mutex_handshake_cpu);
-	printf("Se conectaron Diego y 1 CPU\nSAFA esta en estado operativo\nYa puede usar la consola\n");
-	log_info(logger, "Se conectaron Diego y 1 CPU. SAFA esta en estado operativo");
+	log_info(logger, "Esperando que conecte el diego y al menos 1 CPU\nSAFA esta en estado corrupto\n");
+	sem_wait(&mutex_handshake_diego);
+	log_debug(logger, "Handshake con el diego concretado\n");
+	sem_wait(&mutex_handshake_cpu);
+	log_debug(logger, "Handshake con un cpu concretado\n");
+	log_info(logger, "SAFA esta en estado operativo\n");
+	log_info(logger, "Puede usar la consola\n");
 
 	char *linea;
 	while (true)
