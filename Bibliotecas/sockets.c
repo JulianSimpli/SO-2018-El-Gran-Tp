@@ -1,4 +1,8 @@
 #include "sockets.h"
+#include <commons/string.h>
+#include <string.h>
+#include <readline/readline.h>
+#include <readline/history.h>
 char* Emisores[5] = {"CPU", "FM9", "ELDIEGO", "MDJ", "SAFA"};
 
 /*
@@ -165,7 +169,7 @@ bool EnviarMensaje(int socketFD, char* msg, Emisor emisor) {
 	Paquete paquete;
 	paquete.header.emisor = emisor;
 	paquete.header.tipoMensaje = ESSTRING;
-	paquete.header.tamPayload = string_length(msg) + 1;
+	paquete.header.tamPayload = strlen(msg) + 1;
 	paquete.Payload = msg;
 	return EnviarPaquete(socketFD, &paquete);
 }

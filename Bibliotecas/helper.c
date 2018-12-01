@@ -1,5 +1,5 @@
 #include "helper.h"
-
+#include <string.h>
 
 char* integer_to_string(char*string,int x) {
 	string = malloc(10);

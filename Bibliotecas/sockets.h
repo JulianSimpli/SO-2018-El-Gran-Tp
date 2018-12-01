@@ -22,7 +22,7 @@ typedef enum {CPU, FM9, ELDIEGO, MDJ, SAFA} Emisor;
 
 typedef enum {
 	ESHANDSHAKE, ESSTRING, ESDATOS, SUCCESS, ERROR,				        // Mensajes generales
-	VALIDAR_ARCHIVO, CREAR_ARCHIVO, OBTENER_DATOS, GUARDAR_DATOS, BORRAR_ARCHIVO,   // Mensajes MDJ
+	VALIDAR_ARCHIVO, CREAR_ARCHIVO, OBTENER_DATOS, GUARDAR_DATOS, BORRAR_ARCHIVO,   // Emisor: DIEGO, Receptor: MDJ
 	NUEVA_PRIMITIVA, CLOSE, ASIGNAR,							// Emisor: CPU, Receptor:FM9
 	DTB_EJECUTO, DTB_BLOQUEAR, PROCESS_TIMEOUT, QUANTUM_FALTANTE, WAIT, SIGNAL,	// Emisor: CPU, Receptor: SAFA
 	DUMMY_SUCCES, DUMMY_FAIL, DTB_SUCCES, DTB_FAIL,	DTB_FINALIZAR,			// Emisor: Diego, Receptor: SAFA
@@ -34,6 +34,8 @@ typedef enum {
 	ABORTAR=20001, 										//Errores ASIGNAR
 	ABORTARF=30001,										//Errores FLUSH
 	ABORTARC=40001,										//Errores CLOSE
+	CARGADO,									//Emisor: FM9, Receptor: DIEGO
+	ARCHIVO,									//Emisor: MDJ, Receptor: DIEGO
 	} Tipo;													
 
 typedef struct {

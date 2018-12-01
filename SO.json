@@ -12,7 +12,7 @@
           "shell_command": [
             "cd /home/utnso/workspace/tp-2018-2c-Nene-Malloc/mdj/src",
             "make",
-            "./mdj $(pwd)"
+            "./mdj"
           ],
           "focus": "true"
         },
@@ -36,9 +36,8 @@
           "shell_command": [
             "make",
             "sleep 5",
-            "./dam $(pwd)"
-          ],
-          "focus": "true"
+            "./dam"
+          ]
         }
       ],
       "start_directory": "/home/utnso/workspace/tp-2018-2c-Nene-Malloc/dam/src"
@@ -53,10 +52,8 @@
         {
           "shell_command": [
             "make",
-            "sleep 11",
             "./safa"
-          ],
-          "focus": "true"
+          ]
         }
       ],
       "start_directory": "/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src"
@@ -72,8 +69,7 @@
           "shell_command": [
             "make",
             "./fm9"
-          ],
-          "focus": "true"
+          ]
         }
       ],
       "start_directory": "/home/utnso/workspace/tp-2018-2c-Nene-Malloc/fm9/src"
@@ -89,17 +85,15 @@
           "shell_command": [
             "make",
             "sleep 8",
-            "./cpu $(pwd)"
-          ],
-          "focus": "true"
+            "./cpu"
+          ]
         },
         {
           "shell_command": [
             "make",
             "sleep 9",
-            "./cpu $(pwd)"
-          ],
-          "focus": "true"
+            "./cpu"
+          ]
         }
       ],
       "start_directory": "/home/utnso/workspace/tp-2018-2c-Nene-Malloc/cpu/src"

@@ -12,13 +12,11 @@
 #include <commons/collections/list.h>
 #include <commons/collections/dictionary.h>
 #include <commons/collections/queue.h>
-#include <commons/string.h>
 #include <commons/txt.h>
 #include <commons/bitarray.h>
 #include <pthread.h>
 #include <fcntl.h>
 #include <time.h>
-#include <string.h>
 #include <stdint.h>
 #include <sys/types.h>
 #include <limits.h>
@@ -30,8 +28,6 @@
 #include <assert.h>
 #include <errno.h>
 #include <signal.h>
-#include <readline/readline.h>
-#include <readline/history.h>
 #include <stdbool.h>
 
 // Estos define es lo que hace stdbool.h

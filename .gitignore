@@ -20,12 +20,12 @@ S-AFAlog.log
 /S-AFA/S-AFAlog.log
 S-AFA/S-AFAlog.log
 
-# Procesos
-dam
-mdj
-safa
-fm9
-cpu
+#Procesos
+safa/src/safa
+mdj/src/mdj
+dam/src/dam
+fm9/src/fm9
+cpu/src/cpu
 
 # Tests
 tests/dtb
