@@ -354,20 +354,20 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
 	    DTB *dtb_encontrado;
 	    for(u_int32_t i = 0; i < (list_size(lista_estados)); i++)
 	    {   
-		*lista_actual = list_get(lista_estados, i);
-		dtb_encontrado = dtb_encuentra(*lista_actual, pid, 1);
-		if(dtb_encontrado != NULL)
-		{
-		    *info_dtb = info_asociada_a_pid(dtb_encontrado->gdtPID); //Devuelve el DTB que se guarda localmente en planificador
-		    break;
-		}
+			*lista_actual = list_get(lista_estados, i);
+			dtb_encontrado = dtb_encuentra(*lista_actual, pid, 1);
+			if(dtb_encontrado != NULL)
+			{
+				*info_dtb = info_asociada_a_pid(dtb_encontrado->gdtPID); //Devuelve el DTB que se guarda localmente en planificador
+				break;
+			}
 	    }
 
 	    if(dtb_encontrado == NULL && pid <= numero_pid)
-		printf("El GDT %d ya fue finalizado y removido de memoria.\n"
+			printf("El GDT %d ya fue finalizado y removido de memoria.\n"
 			"Ver archivo DTB_finalizados.log, donde encontrara la informacion de todos los dtb finalizados.\n", pid);
 	    else if(dtb_encontrado == NULL)
-		printf("Nunca ingreso al sistema un GDT con PID %d\n", pid);
+			printf("Nunca ingreso al sistema un GDT con PID %d\n", pid);
 		    
 	    return dtb_encontrado;
 	}
@@ -388,8 +388,8 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
 			printf("Cola de Estado %s:\n", Estados[i]);
 		    if (!list_is_empty(lista_mostrar))
 			{
-		    contar_dummys_y_gdt(lista_mostrar);
-		    list_iterate(lista_mostrar, dtb_imprimir_basico);
+				contar_dummys_y_gdt(lista_mostrar);
+				list_iterate(lista_mostrar, dtb_imprimir_basico);
 			}
 	    }
 		int multip_actual = list_count_satisfying(lista_listos, es_gdt);
@@ -406,7 +406,7 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
 	    DTB *dtb_status = dtb_buscar_en_todos_lados(pid, &info_dtb, &lista_actual);
 
 	    if (dtb_status != NULL)
-		mostrar_proceso(dtb_status);
+			mostrar_proceso(dtb_status);
 	}
 
 	void contar_dummys_y_gdt(t_list* lista)
@@ -443,11 +443,9 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
 	}
 
 	void dtb_imprimir_polenta(void *_dtb)
-	// Agregar lista de recursos.
 	{
 	    DTB *dtb = (DTB *)_dtb;
 	    DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
-	    dtb_imprimir_basico(dtb);
 	    printf( "Estado: %s\n"
 	            "Program Counter: %i\n"
 	            "Ultima CPU: %i\n"
@@ -458,6 +456,25 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
 	            info_dtb->tiempo_respuesta,
 	            (info_dtb->kill) ? "Proceso finalizado por usuario\n" : "",
 	            list_size(dtb->archivosAbiertos) - 1);
+		
+		// Muestra archivos desde el indice 1 (todos menos el escriptorio)
+		for(int i = 1; i < list_size(dtb->archivosAbiertos); i++)
+	    {
+	        ArchivoAbierto *archivo = list_get(dtb->archivosAbiertos, i);
+	        mostrar_archivo(archivo, i);
+	    }
+
+		// Muestra la cantidad de recursos que tiene retenidos y que recurso y cuantas instancias del mismo tiene
+	    printf("Recursos retenidos por el proceso: %d\n", list_size(info_dtb->recursos_asignados));
+	    if(!list_is_empty(info_dtb->recursos_asignados))
+	    {
+	        for(int j = 0; j < list_size(info_dtb->recursos_asignados); j++)
+	        {
+	            t_recurso_asignado *recurso_asignado = list_get(info_dtb->recursos_asignados, j);
+	            printf( "Recurso %d: %s\n en %d instancias",
+	                    j, recurso_asignado->recurso->id, recurso_asignado->instancias);
+	        }
+	    }
 	}
 
 	void mostrar_proceso(void *_dtb)
@@ -474,27 +491,9 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
 	        }
 	        default:
 	        {
+				dtb_imprimir_basico(dtb);
 	            dtb_imprimir_polenta(dtb);
 	            break;
-	        }
-	    }
-
-	// Muestra archivos desde el indice 1 (todos menos el escriptorio)
-	    for(int i = 1; i < list_size(dtb->archivosAbiertos); i++)
-	    {
-	        ArchivoAbierto *archivo = list_get(dtb->archivosAbiertos, i);
-	        mostrar_archivo(archivo, i);
-	    }
-
-	// Muestra la cantidad de recursos que tiene retenidos y que recurso y cuantas instancias del mismo tiene
-	    printf("Recursos retenidos por el proceso: %d\n", list_size(info_dtb->recursos_asignados));
-	    if(!list_is_empty(info_dtb->recursos_asignados))
-	    {
-	        for(int j = 0; j < list_size(info_dtb->recursos_asignados); j++)
-	        {
-	            t_recurso_asignado *recurso_asignado = list_get(info_dtb->recursos_asignados, j);
-	            printf( "Recurso %d: %s\n en %d instancias",
-	                    j, recurso_asignado->recurso->id, recurso_asignado->instancias);
 	        }
 	    }
 	}
