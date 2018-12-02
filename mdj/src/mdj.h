@@ -47,6 +47,7 @@ t_list *get_space(int size);
 char *convertir_bloques_a_string(Archivo_metadata *fm);
 void crear_bitarray();
 void imprimir_directorios(char *);
+void enviar_error(Tipo tipo);
 char *mnt_path;
 char *file_path;
 char *blocks_path;

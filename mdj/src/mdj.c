@@ -22,7 +22,7 @@ int main(int argc, char **argv)
 	return 0;
 }
 
-void *interpretar_consola(void *args) 
+void *interpretar_consola(void *args)
 {
 	char *linea;
 	while (1)
@@ -46,13 +46,13 @@ void *atender_dam()
 		Paquete paquete;
 		RecibirPaqueteCliente(socket_dam, &paquete);
 		pthread_t p_thread;
-		pthread_create(&p_thread, NULL, atender_peticion, (void*)&paquete);
+		pthread_create(&p_thread, NULL, atender_peticion, (void *)&paquete);
 	}
 }
 
 void *atender_peticion(void *args)
 {
-	Paquete *paquete = (Paquete*) args;
+	Paquete *paquete = (Paquete *)args;
 	log_debug(logger, "Tamanio %d", paquete->header.tamPayload);
 	//esto deberia usar semaforos porque ahora admite peticiones concurrentes y pueden querer escribir dos procesos el mismo arhivo
 	Paquete *respuesta = interpretar_paquete(paquete);
@@ -136,7 +136,7 @@ int escuchar_conexiones()
 	struct addrinfo *server_info;
 
 	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC;	 // Permite que la maquina se encargue de verificar si usamos IPv4 o IPv6
+	hints.ai_family = AF_UNSPEC;     // Permite que la maquina se encargue de verificar si usamos IPv4 o IPv6
 	hints.ai_socktype = SOCK_STREAM; // Indica que usaremos el protocolo TCP
 
 	getaddrinfo(ip, port, &hints, &server_info); // Carga en server_info los datos de la conexion
@@ -184,6 +184,35 @@ int escuchar_conexiones()
 	return conexion_aceptada;
 }
 
+void borrar_archivo(Paquete *paquete)
+{
+
+		int offset = 0;
+		char *ruta = string_deserializar(paquete->Payload, &offset);
+
+		//TODO: Lee metadata del archivo y devuelve los bloques
+		t_config *metadata = config_create(ruta);
+		char **bloques_ocupados = config_get_array_value(metadata, "BLOQUES");
+
+		int cantidad_bloques_del_path = config_get_int_value(metadata, "TAMANIO") / tamanio_bloques;
+
+		for (int i = 0; i < cantidad_bloques_del_path; i++)
+		{
+			//TODO: Borra los .bin
+			//remove();
+		}
+
+		//TODO: Modifica el bitarray
+		//liberar();
+		config_destroy(metadata);
+		//Borra los metadata
+		remove(ruta);
+		//Crea paquete OK
+		Paquete respuesta;
+		respuesta.header = cargar_header(0, SUCCESS, MDJ);
+		EnviarPaquete(socket_dam, &respuesta);
+}
+
 Paquete *interpretar_paquete(Paquete *paquete)
 {
 	Paquete *respuesta = malloc(sizeof(Paquete));
@@ -196,9 +225,14 @@ Paquete *interpretar_paquete(Paquete *paquete)
 	{
 	case VALIDAR_ARCHIVO:
 		log_info(logger, "Validar archivo");
-		//TODO: Preguntar si mdj es el unico que llama a este proceso
-		respuesta->Payload = (void*)(__intptr_t)(paquete, file_path);
-		//TODO: Cambiar firma de validar_archivo
+		int existe = validar_archivo(paquete, file_path);
+
+		if (!existe)
+			enviar_error(PATH_INEXISTENTE);
+
+		Paquete respuesta;
+		respuesta.header = cargar_header(0, SUCCESS, MDJ);
+		EnviarPaquete(socket_dam, &respuesta);
 		break;
 	case CREAR_ARCHIVO:
 		log_info(logger, "Crear archivo");
@@ -214,35 +248,7 @@ Paquete *interpretar_paquete(Paquete *paquete)
 		break;
 	case BORRAR_ARCHIVO:
 		log_info(logger, "Borrar archivos");
-
-		char **parametros = string_split(paquete->Payload, " ");
-		char *ruta = parametros[1];
-
-		//Primero verifica que el archivo todavia no exista
-		int existe = validar_archivo(paquete, file_path);
-
-		if (existe)
-		{
-			respuesta->header.tamPayload = sizeof(uint32_t);
-			respuesta->Payload = malloc(sizeof(u_int32_t));
-			u_int32_t error = 10001;
-			memcpy(respuesta->Payload, &error, sizeof(u_int32_t));
-			break;
-		}
-		t_config *metadata = config_create(ruta);
-		char **bloques_ocupados = config_get_array_value(metadata, "BLOQUES");
-
-		int cantidad_bloques_del_path = config_get_int_value(metadata, "TAMANIO") / tamanio_bloques;
-
-		for (int i = 0; i < cantidad_bloques_del_path; i++)
-		{
-		}
-		//TODO: Validar archivo y tirar error si no existe
-		//TODO: Lee metadata del archivo y devuelve los bloques
-		//TODO: Modifica el bitarray
-		//TODO: Borra los .bin
-		//TODO: Borra los metadata
-		//TODO: Crear paquete OK
+		borrar_archivo(paquete);
 		break;
 	default:
 		log_warning(logger, "La accion %d no tiene respuesta posible", accion);
@@ -286,7 +292,7 @@ t_list *get_space(int size)
 	return conseguir_lista_de_bloques(blocks);
 }
 
-int file_size(char *path) 
+int file_size(char *path)
 {
 	FILE *f = fopen(path, "rb");
 	fseek(f, 0, SEEK_END);
@@ -302,13 +308,13 @@ void enviar_error(Tipo tipo)
 	EnviarPaquete(socket_dam, &error);
 }
 
-
 //TODO: Controlar el tamanio que tiene el paquete en la segunda call
 //TODO: Liberar los que son punteros al finalizar cada recursividad
 int validar_archivo(Paquete *paquete, char *current_path)
 {
 	DIR *dir;
 	struct dirent *ent;
+	//Agarra el path del paquete
 	char *search_file = malloc(paquete->header.tamPayload + 1);
 	strcpy(search_file, paquete->Payload);
 	char *route = strtok(search_file, "/");
@@ -317,8 +323,10 @@ int validar_archivo(Paquete *paquete, char *current_path)
 	dir = opendir(current_path);
 	log_info(logger, "Entro al dir: %s", current_path);
 
+	//Recorrer el directorio Archivos
 	while ((ent = readdir(dir)) != NULL)
 	{
+		//Verificar con strcmp si ya existe
 		if (strcmp(route, ent->d_name) == 0)
 		{
 			if (ent->d_type == DT_DIR)
@@ -330,16 +338,11 @@ int validar_archivo(Paquete *paquete, char *current_path)
 				paquete->Payload = route;
 				if (validar_archivo(paquete, current_path))
 					return 1;
-			}
-			else
-			{
+			} else {
 				log_info(logger, "Encontré el archivo %s", ent->d_name);
 				return file_size(ent->d_name);
 			}
 		}
-		//Agarra el path del paquete
-		//Recorrer el directorio Archivos
-		//Verificar con strcmp si ya existe
 	}
 	closedir(dir);
 	log_info(logger, "No encontré el archivo %s", search_file);
@@ -362,7 +365,6 @@ void marcarbitarray(t_config *metadata)
 
 void crear_archivo(Paquete *paquete)
 {
-	Paquete respuesta;
 	int offset = 0;
 	char *ruta = string_deserializar(paquete->Payload, &offset);
 	int bytes_a_crear = 0;
@@ -391,23 +393,26 @@ void crear_archivo(Paquete *paquete)
 	if (resultado != 0)
 		enviar_error(ESPACIO_INSUFICIENTE_CREAR);
 
+	Paquete respuesta;
 	respuesta.header = cargar_header(0, SUCCESS, MDJ);
 	EnviarPaquete(socket_dam, &respuesta);
+	free(nuevo_archivo.nombre);
 }
 
 void obtener_datos(Paquete *paquete)
 {
-	Paquete respuesta;
-	char *payload = malloc(paquete->header.tamPayload + 1);
-	strcpy(payload, paquete->Payload);
 	log_debug(logger, "Recibi el payload %s", paquete->Payload);
 
-	char **parametros = string_split(payload, " ");
-	char *ruta = parametros[1];
-	int bytes_offset = atoi(parametros[2]);
-	int bytes_a_devolver = atoi(parametros[3]);
+	int offset = 0;
+	int size = sizeof(u_int32_t);
+	char *ruta = string_deserializar(paquete->Payload, &offset);
+	int bytes_offset = 0;
+	memcpy(&bytes_offset, paquete->Payload + offset, size);
+	offset += size;
+	int bytes_a_devolver = 0;
+	memcpy(&bytes_a_devolver, paquete->Payload + offset, size);
 
-	//TODO: Calcular en que bloque cae segun el offset y cuantos bloques va leer segun el size
+	//Calcular en que bloque cae segun el offset y cuantos bloques va leer segun el size
 	//Lee metadata del archivo pasado por el path
 	t_config *metadata = config_create(ruta);
 	char **bloques_ocupados = config_get_array_value(metadata, "BLOQUES");
@@ -435,32 +440,32 @@ void obtener_datos(Paquete *paquete)
 		fclose(bloque_abierto);
 	}
 
-	if (buffer != NULL)
-	{
-		respuesta.header.tamPayload = strlen(buffer + 1);
-		respuesta.Payload = buffer;
-		respuesta.header.tipoMensaje = SUCCESS;
-	}
+	//Es el caso que el archivo no se pudo leer por alguna razon
+	if (buffer == NULL)
+		enviar_error(ERROR);
+
+	Paquete respuesta;
+	respuesta.header = cargar_header(strlen(buffer) + 1, SUCCESS, MDJ);
+	respuesta.Payload = buffer;
 
 	EnviarPaquete(socket_dam, &respuesta);
+	free(respuesta.Payload);
 }
 
 void guardar_datos(Paquete *paquete)
 {
 	Paquete respuesta;
-	char **parametros = string_split(paquete->Payload, " ");
-	char *ruta = parametros[1];
-	int bytes_offset = atoi(parametros[2]);
-	int buffer_size = atoi(parametros[3]);
-	char *datos_a_guardar = parametros[4];
-	//Primero verifica que el archivo todavia no exista
-	int existe = validar_archivo(paquete, file_path);
+	int offset = 0;
+	int size = sizeof(u_int32_t);
+	char *ruta = string_deserializar(paquete->Payload, &offset);
+	int bytes_offset = 0;
+	memcpy(&bytes_offset, paquete->Payload + offset, size);
+	offset += size;
+	int buffer_size = 0;
+	memcpy(&buffer_size, paquete->Payload + offset, size);
+	offset += size;
+	char *datos_a_guardar = string_deserializar(paquete->Payload, &offset);
 
-	if (existe)
-	{
-		respuesta.header.tamPayload = sizeof(uint32_t);
-		respuesta.Payload = (void *)10001;
-	}
 	t_config *metadata = config_create(ruta);
 	char **bloques_ocupados = config_get_array_value(metadata, "BLOQUES");
 
