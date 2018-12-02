@@ -134,6 +134,8 @@ void dtb_imprimir_polenta(void *_dtb);
 void mostrar_proceso(void *_dtb);
 void mostrar_archivo(void *_archivo, int index);
 void contar_dummys_y_gdt(t_list* lista);
+bool es_dummy(void *_dtb);
+bool es_gdt(void *_dtb);
 
 //Finalizar
 void finalizar(u_int32_t pid);

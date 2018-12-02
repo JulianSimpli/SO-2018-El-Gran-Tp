@@ -384,14 +384,18 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
 	{
 	    for(int i = 0; i < (list_size(lista_estados)); i++)
 	    {
-		t_list *lista_mostrar = list_get(lista_estados, i);
-		printf("Cola de Estado %s:\n", Estados[i]);
-		    if (list_size(lista_mostrar) != 0)
-		{
+			t_list *lista_mostrar = list_get(lista_estados, i);
+			printf("Cola de Estado %s:\n", Estados[i]);
+		    if (!list_is_empty(lista_mostrar))
+			{
 		    contar_dummys_y_gdt(lista_mostrar);
 		    list_iterate(lista_mostrar, dtb_imprimir_basico);
-		}
+			}
 	    }
+		int multip_actual = list_count_satisfying(lista_listos, es_gdt);
+		multip_actual += list_count_satisfying(lista_ejecutando, es_gdt);
+		multip_actual += list_count_satisfying(lista_bloqueados, es_gdt);
+		printf("Grado de multiprogramacion (procesos en memoria) actual es %d\n", multip_actual);
 	    return;
 	}
 
@@ -407,10 +411,6 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
 
 	void contar_dummys_y_gdt(t_list* lista)
 	{
-	    bool es_dummy(void* dtb)
-	    {
-		return (((DTB*)dtb)->flagInicializacion== DUMMY);
-	    }
 		int cant_dummys = list_count_satisfying(lista, es_dummy);
 		int cant_gdt = list_size(lista) - cant_dummys;
 	    if(cant_dummys != 0)
@@ -509,6 +509,16 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
 	    if (archivo->cantLineas) 
 		printf(", cantidad de lineas: %i", archivo->cantLineas);
 	    printf("\n");
+	}
+
+	bool es_dummy(void *dtb)
+	{
+	return (((DTB*)dtb)->flagInicializacion == DUMMY);
+	}
+
+	bool es_gdt(void *dtb)
+	{
+	return (((DTB*)dtb)->flagInicializacion == GDT);
 	}
 
 	// Finalizar

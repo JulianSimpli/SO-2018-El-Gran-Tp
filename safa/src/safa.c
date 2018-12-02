@@ -275,7 +275,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			break;
 		}
 
-		case DUMMY_SUCCES:
+		case DUMMY_SUCCESS:
 		{
 			// Mensaje contiene pid, cantidad lineas y Capaz direccion logica
 			u_int32_t pid;
@@ -304,7 +304,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			break;
 		}
 
-		case DTB_SUCCES: //DTB_DESBLOQUEAR?
+		case DTB_SUCCESS: //DTB_DESBLOQUEAR?
 		{
 			u_int32_t pid;
 			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
@@ -352,6 +352,10 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 
 void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 {
+	u_int32_t pid = 0;
+	u_int32_t pc = 0;
+	int desplazamiento = 0;
+
 	switch (paquete->header.tipoMensaje)
 	{
 	case ESHANDSHAKE:
@@ -369,9 +373,6 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
         case DTB_BLOQUEAR:
 		{
 			liberar_cpu(socketFD);
-			u_int32_t pid = 0;
-			u_int32_t pc = 0;
-			int desplazamiento = 0;
 			deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
 
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
@@ -388,9 +389,6 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
         case PROCESS_TIMEOUT:
 		{
 			liberar_cpu(socketFD);
-			u_int32_t pid = 0;
-			u_int32_t pc = 0;
-			int desplazamiento = 0;
 			deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
 			
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
@@ -402,9 +400,6 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		case QUANTUM_FALTANTE:
 		{
 			liberar_cpu(socketFD);
-			u_int32_t pid = 0;
-			u_int32_t pc = 0;
-			int desplazamiento = 0;
 			deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
 			
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
@@ -434,9 +429,6 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		case DTB_FINALIZAR: //Aca es cuando el dtb finaliza "normalmente". Lo detecta CPU
 		{
 			liberar_cpu(socketFD);
-			u_int32_t pid = 0;
-			u_int32_t pc = 0;
-			int desplazamiento = 0;
 			deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
 
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
@@ -446,8 +438,6 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		}
 		case WAIT:
 		{
-			u_int32_t pid = 0;
-			u_int32_t pc = 0;
 			t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc, WAIT);
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 			metricas_actualizar(dtb, pc);
@@ -461,8 +451,6 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		}
 		case SIGNAL:
 		{
-			u_int32_t pid = 0;
-			u_int32_t pc = 0;
 			t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc, SIGNAL);
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 			metricas_actualizar(dtb, pc);
@@ -476,9 +464,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		}
 		case ABORTAR:
 		{
-			u_int32_t pid = 0;
-			u_int32_t pc = 0;
-			int desplazamiento = 0;
+			liberar_cpu(socketFD);
 			deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
 
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
@@ -491,9 +477,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		}
 		case ABORTARF:
 		{
-			u_int32_t pid = 0;
-			u_int32_t pc = 0;
-			int desplazamiento = 0;
+			liberar_cpu(socketFD);
 			deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
 
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
@@ -506,9 +490,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		}
 		case ABORTARC:
 		{
-			u_int32_t pid = 0;
-			u_int32_t pc = 0;
-			int desplazamiento = 0;
+			liberar_cpu(socketFD);
 			deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
 
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
