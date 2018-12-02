@@ -7,11 +7,12 @@
 
 #ifndef FM9_H_
 #define FM9_H_
-#define LAMBDA(c_) ({ c_ _;}) //Para funciones lambda
 
-#include "../../Bibliotecas/sockets.h"
-#include "../../Bibliotecas/helper.h"
-#include "../../Bibliotecas/dtb.h"
+#include "sockets.h"
+//#include <commons/collections/list.h>
+//#include "../../Bibliotecas/sockets.h"
+//#include "../../Bibliotecas/helper.h"
+//#include "../../Bibliotecas/dtb.h"
 
 typedef struct {
 	char* idArchivo; //path del archivo
@@ -34,6 +35,12 @@ typedef struct {
 } Frame;
 
 typedef struct {
+	t_list* lineas;
+	int inicio;
+	int fin;
+} Pagina;
+
+typedef struct {
 	int idProceso;
 	t_list* segmentos; //tabla segmentos/lista de 'SegmentoArchivo' que posee un proceso
 } ProcesoArchivo;
@@ -44,15 +51,15 @@ typedef struct {
 } PidPath;
 
 void inicializarFramesMemoria();
-int cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo);
+int cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo); //va a devolver void
 void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo);
 void printGloriosoSegmentacion(int pid);
 void imprimirMemoria();
-void printGloriosoSegmentacion(int pid);
+void printSegmentacion(int pid);
 void liberarMemoriaDesdeHasta(int nroLineaInicio, int nroLineaFin);
 bool archivoAbierto(char* path);
 void liberarArchivoSEG(int pid, char* path);
-char* lineaDeUnaPosicion(int pid, int pc);
+char* lineaDeUnaPosicionSEG(int pid, int pc);
 void enviar_abrio_a_dam(int socketFD, u_int32_t pid, char *fid, char *file);
 
 #endif /* FM9_H_ */
