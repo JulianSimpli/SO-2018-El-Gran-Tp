@@ -264,6 +264,8 @@ void manejar_desconexion_cpu(int socket)
 
 void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 {
+	u_int32_t pid = 0;
+	int tam_pid = sizeof(u_int32_t);
 	switch (paquete->header.tipoMensaje)
 	{
 		case ESHANDSHAKE:
@@ -278,14 +280,15 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		case DUMMY_SUCCESS:
 		{
 			// Mensaje contiene pid, cantidad lineas y Capaz direccion logica
-			u_int32_t pid;
-			memcpy(&pid, paquete->Payload, sizeof(u_int32_t));
+			memcpy(&pid, paquete->Payload, tam_pid);
 			DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
 			log_info(logger, "GDT %d fue cargado en memoria correctamente", dtb->gdtPID);
 
+			ArchivoAbierto *escriptorio_cargado = DTB_leer_struct_archivo(paquete->Payload, &tam_pid);
 			ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
-			memcpy(&escriptorio->cantLineas, paquete->Payload + sizeof(u_int32_t), sizeof(u_int32_t));
-			
+			memcpy(&escriptorio->cantLineas, &escriptorio_cargado->cantLineas, sizeof(u_int32_t));
+
+			liberar_archivo_abierto(escriptorio_cargado);
 			bloquear_dummy(lista_ejecutando, dtb->gdtPID);
 
 			if(verificar_si_murio(dtb, lista_nuevos, dtb->PC))
@@ -296,8 +299,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		}
 		case DUMMY_FAIL_CARGA:
 		{
-			u_int32_t pid;
-			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
+			memcpy(&pid, paquete->Payload, tam_pid);
 			DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
 			log_error(logger, "Fallo la carga en memoria del GDT %d", dtb->gdtPID);
 			bloquear_dummy(lista_ejecutando, dtb->gdtPID);
@@ -306,21 +308,19 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 
 		case DUMMY_FAIL_NO_EXISTE:
 		{
-			u_int32_t pid;
-			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
+			memcpy(&pid, paquete->Payload, tam_pid);
 			DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
 			ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
 			log_error(logger, "No existe el escriptorio %s del GDT %d", escriptorio->path, dtb->gdtPID);
 			printf("No existe el escriptorio %s del dtb %d\nSe removera al dtb de nuevos\n", escriptorio->path, dtb->gdtPID);
 			bloquear_dummy(lista_ejecutando, dtb->gdtPID);
 			list_remove_and_destroy_by_condition(lista_nuevos, LAMBDA (bool _(void *_dtb) {return dtb_coincide_pid(_dtb, pid, GDT); }), dtb_liberar);
-
+			break;
 		}
 
 		case DTB_SUCCESS: //DTB_DESBLOQUEAR?
 		{
-			u_int32_t pid;
-			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
+			memcpy(&pid, paquete->Payload, tam_pid);
 
 			DTB *dtb = dtb_encuentra(lista_bloqueados, pid, GDT);
 			DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
@@ -338,21 +338,56 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			
 			break;
 		}
-		case DTB_FAIL:
+		case ARCHIVO_ABIERTO:
 		{
-			u_int32_t pid;
-			DTB_info *info_dtb;
-			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
-			bloquear_dummy(lista_ejecutando, pid);
-			log_error(logger, "Fallo la carga en memoria del GDT %d", pid);
-			limpiar_recursos(info_dtb);
-			enviar_finalizar_dam(pid);
+			memcpy(&pid, paquete->Payload, tam_pid);
+			DTB *dtb = dtb_encuentra(lista_bloqueados, pid, GDT);
+			DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
+
+			ArchivoAbierto *archivo = DTB_leer_struct_archivo(paquete->Payload, &tam_pid);
+			list_add(dtb->archivosAbiertos, archivo);
+			log_info(logger, "GDT %d abrio %s", dtb->gdtPID, archivo->path);
+			info_dtb->tiempo_respuesta = medir_tiempo(0, (info_dtb->tiempo_ini), (info_dtb->tiempo_fin));
+
+			liberar_archivo_abierto(archivo);
+			if(verificar_si_murio(dtb, lista_bloqueados, dtb->PC))
+				break;
+			
+			dtb_actualizar(dtb, lista_bloqueados, lista_listos, dtb->PC, DTB_LISTO, info_dtb->socket_cpu);
 			break;
 		}
+		case ARCHIVO_CERRADO:
+		{
+			memcpy(&pid, paquete->Payload, tam_pid);
+			DTB *dtb = dtb_encuentra(lista_bloqueados, pid, GDT);
+			DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
+
+			ArchivoAbierto *archivo = DTB_leer_struct_archivo(paquete->Payload, &tam_pid);
+			list_remove_and_destroy_by_condition(dtb->archivosAbiertos, LAMBDA (bool _(void *_archivo) {return coincide_archivo(_archivo, archivo->path); }), liberar_archivo_abierto);
+			log_info(logger, "GDT %d cerro %s", dtb->gdtPID, archivo->path);
+			liberar_archivo_abierto(archivo);
+
+			info_dtb->tiempo_respuesta = medir_tiempo(0, (info_dtb->tiempo_ini), (info_dtb->tiempo_fin));
+
+			if(verificar_si_murio(dtb, lista_bloqueados, dtb->PC))
+				break;
+			
+			dtb_actualizar(dtb, lista_bloqueados, lista_listos, dtb->PC, DTB_LISTO, info_dtb->socket_cpu);
+			break;
+		}
+		// case DTB_FAIL: Este se convierte en 1 por cada error
+		// {
+		// 	DTB_info *info_dtb;
+		// 	memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
+		// 	bloquear_dummy(lista_ejecutando, pid);
+		// 	log_error(logger, "Fallo la carga en memoria del GDT %d", pid);
+		// 	limpiar_recursos(info_dtb);
+		// 	enviar_finalizar_dam(pid);
+		// 	break;
+		// }
 		case DTB_FINALIZAR:
 		{
 			sem_post(&sem_multiprogramacion);
-			u_int32_t pid;
 			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
 			DTB_info *info_dtb;
 			t_list *lista_actual;

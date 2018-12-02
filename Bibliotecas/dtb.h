@@ -42,6 +42,7 @@ void liberar_archivo_abierto(void *archivo);
 void DTB_agregar_archivo(DTB *dtb, int cant_lineas, char *path);
 bool find_file(t_list *files, char *path_archivo);
 ArchivoAbierto *_DTB_encontrar_archivo(DTB *dtb, char *path_archivo);
+bool coincide_archivo(void *archivo, char *path);
 void _DTB_remover_archivo(DTB *dtb, char *path);
 ArchivoAbierto *DTB_obtener_escriptorio(DTB *dtb);
 

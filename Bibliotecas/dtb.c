@@ -180,6 +180,11 @@ ArchivoAbierto *_DTB_encontrar_archivo(DTB *dtb, char *path_archivo)
     return list_find(dtb->archivosAbiertos, coincide_nombre);
 }
 
+bool coincide_archivo(void *_archivo, char *path)
+{
+    return !strcmp(((ArchivoAbierto *)_archivo)->path, path);
+}
+
 void _DTB_remover_archivo(DTB *dtb, char *path)
 {
     bool coincide_nombre(void *element)

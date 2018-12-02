@@ -422,7 +422,7 @@ void *interpretar_mensajes_de_cpu(void *arg)
 		if (!cargado)
 			enviar_error(socket_safa, ESPACIO_INSUFICIENTE_ABRIR, pid);
 
-		respuesta.header = cargar_header(respuesta.header.tamPayload, DUMMY_SUCCESS, ELDIEGO);
+		respuesta.header = cargar_header(respuesta.header.tamPayload, ARCHIVO_ABIERTO, ELDIEGO);
 		EnviarPaquete(socket_safa, &respuesta);
 
 		break;
