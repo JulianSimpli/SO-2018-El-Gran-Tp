@@ -34,8 +34,8 @@ void handshake(int, int);
 int escuchar_conexiones();
 int crear_socket_mdj();
 int ligar_socket();
-int recibir_todo(Paquete *paquete, int socketFD, uint32_t cantARecibir);
-int recibir_partes(void *paquete, int socketFD, u_int32_t cant_a_recibir);
+void recibir_paquete(int socket, Paquete *paquete);
+void recibir_partes(int socket, Paquete *paquete, int cant_a_recibir);
 
 // Finalmente, los prototipos de las funciones que vamos a implementar
 void configure_logger();
@@ -129,6 +129,55 @@ int crear_socket_mdj() {
 	char * ip_mdj = config_get_string_value(config, "IP_MDJ");
 
 	return connect_to_server(ip_mdj,puerto_mdj);
+}
+
+void enviar_paquete(int socket, Paquete *paquete) {
+	int total = TAMANIOHEADER + paquete->header.tamPayload;
+	int desplazamiento = 0;
+	int enviar = transfer_size;
+
+	while (desplazamiento != total) {
+		if ((total - desplazamiento) < transfer_size)
+			enviar = total - desplazamiento;	
+
+		int enviado = send(socket, paquete->Payload + desplazamiento, enviar, 0);
+		
+		if (enviado == -1)
+			_exit_with_error(socket, "No pudo enviar el paquete", paquete);
+
+		desplazamiento += enviado;
+	}
+}
+
+void recibir_paquete(int socket, Paquete *paquete)
+{
+	recibir_partes(socket, paquete, TAMANIOHEADER);
+	paquete->Payload = malloc(paquete->header.tamPayload);
+	recibir_partes(socket, paquete->Payload, paquete->header.tamPayload);
+}
+
+void recibir_partes(int socket, Paquete *paquete, int cant_a_recibir)
+{
+	void *datos = malloc(cant_a_recibir);
+	int total_recibido = 0;
+	int len = transfer_size;
+
+	while (total_recibido != cant_a_recibir)
+	{
+		if (cant_a_recibir < transfer_size)
+			len = cant_a_recibir;
+
+		int recibido = recv(socket, datos + total_recibido, len, 0);
+
+		//man recv en el caso de -1 es error pero tambien lo matamos
+		if (recibido <= 0)
+			_exit_with_error(socket, "No pudo recibir el paquete", datos);
+
+		total_recibido += recibido;
+	}
+
+	memcpy(paquete, datos, cant_a_recibir);
+	free(datos);
 }
 
 void _exit_with_error(int socket, char* error_msg, void * buffer) {

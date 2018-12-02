@@ -14,6 +14,7 @@
 
 #define BACKLOG 10 // Cuántas conexiones pendientes se mantienen en cola del server
 #define TAMANIOHEADER sizeof(Header)
+#define INTSIZE sizeof(u_int32_t)
 #define STRHANDSHAKE "10"
 
 char* Emisores[5];
@@ -35,7 +36,7 @@ typedef enum {
 	ARCHIVO,									//Emisor: MDJ, Receptor: DIEGO
 	PATH_INEXISTENTE = 10001, ESPACIO_INSUFICIENTE_ABRIR,	//Errores ABRIR
 	ABORTAR = 20001,	//Errores ASIGNAR
-	ABORTARF = 30001,	//Errores FLUSH
+	ABORTARF = 30001, FALLO_DE_SEGMENTO, ESPACIO_INSUFICIENTE_FLUSH, ARCHIVO_NO_EXISTE_FLUSH,	//Errores FLUSH
 	ABORTARC = 40001,	//Errores CLOSE
 	ARCHIVO_YA_EXISTENTE = 50001, ESPACIO_INSUFICIENTE_CREAR,	//Errores CREAR
 	ARCHIVO_NO_EXISTE = 60001,	//Errores BORRAR

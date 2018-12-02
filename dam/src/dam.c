@@ -61,7 +61,7 @@ void aceptar_cpus()
 		log_info(logger, "Concrete handshake con cpu %d", socket);
 
 		pthread_t p_thread;
-		pthread_create(&p_thread, NULL, interpretar_mensajes_de_cpu, (void*)(intptr_t)socket);
+		pthread_create(&p_thread, NULL, interpretar_mensajes_de_cpu, (void *)(intptr_t)socket);
 	}
 }
 
@@ -71,7 +71,7 @@ void aceptar_cpus()
 void handshake_cpu(int socket)
 {
 	Paquete paquete;
-	RecibirPaqueteCliente(socket, &paquete);
+	recibir_paquete(socket, &paquete);
 	if (paquete.header.tipoMensaje != ESHANDSHAKE)
 		_exit_with_error(socket, "No se logro el handshake", NULL);
 	EnviarHandshake(socket, ELDIEGO);
@@ -84,11 +84,18 @@ void handshake_cpu(int socket)
 void handshake_mdj()
 {
 	socket_mdj = crear_socket_mdj();
-	EnviarHandshake(socket_mdj, ELDIEGO);
-	Paquete paquete;
-	RecibirPaqueteCliente(socket_mdj, &paquete);
-	if (paquete.header.tipoMensaje != ESHANDSHAKE)
-		_exit_with_error(socket_mdj, "No se logro el handshake", NULL);
+
+	Paquete config;
+	config.header = cargar_header(INTSIZE, ESHANDSHAKE, ELDIEGO);
+	config.Payload = malloc(INTSIZE);
+	memcpy(config.Payload, transfer_size, INTSIZE);
+
+	enviar_paquete(socket_mdj, &config);
+
+	Paquete respuesta;
+	recibir_paquete(socket_mdj, &respuesta);
+	if (respuesta.header.tipoMensaje != ESHANDSHAKE)
+		_exit_with_error(socket_mdj, "No se logro el handshake", config.Payload);
 }
 
 /**
@@ -125,16 +132,6 @@ void handshake_safa()
 	if (paquete->header.tipoMensaje != ESHANDSHAKE)
 		_exit_with_error(socket_safa, "No se logro el primer paso de datos", NULL);
 }
-
-// void * mensajes_mdj()
-// 	int socket = crear_socket_mdj();
-
-// 	log_info(logger, "Voy a enviar mensaje");
-// 	Mensaje mensaje = crear_handshake_mdj(socket);
-// 	enviar_mensaje(mensaje);
-// 	Mensaje *respuesta = recibir_mensaje(socket);
-// 	log_info(logger, "Recibido");
-// }
 
 int crear_socket_safa()
 {
@@ -180,55 +177,6 @@ void *interpretar_mensajes_de_mdj(void *args)
 	//enviar_mensaje
 }
 
-/**
- * Devuelve <= 0 si murio el socket
- * al recibir solo el header o todo el paquete 
- */
-int recibir_todo(Paquete *paquete, int socketFD, uint32_t cantARecibir)
-{
-	int ret = recibir_partes(paquete, socketFD, sizeof(Header));
-	if (ret <= 0)
-		return ret;
-	paquete->Payload = malloc(paquete->header.tamPayload);
-	ret = recibir_partes(paquete->Payload, socketFD, paquete->header.tamPayload);
-	return ret;
-}
-
-int recibir_partes(void *paquete, int socketFD, u_int32_t cant_a_recibir)
-{
-	void *datos = malloc(cant_a_recibir);
-	int recibido = 0;
-	int totalRecibido = 0;
-	int len = transfer_size;
-
-	while (totalRecibido != cant_a_recibir)
-	{
-		if (cant_a_recibir < transfer_size)
-		{
-			len = cant_a_recibir;
-		}
-
-		recibido = recv(socketFD, datos + totalRecibido, len, 0);
-
-		//man recv en el caso de -1 es error pero tambien lo matamos
-		if (recibido <= 0)
-		{
-			log_error(logger, "Cliente Desconectado\n");
-			//TODO: Preguntar que socket se desconecto, si no es CPU o si es el ultimo CPU tiene que morir todo.
-			close(socketFD); // ¡Hasta luego!
-			//sem_post
-			break;
-		}
-
-		totalRecibido += recibido;
-	}
-
-	memcpy(paquete, datos, cant_a_recibir);
-	free(datos);
-
-	return recibido;
-}
-
 void *interpretar_mensajes_de_safa(void *args)
 {
 	Paquete paquete;
@@ -245,7 +193,7 @@ void *interpretar_mensajes_de_safa(void *args)
 
 void *interpretar_mensajes_de_fm9(void *args)
 {
-	int socket = (intptr_t) args;
+	int socket = (intptr_t)args;
 	//For para recibir mensaje de cpu, interpretarlo y enviar la respuesta
 	log_info(logger, "Soy el hilo %d, recibi una conexion en el socket: %d", process_get_thread_id(), socket);
 	log_info(logger, "Interpreto mensaje");
@@ -303,13 +251,12 @@ pthread_t levantar_hilo(void *funcion)
 	return p_thread;
 }
 
-
 //TODO: Abstraer estas dos funciones
 int pedir_validar(char *path)
 {
 	int len = strlen(path);
 	Paquete validar;
-	validar.header = cargar_header(len, VALIDAR_ARCHIVO, ELDIEGO); 
+	validar.header = cargar_header(len, VALIDAR_ARCHIVO, ELDIEGO);
 	validar.Payload = malloc(len);
 	memcpy(validar.Payload, path, len);
 	EnviarPaquete(socket_mdj, &validar);
@@ -349,14 +296,25 @@ int cargar_a_memoria(u_int32_t pid, char *path, char *file, Paquete *respuesta)
 	return respuesta.header.tipoMensaje != ESPACIO_INSUFICIENTE_ABRIR;
 }
 
-void enviar_error(int socket, Tipo tipo, int pid)
+void enviar_error(Tipo tipo, int pid)
 {
 	Paquete error;
-	int size = sizeof(u_int32_t);
-	error.Payload = malloc(size);
-	memcpy(error.Payload, pid, size);
-	error.header = cargar_header(size, tipo, ELDIEGO);
-	EnviarPaquete(socket, &error);
+	error.Payload = malloc(INTSIZE);
+	memcpy(error.Payload, pid, INTSIZE);
+	error.header = cargar_header(INTSIZE, tipo, ELDIEGO);
+	enviar_paquete(socket_safa, &error);
+	log_error(logger, "El proceso %d fallo por %d", pid, tipo);
+	free(error.Payload);
+}
+
+void enviar_success(Tipo tipo, int pid)
+{
+	Paquete respuesta;
+	respuesta.header = cargar_header(INTSIZE, tipo, ELDIEGO);
+	respuesta.Payload = malloc(INTSIZE);
+	memcpy(respuesta.Payload, &pid, INTSIZE);
+	enviar_paquete(socket_safa, &respuesta);
+	free(respuesta.Payload);
 }
 
 /**
@@ -367,12 +325,13 @@ void enviar_error(int socket, Tipo tipo, int pid)
  */
 void *interpretar_mensajes_de_cpu(void *arg)
 {
-	int socket = (intptr_t) arg; 
+	int socket = (intptr_t)arg;
 	//For para recibir mensaje de cpu, interpretarlo y enviar la respuesta
-	log_info(logger, "Soy el hilo %d, recibi una conexion en el socket: %d", process_get_thread_id(), socket);
-	log_info(logger, "Interpreto mensaje");
+	log_debug(logger, "Soy el hilo %d, recibi una conexion en el socket: %d", process_get_thread_id(), socket);
+	log_info(logger, "Interpreto nuevo mensaje");
 	Paquete paquete;
-	RecibirPaqueteCliente(socket, &paquete);
+	recibir_paquete(socket, &paquete);
+
 	switch (paquete.header.tipoMensaje)
 	{
 	case ESDTBDUMMY:
@@ -382,52 +341,164 @@ void *interpretar_mensajes_de_cpu(void *arg)
 
 		int validar = pedir_validar(escriptorio->path);
 
-		if (!validar)
-			enviar_error(socket_safa, DUMMY_FAIL_NO_EXISTE, dummy->gdtPID);
+		if (!validar) {
+			enviar_error(DUMMY_FAIL, dummy->gdtPID);
+			break;
+		}
 
 		Paquete pedido_escriptorio;
-		pedido_escriptorio.header = cargar_header(0, OBTENER_DATOS, ELDIEGO); 
+		pedido_escriptorio.header = cargar_header(0, OBTENER_DATOS, ELDIEGO);
 		char *primitiva = escriptorio->path;
 		EnviarPaquete(socket_mdj, &pedido_escriptorio);
 
 		log_debug(logger, "Le envie el pedido a mdj");
 		RecibirPaqueteCliente(socket_mdj, &paquete);
 		log_debug(logger, "Le envie el pedido a mdj");
-		log_debug(logger, "Recibi %s", (char*) paquete.Payload);
+		log_debug(logger, "Recibi %s", (char *)paquete.Payload);
 
-		Paquete respuesta;
-		int cargado = cargar_a_memoria(dummy->gdtPID, escriptorio->path, file, &respuesta);
-		// falta file
-		if (!cargado)
-			enviar_error(socket_safa, DUMMY_FAIL_CARGA, dummy->gdtPID);
+		int cargado = cargar_a_memoria(escriptorio->path);
 
-		respuesta.header = cargar_header(resuesta.header.tamPayload, DUMMY_SUCCESS, ELDIEGO);
-		EnviarPaquete(socket_safa, &respuesta);
+		if (!cargado) {
+			enviar_error(DUMMY_FAIL, dummy->gdtPID);
+			break;
+		}
 
+		enviar_success(DUMMY_SUCCESS, dummy->gdtPID);
 		break;
 	case ABRIR:
 		int pid = 0;
-		memcpy(&pid, paquete.Payload, sizeof(u_int32_t));
-		char *path = string_deserializar(paquete.Payload, sizeof(u_int32_t));
+		memcpy(&pid, paquete.Payload, INTSIZE);
+		char *path = string_deserializar(paquete.Payload, INTSIZE);
 		log_debug(logger, "Recibi el payload %s", path);
 
 		int validar = pedir_validar(path);
 
-		if (!validar)
-			enviar_error(socket_safa, PATH_INEXISTENTE, pid);
+		if (!validar) {
+			enviar_error(PATH_INEXISTENTE, pid);
+			break;
+		}
 
-		Paquete respuesta;
-		int cargado = cargar_a_memoria(pid, escriptorio->path, file, &respuesta);
-		// falta file
-		if (!cargado)
-			enviar_error(socket_safa, ESPACIO_INSUFICIENTE_ABRIR, pid);
+		int cargado = cargar_a_memoria(escriptorio->path);
 
-		respuesta.header = cargar_header(respuesta.header.tamPayload, ARCHIVO_ABIERTO, ELDIEGO);
-		EnviarPaquete(socket_safa, &respuesta);
+		if (!cargado) {
+			enviar_error(ESPACIO_INSUFICIENTE_ABRIR, pid);
+			break;
+		}
+
+		//TODO: Tengo que traerme de cpu la flag para saber si es dummy
+		enviar_success(DUMMY_SUCCESS, pid);
+		//enviar_success(DTB_SUCCESS, pid);
 
 		break;
+	case CREAR_ARCHIVO:
+
+		int desplazamiento = 0, pid = 0;
+		memcpy(&pid, paquete.Payload + desplazamiento, INTSIZE);
+		desplazamiento += INTSIZE;
+
+		char *path = string_deserializar(paquete.Payload, &desplazamiento);
+		int lineas = 0;
+		memcpy(&lineas, paquete.Payload + desplazamiento, INTSIZE);
+
+		//En este caso si el archivo existe tira error
+		int validar = pedir_validar(escriptorio->path);
+
+		if (validar)
+		{
+			enviar_error(socket_safa, ARCHIVO_YA_EXISTENTE, pid);
+			break;
+		}
+
+		//Reenvio el pedido de crear archivo a mdj
+		//Pero le saco el pid que no lo necesita
+		paquete.header.tamPayload -= INTSIZE;
+		paquete.Payload = paquete.Payload + INTSIZE;
+		enviar_paquete(socket_mdj, &paquete);
+
+		Paquete respuesta_mdj;
+		recibir_paquete(socket_mdj, &respuesta_mdj);
+
+		if (respuesta_mdj.header.tipoMensaje == ESPACIO_INSUFICIENTE_CREAR)
+		{
+			enviar_error(socket_safa, ESPACIO_INSUFICIENTE_CREAR, dummy->gdtPID);
+			break;
+		}
+
+		enviar_success(DTB_SUCCESS, pid);
+		break;
+
+	case BORRAR_ARCHIVO:
+
+		int desplazamiento = 0, pid = 0;
+		memcpy(&pid, paquete.Payload + desplazamiento, INTSIZE);
+		desplazamiento += INTSIZE;
+
+		char *path = string_deserializar(paquete.Payload, &desplazamiento);
+
+		log_debug(logger, "Envio a MDJ");
+		//Reenvio el pedido de crear archivo a mdj
+		//Pero le saco el pid que no lo necesita
+		paquete.Payload = paquete.Payload + INTSIZE;
+		enviar_paquete(socket_mdj, &paquete);
+
+		Paquete respuesta_mdj;
+		recibir_paquete(socket_mdj, &respuesta_mdj);
+
+		if (respuesta_mdj.header.tipoMensaje == ARCHIVO_NO_EXISTE) {
+			enviar_error(socket_safa, ARCHIVO_NO_EXISTE, pid);
+			break;
+		}
+
+		enviar_success(DTB_SUCCESS, pid);
+		break;
+
+	case FLUSH:
+
+		int desplazamiento = 0, pid = 0;
+		memcpy(&pid, paquete.Payload + desplazamiento, INTSIZE);
+		desplazamiento += INTSIZE;
+
+		char *path = string_deserializar(paquete.Payload, &desplazamiento);
+
+		log_debug(logger, "Envio a FM9");
+		//enviar_paquete(socket_fm9, &paquete);
+
+		Paquete respuesta_fm9;
+		recibir_paquete(socket_fm9, &respuesta_fm9);
+
+		if (respuesta_fm9.header.tipoMensaje == FALLO_DE_SEGMENTO) {
+			enviar_error(FALLO_DE_SEGMENTO, pid);
+			break;
+		}
+
+		log_debug(logger, "Recibi el archivo entero y pesa %d", respuesta_fm9.header.tamPayload);
+		Paquete pedido_escritura;
+		pedido_escritura.header = cargar_header(size, GUARDAR_DATOS, ELDIEGO);
+		pedido_escritura.Payload = malloc(size);
+		//TODO: copiar el len como tercer parametro para mdj
+		//TODO: copiar todo el payload de fm9 al nuevo paquete de mdj
+		int offset = 0;
+		paquete.Payload = paquete.Payload + INTSIZE;
+		enviar_paquete(socket_mdj, &paquete);
+		Paquete respuesta_fm9;
+		recibir_paquete(socket_fm9, &respuesta_fm9);
+
+		if (respuesta_mdj.header.tipoMensaje == ESPACIO_INSUFICIENTE_FLUSH) {
+			enviar_error(ARCHIVO_NO_EXISTE_FLUSH, pid);
+			break;
+		}
+
+		if (respuesta_mdj.header.tipoMensaje == ARCHIVO_NO_EXISTE_FLUSH) {
+			enviar_error(ARCHIVO_NO_EXISTE_FLUSH, pid);
+			break;
+		}
+
+		enviar_success(DTB_SUCCESS, pid);
+		break;
+
 	default:
 		log_error(logger, "No entiendo el mensaje");
 		break;
 	}
+	free(paquete.Payload);
 }

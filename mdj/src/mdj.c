@@ -9,8 +9,6 @@ int main(int argc, char **argv)
 {
 	inicializar(argv);
 
-	//TODO: Tiene que cargar desde el bitarray toda la estructura del filesystem existente
-
 	pthread_t dam;
 	pthread_create(&dam, NULL, atender_dam, NULL);
 
@@ -53,16 +51,16 @@ void *atender_dam()
 void *atender_peticion(void *args)
 {
 	Paquete *paquete = (Paquete *)args;
+	log_debug(logger, "Tamanio %d", paquete->header.tipoMensaje);
 	log_debug(logger, "Tamanio %d", paquete->header.tamPayload);
 	//esto deberia usar semaforos porque ahora admite peticiones concurrentes y pueden querer escribir dos procesos el mismo arhivo
-	Paquete *respuesta = interpretar_paquete(paquete);
-	log_debug(logger, "Respuesta %d", respuesta->header.tipoMensaje);
-	EnviarPaquete(socket_dam, respuesta);
+	interpretar_paquete(paquete);
 }
 
 void leer_config(char *path)
 {
 	config = config_create("/home/utnso/tp-2018-2c-Nene-Malloc/mdj/src/MDJ.config");
+	retardo = config_get_int_value(config, "RETARDO") / 1000;
 	char *mnt_config = config_get_string_value(config, "PUNTO_MONTAJE");
 	mnt_path = malloc(strlen(mnt_config) + 1);
 	strcpy(mnt_path, mnt_config);
@@ -79,17 +77,11 @@ void inicializar_log(char *program)
 void inicializar(char **argv)
 {
 	inicializar_log(argv[0]);
-	log_info(logger, "Log cargado exitosamente");
+	log_info(logger, "Log cargado");
 	leer_config(argv[1]);
-	log_info(logger, "Config cargada exitosamente");
-	// crear_bitarray();
-	// log_info(logger, "bitarray creado exitosamente");
-}
-
-void retardo()
-{
-	int retardo = config_get_int_value(config, "RETARDO") / 1000;
-	sleep(retardo);
+	log_info(logger, "Config cargada");
+    cargar_bitarray();
+	log_info(logger, "Bitarray cargado");
 }
 
 int interpretar(char *linea)
@@ -126,100 +118,13 @@ int interpretar(char *linea)
 	return 0;
 }
 
-int escuchar_conexiones()
-{
-
-	char *port = config_get_string_value(config, "PUERTO");
-	char *ip = "127.0.0.1";
-
-	struct addrinfo hints;
-	struct addrinfo *server_info;
-
-	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC;     // Permite que la maquina se encargue de verificar si usamos IPv4 o IPv6
-	hints.ai_socktype = SOCK_STREAM; // Indica que usaremos el protocolo TCP
-
-	getaddrinfo(ip, port, &hints, &server_info); // Carga en server_info los datos de la conexion
-
-	int server_socket = socket(server_info->ai_family, server_info->ai_socktype, server_info->ai_protocol);
-
-	if (server_socket < 0)
-	{
-		_exit_with_error(-1, "No creo el socket", NULL);
-		exit_gracefully(1);
-	}
-
-	int retorno = bind(server_socket, server_info->ai_addr, server_info->ai_addrlen);
-
-	freeaddrinfo(server_info); // No lo necesitamos mas
-
-	if (retorno < 0)
-	{
-		_exit_with_error(server_socket, "No logro el bind", NULL);
-		exit_gracefully(1);
-	}
-
-	log_info(logger, "Empiezo a escuchar el socket");
-
-	int conexion = listen(server_socket, 1);
-
-	if (conexion < 0)
-	{
-		_exit_with_error(server_socket, "Fallo el listen", NULL);
-		exit_gracefully(1);
-	}
-
-	//int conexion_aceptada = accept(server_socket, server_info->ai_addr, server_info->ai_addrlen);
-	int conexion_aceptada = accept(server_socket, NULL, NULL);
-
-	if (conexion_aceptada < 0)
-	{
-		_exit_with_error(server_socket, "Fallo el accept", NULL);
-		exit_gracefully(1);
-	}
-
-	log_info(logger, "Conexion aceptada nuevo socket: %d", conexion_aceptada);
-
-	close(server_socket);
-	return conexion_aceptada;
-}
-
-void borrar_archivo(Paquete *paquete)
-{
-
-		int offset = 0;
-		char *ruta = string_deserializar(paquete->Payload, &offset);
-
-		//TODO: Lee metadata del archivo y devuelve los bloques
-		t_config *metadata = config_create(ruta);
-		char **bloques_ocupados = config_get_array_value(metadata, "BLOQUES");
-
-		int cantidad_bloques_del_path = config_get_int_value(metadata, "TAMANIO") / tamanio_bloques;
-
-		for (int i = 0; i < cantidad_bloques_del_path; i++)
-		{
-			//TODO: Borra los .bin
-			//remove();
-		}
-
-		//TODO: Modifica el bitarray
-		//liberar();
-		config_destroy(metadata);
-		//Borra los metadata
-		remove(ruta);
-		//Crea paquete OK
-		Paquete respuesta;
-		respuesta.header = cargar_header(0, SUCCESS, MDJ);
-		EnviarPaquete(socket_dam, &respuesta);
-}
-
 Paquete *interpretar_paquete(Paquete *paquete)
 {
 	Paquete *respuesta = malloc(sizeof(Paquete));
-	respuesta->header.emisor = MDJ;
-	//TODO: Poner destinatario DAM
+	respuesta->header = cargar_header(0, SUCCESS, MDJ);
 
 	int accion = paquete->header.tipoMensaje;
+	//sleep(retardo);
 
 	switch (accion)
 	{
