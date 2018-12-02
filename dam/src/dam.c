@@ -318,16 +318,34 @@ int pedir_validar(char *path)
 	return respuesta.header.tipoMensaje != PATH_INEXISTENTE;
 }
 
-int cargar_a_memoria(char *file)
+int cargar_a_memoria(u_int32_t pid, char *path, char *file, Paquete *respuesta)
 {
-	int len = strlen(file);
+	int desplazamiento = 0;
+	int tam_pid = sizeof(u_int32_t);
+	int tam_serial_path = 0;
+	int tam_serial_file = 0;
+
+	void *serial_path = string_serializar(path, &tam_serial_path);
+	void *serial_file = string_serializar(file, &tam_serial_file);
+	
+	// payload = pid, len path, path, len archivo, archivo	
 	Paquete cargar;
-	cargar.header = cargar_header(len, ABRIR, ELDIEGO); 
-	cargar.Payload = malloc(len);
-	memcpy(cargar.Payload, file, len);
+	cargar.Payload = malloc(tam_pid + tam_serial_path + tam_serial_file);
+	memcpy(cargar.Payload, &pid, tam_pid);
+	desplazamiento += tam_pid;
+	memcpy(cargar.Payload + desplazamiento, serial_path, tam_serial_path);
+	desplazamiento += tam_serial_path;
+	memcpy(cargar.Payload + desplazamiento, serial_file, tam_serial_file);
+	desplazamiento += tam_serial_file;
+
+	cargar.header = cargar_header(desplazamiento, ABRIR, ELDIEGO);
 	EnviarPaquete(socket_fm9, &cargar);
-	Paquete respuesta;
-	RecibirPaqueteCliente(socket_fm9, &respuesta);
+	
+	free(serial_path);
+	free(serial_file);
+	free(cargar.Payload);
+
+	RecibirPaqueteCliente(socket_fm9, respuesta);
 	return respuesta.header.tipoMensaje != ESPACIO_INSUFICIENTE_ABRIR;
 }
 
@@ -365,7 +383,7 @@ void *interpretar_mensajes_de_cpu(void *arg)
 		int validar = pedir_validar(escriptorio->path);
 
 		if (!validar)
-			enviar_error(socket_safa, DUMMY_FAIL, dummy->gdtPID);
+			enviar_error(socket_safa, DUMMY_FAIL_NO_EXISTE, dummy->gdtPID);
 
 		Paquete pedido_escriptorio;
 		pedido_escriptorio.header = cargar_header(0, OBTENER_DATOS, ELDIEGO); 
@@ -377,19 +395,19 @@ void *interpretar_mensajes_de_cpu(void *arg)
 		log_debug(logger, "Le envie el pedido a mdj");
 		log_debug(logger, "Recibi %s", (char*) paquete.Payload);
 
-		int cargado = cargar_a_memoria(escriptorio->path);
-
-		if (!cargado)
-			enviar_error(socket_safa, DUMMY_FAIL, dummy->gdtPID);
-
 		Paquete respuesta;
-		respuesta.header = cargar_header(0, DUMMY_SUCCESS, ELDIEGO);
+		int cargado = cargar_a_memoria(dummy->gdtPID, escriptorio->path, file, &respuesta);
+		// falta file
+		if (!cargado)
+			enviar_error(socket_safa, DUMMY_FAIL_CARGA, dummy->gdtPID);
+
+		respuesta.header = cargar_header(resuesta.header.tamPayload, DUMMY_SUCCESS, ELDIEGO);
 		EnviarPaquete(socket_safa, &respuesta);
 
 		break;
 	case ABRIR:
 		int pid = 0;
-		memcpy(pid, paquete.Payload, sizeof(u_int32_t));
+		memcpy(&pid, paquete.Payload, sizeof(u_int32_t));
 		char *path = string_deserializar(paquete.Payload, sizeof(u_int32_t));
 		log_debug(logger, "Recibi el payload %s", path);
 
@@ -398,13 +416,13 @@ void *interpretar_mensajes_de_cpu(void *arg)
 		if (!validar)
 			enviar_error(socket_safa, PATH_INEXISTENTE, pid);
 
-		int cargado = cargar_a_memoria(escriptorio->path);
-
+		Paquete respuesta;
+		int cargado = cargar_a_memoria(pid, escriptorio->path, file, &respuesta);
+		// falta file
 		if (!cargado)
 			enviar_error(socket_safa, ESPACIO_INSUFICIENTE_ABRIR, pid);
 
-		Paquete respuesta;
-		respuesta.header = cargar_header(0, DUMMY_SUCCESS, ELDIEGO);
+		respuesta.header = cargar_header(respuesta.header.tamPayload, DUMMY_SUCCESS, ELDIEGO);
 		EnviarPaquete(socket_safa, &respuesta);
 
 		break;

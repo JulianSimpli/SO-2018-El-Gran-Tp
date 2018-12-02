@@ -294,7 +294,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			pasaje_a_ready(dtb->gdtPID);
 			break;
 		}
-		case DUMMY_FAIL:
+		case DUMMY_FAIL_CARGA:
 		{
 			u_int32_t pid;
 			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
@@ -302,6 +302,19 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			log_error(logger, "Fallo la carga en memoria del GDT %d", dtb->gdtPID);
 			bloquear_dummy(lista_ejecutando, dtb->gdtPID);
 			break;
+		}
+
+		case DUMMY_FAIL_NO_EXISTE:
+		{
+			u_int32_t pid;
+			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
+			DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
+			ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
+			log_error(logger, "No existe el escriptorio %s del GDT %d", escriptorio->path, dtb->gdtPID);
+			printf("No existe el escriptorio %s del dtb %d\nSe removera al dtb de nuevos\n", escriptorio->path, dtb->gdtPID);
+			bloquear_dummy(lista_ejecutando, dtb->gdtPID);
+			list_remove_and_destroy_by_condition(lista_nuevos, LAMBDA (bool _(void *_dtb) {return dtb_coincide_pid(_dtb, pid, GDT); }), dtb_liberar);
+
 		}
 
 		case DTB_SUCCESS: //DTB_DESBLOQUEAR?

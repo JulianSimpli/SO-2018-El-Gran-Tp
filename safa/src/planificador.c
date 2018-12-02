@@ -917,6 +917,7 @@ void dtb_liberar(void *dtb)
     if (((DTB *)dtb)->flagInicializacion == GDT)
         info_liberar(dtb);
     list_clean_and_destroy_elements(((DTB *)dtb)->archivosAbiertos, liberar_archivo_abierto);
+	log_info(logger, "Se libero de memoria del DTB %d", ((DTB *)dtb)->gdtPID);
     free(dtb);
 }
 
