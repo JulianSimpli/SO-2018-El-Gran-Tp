@@ -10,6 +10,8 @@
 #define LAMBDA(c_) ({ c_ _;}) //Para funciones lambda
 
 #include "../../Bibliotecas/sockets.h"
+#include "../../Bibliotecas/helper.h"
+#include "../../Bibliotecas/dtb.h"
 
 typedef struct {
 	char* idArchivo; //path del archivo
@@ -51,5 +53,6 @@ void liberarMemoriaDesdeHasta(int nroLineaInicio, int nroLineaFin);
 bool archivoAbierto(char* path);
 void liberarArchivoSEG(int pid, char* path);
 char* lineaDeUnaPosicion(int pid, int pc);
+void enviar_abrio_a_dam(int socketFD, u_int32_t pid, char *fid, char *file);
 
 #endif /* FM9_H_ */

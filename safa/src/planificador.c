@@ -853,20 +853,6 @@ void metricas()
     printf("Tiempo de respuesta promedio del sistema: %f milisegundos\n", t_rta);
 }
 
-void* list_fold(t_list* self, void* seed, void*(*operation)(void*, void*))
-{
-	t_link_element* element = self->head;
-	void* result = seed;
-
-	while(element != NULL)
-	{
-		result = operation(result, element->data);
-		element = element->next;
-	}
-
-	return result;
-}
-
 float calcular_sentencias_promedio_diego()
 {
     int _sumar_sentencias_al_diego(void *_acum, void * _info_dtb)

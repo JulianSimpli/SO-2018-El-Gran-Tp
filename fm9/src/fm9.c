@@ -93,34 +93,16 @@ void accion(void* socket) {
 				case ABRIR: {
 					//el payload debe ser: int(id)+char*(path)\0+char*(archivo)
 					u_int32_t pid;
-					memcpy(&pid, paquete.Payload, sizeof(pid));
-					int tam_desplazado = sizeof(u_int32_t);
+					int tam_pid = sizeof(u_int32_t);
+					memcpy(&pid, paquete.Payload, tam_pid);
+					int tam_desplazado = tam_pid;
 					char *fid = string_deserializar(paquete.Payload, &tam_desplazado);
 					char *file = string_deserializar(paquete.Payload, &tam_desplazado);
+					free(paquete.Payload);
 					if(!strcmp(MODO, "SEG")) {
-						if (cargarArchivoAMemoriaSEG(pid, fid, file)) {
-							int desplazamiento = 0;
-							int tam_pid = sizeof(u_int32_t);
-							int desplazamiento_archivo = 0;
-
-							ArchivoAbierto archivo;
-							strcpy(archivo.path, fid);
-							//archivo.cantLineas = contar_lineas(fid); Falta funcion que cuente lineas
-							void *archivo_serializado = DTB_serializar_archivo(archivo, &desplazamiento_archivo);
-							
-							Paquete abrio;
-							abrio.Payload = malloc(tam_pid + desplazamiento_archivo);
-							memcpy(abrio.Payload, &pid, tam_pid);
-							desplazamiento += tam_pid;
-							memcpy(abrio.Payload + tam_pid, archivo_serializado, desplazamiento_archivo);
-							desplazamiento += desplazamiento_archivo;
-							
-							abrio.header = cargar_header(desplazamiento, ABRIR, FM9);
-							EnviarPaquete(socketFD, abrio);
-
-							free(archivo_serializado);
-							free(abrio.Payload);
-						} else EnviarDatosTipo(socketFD, ELDIEGO, NULL, 0, ERROR);
+						if (cargarArchivoAMemoriaSEG(pid, fid, file))
+							enviar_abrio_a_dam(socketFD, pid, fid, file);
+						else EnviarDatosTipo(socketFD, ELDIEGO, NULL, 0, ERROR);
 					} else if(!strcmp(MODO, "TPI")) {
 
 					} else if(!strcmp(MODO, "SPA")) {
@@ -232,6 +214,36 @@ void accion(void* socket) {
 			}
 		}
 	}
+}
+
+void enviar_abrio_a_dam(int socketFD, u_int32_t pid, char *fid, char *file)
+{
+	int desplazamiento = 0;
+	int desplazamiento_archivo = 0;
+	int tam_pid = sizeof(u_int32_t);
+
+	ArchivoAbierto archivo;
+	strcpy(archivo.path, fid);
+	//archivo.cantLineas = contar_lineas(fid); Falta funcion que cuente lineas
+	void *archivo_serializado = DTB_serializar_archivo(&archivo, &desplazamiento_archivo);
+	
+	Paquete abrio;
+	abrio.Payload = malloc(tam_pid + desplazamiento_archivo);
+	memcpy(abrio.Payload, &pid, tam_pid);
+	desplazamiento += tam_pid;
+	memcpy(abrio.Payload + tam_pid, archivo_serializado, desplazamiento_archivo);
+	desplazamiento += desplazamiento_archivo;
+	
+	abrio.header = cargar_header(desplazamiento, ABRIR, FM9);
+	bool envio = EnviarPaquete(socketFD, &abrio);
+
+	if(envio)
+		printf("Paquete a dam archivo abierto enviado %s\n", (char *)abrio.Payload);
+	else
+		printf("Paquete a dam archivo abierto fallo\n");
+
+	free(archivo_serializado);
+	free(abrio.Payload);
 }
 
 void consola() {
