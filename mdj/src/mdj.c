@@ -51,7 +51,6 @@ void *atender_dam()
 void *atender_peticion(void *args)
 {
 	Paquete *paquete = (Paquete *)args;
-	log_debug(logger, "Tamanio %d", paquete->header.tipoMensaje);
 	log_debug(logger, "Tamanio %d", paquete->header.tamPayload);
 	//esto deberia usar semaforos porque ahora admite peticiones concurrentes y pueden querer escribir dos procesos el mismo arhivo
 	interpretar_paquete(paquete);
@@ -74,6 +73,11 @@ void inicializar_log(char *program)
 	logger = log_create("MDJ.log", program, true, LOG_LEVEL_DEBUG);
 }
 
+void inicializar_semaforos()
+{
+	sem_init(&sem_bitarray, 0, 0);
+}
+
 void inicializar(char **argv)
 {
 	inicializar_log(argv[0]);
@@ -82,6 +86,7 @@ void inicializar(char **argv)
 	log_info(logger, "Config cargada");
     cargar_bitarray();
 	log_info(logger, "Bitarray cargado");
+	inicializar_semaforos();
 }
 
 int interpretar(char *linea)
@@ -130,13 +135,17 @@ Paquete *interpretar_paquete(Paquete *paquete)
 	{
 	case VALIDAR_ARCHIVO:
 		log_info(logger, "Validar archivo");
-		int existe = validar_archivo(paquete, file_path);
+		int tamanio = validar_archivo(paquete, file_path);
 
-		if (!existe)
+		if (tamanio == 0) {
 			enviar_error(PATH_INEXISTENTE);
+			return;
+		}
 
 		Paquete respuesta;
-		respuesta.header = cargar_header(0, SUCCESS, MDJ);
+		respuesta.header = cargar_header(INTSIZE, SUCCESS, MDJ);
+		respuesta.Payload = malloc(INTSIZE);
+		memcpy(respuesta.Payload, &tamanio, INTSIZE);
 		EnviarPaquete(socket_dam, &respuesta);
 		break;
 	case CREAR_ARCHIVO:
@@ -256,6 +265,7 @@ int validar_archivo(Paquete *paquete, char *current_path)
 
 void marcarbitarray(t_config *metadata)
 {
+	sem_wait();	
 	char **bloques = config_get_array_value(metadata, "BLOQUES");
 	log_info(logger, "Ocupa el bloque %d", atoi(bloques[0]));
 	log_info(logger, "Ocupa el bloque %d", atoi(bloques[1]));
@@ -293,6 +303,9 @@ void crear_archivo(Paquete *paquete)
 	nuevo_archivo.tamanio = bytes_a_crear;
 
 	//Crea el archivo metadata con la informacion de donde estan los bloques
+	//TODO: Agregar en una lista que este archivo esta siendo leido
+	//TODO: Si esta abierto hace un wait en ese semaforo y queda bloqueado
+	//Caso de carrera en el que un escriptorio crea un archivo que otro proceso va a leer
 	int resultado = guardar_metadata(&nuevo_archivo);
 
 	if (resultado != 0)
@@ -311,6 +324,8 @@ void obtener_datos(Paquete *paquete)
 	int offset = 0;
 	int size = sizeof(u_int32_t);
 	char *ruta = string_deserializar(paquete->Payload, &offset);
+	//TODO: Agregar en una lista que este archivo esta siendo leido
+	//TODO: Si esta abierto hace un wait en ese semaforo y queda bloqueado
 	int bytes_offset = 0;
 	memcpy(&bytes_offset, paquete->Payload + offset, size);
 	offset += size;
@@ -350,11 +365,14 @@ void obtener_datos(Paquete *paquete)
 		enviar_error(ERROR);
 
 	Paquete respuesta;
-	respuesta.header = cargar_header(strlen(buffer) + 1, SUCCESS, MDJ);
-	respuesta.Payload = buffer;
-
+	int desplazamiento = 0;
+	void *serializado = string_serializar(buffer, &desplazamiento);
+	respuesta.header = cargar_header(desplazamiento, SUCCESS, MDJ);
+	respuesta.Payload = serializado;
+ 
 	EnviarPaquete(socket_dam, &respuesta);
 	free(respuesta.Payload);
+	free(buffer);
 }
 
 void guardar_datos(Paquete *paquete)
@@ -363,6 +381,8 @@ void guardar_datos(Paquete *paquete)
 	int offset = 0;
 	int size = sizeof(u_int32_t);
 	char *ruta = string_deserializar(paquete->Payload, &offset);
+	//TODO: Agregar en una lista que este archivo esta siendo leido
+	//TODO: Si esta abierto hace un wait en ese semaforo y queda bloqueado
 	int bytes_offset = 0;
 	memcpy(&bytes_offset, paquete->Payload + offset, size);
 	offset += size;
@@ -370,6 +390,11 @@ void guardar_datos(Paquete *paquete)
 	memcpy(&buffer_size, paquete->Payload + offset, size);
 	offset += size;
 	char *datos_a_guardar = string_deserializar(paquete->Payload, &offset);
+
+	int tamanio = validar_archivo(paquete, file_path);
+
+	if (tamanio == 0)
+		enviar_error(ARCHIVO_NO_EXISTE_FLUSH);
 
 	t_config *metadata = config_create(ruta);
 	char **bloques_ocupados = config_get_array_value(metadata, "BLOQUES");

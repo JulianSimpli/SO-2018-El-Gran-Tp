@@ -61,6 +61,8 @@ int tamanio_bloques;
 int socket_dam;
 char *current_path;
 int retardo;
+int transfer_size;
+sem_t *sem_bitarray;
 
 void _exit_with_error(int socket, char *error_msg, void *buffer);
 void exit_gracefully(int return_nr);
@@ -93,9 +95,10 @@ void handshake_dam()
 {
     socket_dam = escuchar_conexiones();
     Paquete paquete;
-    RecibirPaqu(socket_dam, &paquete);
+    recibir_paquete(socket_dam, &paquete);
     if (paquete.header.tipoMensaje != ESHANDSHAKE)
         _exit_with_error(socket_dam, "No se logro el handshake", NULL);
+    memcpy(&transfer_size, paquete.Payload, INTSIZE);
     EnviarHandshake(socket_dam, MDJ);
 }
 
