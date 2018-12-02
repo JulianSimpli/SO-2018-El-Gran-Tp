@@ -34,6 +34,8 @@
 #define true 1
 #define false 0
 
+t_log *logger;
+
 //para guardar funciones y estructuras que se necesiten
 
 char* integer_to_string(char*string,int x);
@@ -42,5 +44,7 @@ void *string_serializar(char *string, int *desplazamiento);
 char *string_deserializar(void *data, int *desplazamiento);
 void *serializar_pid_y_pc(u_int32_t pid, u_int32_t pc, int *tam_pid_y_pc);
 void deserializar_pid_y_pc(void *payload, u_int32_t *pid, u_int32_t *pc, int *desplazamiento);
+void _exit_with_error(int socket, char *error_msg, void *buffer);
+void exit_gracefully(int return_nr);
 
 #endif /* HELPER_*/

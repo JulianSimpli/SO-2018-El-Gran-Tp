@@ -18,10 +18,8 @@
 #include "../../Bibliotecas/dtb.h"
 
 // Definimos algunas variables globales
-t_log *logger;
 t_config *config;
 int tamanio_linea;
-int transfer_size;
 
 #define IP "127.0.0.1"
 #define PUERTO "8080"
@@ -164,6 +162,7 @@ void enviar_paquete(int socket, Paquete *paquete)
 	int total = TAMANIOHEADER + paquete->header.tamPayload;
 	int desplazamiento = 0;
 	int enviar = transfer_size;
+	log_debug(logger, "Emisor %d", paquete->header.emisor);
 
 	while (desplazamiento != total)
 	{
@@ -176,57 +175,8 @@ void enviar_paquete(int socket, Paquete *paquete)
 			_exit_with_error(socket, "No pudo enviar el paquete", paquete);
 
 		desplazamiento += enviado;
+		log_debug(logger, "%i bytes de %i/%i", enviado, desplazamiento, enviar);
 	}
-}
-
-void recibir_paquete(int socket, Paquete *paquete)
-{
-	recibir_partes(socket, paquete, TAMANIOHEADER);
-	paquete->Payload = malloc(paquete->header.tamPayload);
-	recibir_partes(socket, paquete->Payload, paquete->header.tamPayload);
-}
-
-void recibir_partes(int socket, Paquete *paquete, int cant_a_recibir)
-{
-	void *datos = malloc(cant_a_recibir);
-	int total_recibido = 0;
-	int len = transfer_size;
-
-	while (total_recibido != cant_a_recibir)
-	{
-		if (cant_a_recibir < transfer_size)
-			len = cant_a_recibir;
-
-		int recibido = recv(socket, datos + total_recibido, len, 0);
-
-		//man recv en el caso de -1 es error pero tambien lo matamos
-		if (recibido <= 0)
-			_exit_with_error(socket, "No pudo recibir el paquete", datos);
-
-		total_recibido += recibido;
-	}
-
-	memcpy(paquete, datos, cant_a_recibir);
-	free(datos);
-}
-
-//funciones de exit
-
-void _exit_with_error(int socket, char *error_msg, void *buffer)
-{
-	if (buffer != NULL)
-	{
-		free(buffer);
-	}
-	log_error(logger, error_msg);
-	close(socket);
-	exit_gracefully(1);
-}
-
-void exit_gracefully(int return_nr)
-{
-	log_destroy(logger);
-	exit(return_nr);
 }
 
 #endif /* DAM_H_ */

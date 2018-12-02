@@ -66,3 +66,22 @@ void deserializar_pid_y_pc(void *payload, u_int32_t *pid, u_int32_t *pc, int *de
 	*desplazamiento += tamanio;
 
 }
+
+//funciones de exit
+
+void _exit_with_error(int socket, char *error_msg, void *buffer)
+{
+	if (buffer != NULL)
+	{
+		free(buffer);
+	}
+	log_error(logger, error_msg);
+	close(socket);
+	exit_gracefully(1);
+}
+
+void exit_gracefully(int return_nr)
+{
+	log_destroy(logger);
+	exit(return_nr);
+}

@@ -39,7 +39,7 @@ int escuchar_conexiones();
 Mensaje *recibir_mensaje(int conexion);
 void *atender_dam();
 void *atender_peticion(void *args);
-Paquete *interpretar_paquete(Paquete *paquete);
+void interpretar_paquete(Paquete *paquete);
 void handshake(int, int);
 void enviar_mensaje(Mensaje);
 void marcarBitarray(t_config *metadata);
@@ -62,10 +62,8 @@ int socket_dam;
 char *current_path;
 int retardo;
 int transfer_size;
-sem_t *sem_bitarray;
+sem_t sem_bitarray;
 
-void _exit_with_error(int socket, char *error_msg, void *buffer);
-void exit_gracefully(int return_nr);
 int validar_archivo(Paquete *paquete, char *);
 void crear_archivo(Paquete *paquete);
 void obtener_datos(Paquete *paquete);
@@ -272,7 +270,9 @@ int create_block(int index, int cantidad_bytes)
 {
     char *block_path = get_block_full_path(index);
 
+	sem_wait(&sem_bitarray);	
     bitarray_set_bit(bitarray, index);
+	sem_post(&sem_bitarray);	
 
     return create_block_file(block_path, cantidad_bytes) != 0;
 }
@@ -281,7 +281,9 @@ int destroy_block(int index)
 {
     char *block_path = get_block_full_path(index);
 
+	sem_wait(&sem_bitarray);	
     bitarray_clean_bit(bitarray, index);
+	sem_post(&sem_bitarray);	
 
     return 0;
 }
@@ -447,27 +449,6 @@ void cargar_bitarray()
     bitarray = bitarray_create_with_mode(bitmap, cantidad_bloques / 8, LSB_FIRST);
     size_t n = bitarray_get_max_bit(bitarray);
     log_info(logger, "El bitarray tiene %d bits", n);
-}
-
-void _exit_with_error(int socket, char *error_msg, void *buffer)
-{
-    if (buffer != NULL)
-        free(buffer);
-
-    log_error(logger, error_msg);
-    close(socket);
-    exit_gracefully(1);
-}
-
-void exit_gracefully(int return_nr)
-{
-    if (return_nr == 1)
-        perror("Error: ");
-
-    bitarray_destroy(bitarray);
-    config_destroy(config);
-    log_destroy(logger);
-    exit(return_nr);
 }
 
 #endif

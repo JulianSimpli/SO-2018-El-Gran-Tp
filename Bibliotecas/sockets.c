@@ -212,8 +212,10 @@ int RecibirDatos(void* paquete, int socketFD, uint32_t cantARecibir) {
 	do {
 		recibido = recv(socketFD, datos + totalRecibido, cantARecibir - totalRecibido, 0);
 		totalRecibido += recibido;
+		log_debug(logger, "%i/%i", recibido, totalRecibido);
 	} while (totalRecibido != cantARecibir && recibido > 0);
 	memcpy(paquete, datos, cantARecibir);
+	log_debug(logger, "%d", ((Header*) datos)->emisor);
 	free(datos);
 	if (recibido < 0) {
 		printf("Cliente Desconectado\n");
@@ -261,6 +263,40 @@ int RecibirPaqueteCliente(int socketFD, Paquete* paquete) {
 		resul = RecibirDatos(paquete->Payload, socketFD, paquete->header.tamPayload);
 	}
 	return resul;
+}
+
+void recibir_paquete(int socket, Paquete *paquete)
+{
+	log_debug(logger, "Recibo el header");
+	recibir_partes(socket, paquete, TAMANIOHEADER);
+	paquete->Payload = malloc(paquete->header.tamPayload);
+	log_debug(logger, "Recibo el payload de tamanio %i", paquete->header.tamPayload);
+	recibir_partes(socket, paquete->Payload, paquete->header.tamPayload);
+}
+
+void recibir_partes(int socket, Paquete *paquete, int cant_a_recibir)
+{
+	void *datos = malloc(cant_a_recibir);
+	int total_recibido = 0;
+	int len = transfer_size;
+
+	while (total_recibido != cant_a_recibir)
+	{
+		if (cant_a_recibir < transfer_size)
+			len = cant_a_recibir;
+
+		int recibido = recv(socket, datos + total_recibido, len, 0);
+		log_debug(logger, "%i/%i", recibido, cant_a_recibir);
+
+		//man recv en el caso de -1 es error pero tambien lo matamos
+		if (recibido <= 0)
+			_exit_with_error(socket, "No pudo recibir el paquete", datos);
+
+		total_recibido += recibido;
+	}
+
+	memcpy(paquete, datos, cant_a_recibir);
+	free(datos);
 }
 
 Header cargar_header(int tamanio_payload, Tipo tipo_mensaje, Emisor emisor)

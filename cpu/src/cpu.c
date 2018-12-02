@@ -321,25 +321,6 @@ int crear_socket_dam()
 	return connect_to_server(ip, puerto);
 }
 
-void _exit_with_error(int socket, char *error_msg, void *buffer)
-{
-	if (buffer != NULL)
-		free(buffer);
-
-	log_error(logger, error_msg);
-	close(socket);
-	exit_gracefully(1);
-}
-
-void exit_gracefully(int return_nr)
-{
-	if (return_nr == 1)
-		perror("Error: ");
-
-	log_destroy(logger);
-	exit(return_nr);
-}
-
 //PRIMITIVAS
 
 int ejecutar_abrir(char **parameters, DTB *dtb)

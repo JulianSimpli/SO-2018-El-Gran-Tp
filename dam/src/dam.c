@@ -86,9 +86,10 @@ int crear_socket_mdj() {
 void enviar_handshake(int socket)
 {
 	Paquete handshake;
-	handshake.header = cargar_header(INTSIZE, ESHANDSHAKE, ELDIEGO);
-	handshake.Payload = malloc(INTSIZE);
-	memcpy(handshake.Payload, &transfer_size, INTSIZE);
+	//handshake.header = cargar_header(INTSIZE, ESHANDSHAKE, ELDIEGO);
+	handshake.header = cargar_header(4, ESHANDSHAKE, ELDIEGO);
+	handshake.Payload = malloc(4);
+	memcpy(handshake.Payload, &transfer_size, 4);
 	enviar_paquete(socket, &handshake);
 	free(handshake.Payload);
 }
@@ -237,6 +238,7 @@ void inicializar(char **argv)
 	leer_config();
 	log_info(logger, "Config cargada exitosamente");
 	transfer_size = config_get_int_value(config, "TRANSFER_SIZE");
+	log_debug(logger, "Transfer size: %i", transfer_size);
 }
 
 int escuchar_conexiones(int server_socket)

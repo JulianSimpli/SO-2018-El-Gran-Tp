@@ -63,6 +63,7 @@ typedef struct {
 	int socket;
 }__attribute__((packed)) Mensaje;
 
+int transfer_size; //Lo envia DAM en el handshake
 
 void ServidorConcurrente(char* ip, int puerto, Emisor nombre, t_list** listaDeHilos,
 		bool* terminar, void (*accionHilo)(void* socketFD));
@@ -81,6 +82,10 @@ void EnviarHandshakeELDIEGO(int socketFD);
 void RecibirHandshake(int socketFD, Emisor emisor);
 int RecibirPaqueteServidor(int socketFD, Emisor receptor, Paquete* paquete); //Responde al recibir un Handshake
 int RecibirPaqueteCliente(int socketFD, Paquete* paquete); //No responde los Handshakes
+
+void recibir_paquete(int socket, Paquete *paquete);
+void recibir_partes(int socket, Paquete *paquete, int cant_a_recibir);
+
 int RecibirPaqueteServidorSafa(int socketFD, Emisor receptor, Paquete* paquete);
 int RecibirPaqueteServidorFm9(int socketFD, Emisor receptor, Paquete* paquete);
 int RecibirDatos(void* paquete, int socketFD, uint32_t cantARecibir);

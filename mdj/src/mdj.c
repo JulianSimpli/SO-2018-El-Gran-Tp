@@ -123,7 +123,7 @@ int interpretar(char *linea)
 	return 0;
 }
 
-Paquete *interpretar_paquete(Paquete *paquete)
+void interpretar_paquete(Paquete *paquete)
 {
 	Paquete *respuesta = malloc(sizeof(Paquete));
 	respuesta->header = cargar_header(0, SUCCESS, MDJ);
@@ -168,8 +168,6 @@ Paquete *interpretar_paquete(Paquete *paquete)
 		log_warning(logger, "La accion %d no tiene respuesta posible", accion);
 		break;
 	}
-
-	return respuesta;
 }
 
 int calcular_bloques(int tamanio)
@@ -261,21 +259,6 @@ int validar_archivo(Paquete *paquete, char *current_path)
 	closedir(dir);
 	log_info(logger, "No encontré el archivo %s", search_file);
 	return 0;
-}
-
-void marcarbitarray(t_config *metadata)
-{
-	sem_wait();	
-	char **bloques = config_get_array_value(metadata, "BLOQUES");
-	log_info(logger, "Ocupa el bloque %d", atoi(bloques[0]));
-	log_info(logger, "Ocupa el bloque %d", atoi(bloques[1]));
-	bitarray_set_bit(bitarray, 1);
-	log_info(logger, "Ocupa el bloque %d", atoi(bloques[2]));
-	bitarray_set_bit(bitarray, atoi(bloques[0]));
-	bitarray_set_bit(bitarray, atoi(bloques[1]));
-	log_info(logger, "Ocupa el bloque %d", atoi(bloques[3]));
-	bitarray_set_bit(bitarray, atoi(bloques[2]));
-	bitarray_set_bit(bitarray, atoi(bloques[3]));
 }
 
 void crear_archivo(Paquete *paquete)
