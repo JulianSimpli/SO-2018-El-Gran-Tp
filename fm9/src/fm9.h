@@ -48,6 +48,7 @@ typedef struct {
 typedef struct {
 	int idProceso;
 	char* pathArchivo;
+	int cantidadLineas;
 } PidPath;
 
 void inicializarFramesMemoria();

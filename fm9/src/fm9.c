@@ -21,7 +21,7 @@ void crearLogger() {
 void obtenerValoresArchivoConfiguracion() {
 	t_config* arch = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/fm9/src/FM9.config");
 
-	IP_FM9 = (char*) string_duplicate(config_get_string_value(arch, "IP_FM9"));
+	IP_FM9 = (char*) string_duplicate((char*) config_get_string_value(arch, "IP_FM9"));
 	PUERTO_FM9 = config_get_int_value(arch, "PUERTO_FM9");
 	MODO = (char*) string_duplicate(config_get_string_value(arch, "MODO"));
 	TAMANIO = config_get_int_value(arch, "TAMANIO");
@@ -61,6 +61,31 @@ char* lineaDeUnaPosicionSEG(int pid, int pc) {
 		return NULL;
 	} else
 		return ((char*) list_get(unSegmento->lineas, pcReal));
+}
+
+void asignarSPA(int pid, char* path, int pos, char* dato) {
+	int posReal = pos - 1; //dado que la linea 1 de un archivo, se persiste la posicion 0
+	//posee el archivo?
+	if(list_count_satisfying(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return pp->idProceso == pid && strcpy(pp->pathArchivo, path);}))) {
+		ProcesoArchivo* proceso = (ProcesoArchivo*) list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pid;}));
+		SegmentoArchivoSPA* segmento = (SegmentoArchivoSPA*) list_find(proceso->segmentos, LAMBDA(bool _(SegmentoArchivoSPA* s) {return !strcpy(s->idArchivo, path);}));
+		//esta dentro de su rango de memoria?
+		int calculoDePagina = ceil(posReal/lineasPorFrame);
+		if(calculoDePagina <= segmento->cantidadPaginas) {
+			//Cuenta mágica (?
+			int calculoDeLinea = posReal - (lineasPorFrame * (segmento->cantidadPaginas - calculoDePagina));
+			//tengo el numero de pagina y la linea donde se ubica la posicion recibida
+			Pagina* pag = list_get(segmento->paginas, calculoDePagina);
+			//busco el frame en memoria principal por linea de inicio
+			Frame* frame = list_find(framesMemoria, LAMBDA(bool _(Frame* f) {return f->inicio == pag->inicio;}));
+			list_replace(pag->lineas, calculoDeLinea, dato);
+			list_replace(frame->lineas, calculoDeLinea, dato);
+		} else {
+			printf("no pertenece a su rango de memoria");
+		}
+	} else {
+		printf("el pid no posee tal archivo");
+	}
 }
 
 int asignarSEG(int pid, char* path, int pos, char* dato) {
@@ -121,18 +146,20 @@ void accion(void* socket) {
 							ProcesoArchivo* proceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pp->idProceso;}));
 							SegmentoArchivoSEG* segmento = list_find(proceso->segmentos, LAMBDA(bool _(SegmentoArchivoSEG* s) {return !strcmp(s->idArchivo, path);}));
 							char* texto = malloc(MAX_LINEA*sizeof(segmento->lineas));
-							int flag = 1;
 							for(int x = segmento->inicio; x < segmento->inicio + list_size(segmento->lineas); x++) {
 								//transformo la lista de lineas en un char* concatenado por \n
-								if (flag == 1) {
-									strcpy(texto, list_get(segmento->lineas, x));
-									flag = 0;
-								} else {
-									strcat(texto, "\n");
-									strcat(texto, list_get(segmento->lineas, x));
-								}
+								strcpy(texto, list_get(segmento->lineas, x));
+								texto += strlen(list_get(segmento->lineas, x));
+								*texto = '\n';
+								texto += 1;
 							}
-							strcat(texto, "\n\n");
+							*texto = '\n';
+							texto += 1;
+							*texto = '\n';
+							texto += 1;
+							*texto = '\0';
+							//en teoria queda un texto separado por \n (sin \0 de por medio) con 2 \n al final
+							//seguido de un \0
 							texto = realloc(texto, strlen(texto)+1);
 							EnviarDatosTipo(socketFD, ELDIEGO, texto, strlen(texto)+1, SUCCESS);
 						} else {
@@ -217,6 +244,26 @@ void accion(void* socket) {
 	}
 }
 
+//implementado solo para SEG y SPA por ahora
+int contarLineas(char* path) {
+	if(!strcmp(MODO, "SEG")) {
+		PidPath* pidPath = list_find(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path);}));
+		ProcesoArchivo* proceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pidPath->idProceso;}));
+		SegmentoArchivoSEG* segmento = list_find(proceso->segmentos, LAMBDA(bool _(SegmentoArchivoSPA* s) {return !strcmp(segmento->idArchivo, path);}));
+		return list_size(segmento->lineas);
+	} else {
+		PidPath* pidPath = list_find(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path);}));
+		ProcesoArchivo* proceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pidPath->idProceso;}));
+		SegmentoArchivoSPA* segmento = list_find(proceso->segmentos, LAMBDA(bool _(SegmentoArchivoSPA* s) {return !strcmp(segmento->idArchivo, path);}));
+		Pagina* pag = list_get(segmento->paginas, segmento->cantidadPaginas - 1);
+		int cantLineas = lineasPorFrame * (segmento->cantidadPaginas - 1);
+		for(int x = 0; x < lineasPorFrame; x++) {
+			if(!strcmp(list_get(pag->lineas, x), "NaN")) cantLineas++;
+		}
+		return cantLineas;
+	}
+}
+
 //void enviar_abrio_a_dam(int socketFD, u_int32_t pid, char *fid, char *file)
 //{
 //	int desplazamiento = 0;
@@ -225,7 +272,7 @@ void accion(void* socket) {
 //
 //	ArchivoAbierto archivo;
 //	strcpy(archivo.path, fid);
-//	//archivo.cantLineas = contar_lineas(fid); Falta funcion que cuente lineas
+//	archivo.cantLineas = contarLineas(fid);
 //	void *archivo_serializado = DTB_serializar_archivo(&archivo, &desplazamiento_archivo);
 //
 //	Paquete abrio;
@@ -368,7 +415,7 @@ void liberarMemoriaDesdeHasta(int nroLineaInicio, int nroLineaFin) {
 	}
 }
 
-void agregarArhivoYProcesoATabla(int pid, char* path) {
+void agregarArchivoYProcesoATabla(int pid, char* path) {
 	PidPath* pp = malloc(sizeof(PidPath));
 	pp->pathArchivo = malloc(strlen(path)+1);
 	strcpy(pp->pathArchivo, path);
@@ -419,15 +466,6 @@ int lineasLibresConsecutivasMemoria(int lineasAGuardar) {
 	return -1;
 }
 
-int primerLineaVaciaMemoria() {
-	for(int i = 0; i < lineasTotales; i++){
-		if(!strcmp(memoria[i], "NaN")){
-			return i;
-		}
-	}
-	return -1;
-}
-
 int contarElementosArray(char** array) {
 	int contador = 0;
 	while (array[contador] != NULL) {
@@ -471,7 +509,7 @@ int cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo) {
 			list_add(procesoArchivo->segmentos, unSegmentoArchivoSEG);
 			list_add(procesos, procesoArchivo);
 		}
-		agregarArhivoYProcesoATabla(idProceso, path);
+		agregarArchivoYProcesoATabla(idProceso, path);
 		log_info(logger, "El archivo ya cargado fue agregado a los archivos abiertos del proceso: %d", idProceso);
 		return 1;
 	} else {
@@ -520,7 +558,7 @@ int cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo) {
 				}
 			}
 			log_info(logger, "Archivo cargado con éxito...");
-			agregarArhivoYProcesoATabla(idProceso, path);
+			agregarArchivoYProcesoATabla(idProceso, path);
 			return 1;
 		} else {
 			printf("No hay espacio suficiente para cargar tal segmento...\n");
@@ -537,7 +575,7 @@ void imprimirMemoria(){
 	printf("cantidad lineas libres de memoria: %d\n", cantidadLineasLibresMemoria());
 }
 
-void modoDeEjecucion(char* modo) {
+void inicializar(char* modo) {
 	//“SEG” - “TPI” - “SPA”
 	if(!strcmp(modo, "SEG")) {
 
@@ -546,21 +584,17 @@ void modoDeEjecucion(char* modo) {
 	} else if(!strcmp(modo, "SPA")) {
 		framesTotales = TAMANIO/TAM_PAGINA;
 		lineasPorFrame = lineasTotales/framesTotales; //lineasPorFrame = lineasPorPagina
-		inicializarFramesMemoria();
-	}
-}
-
-void inicializarFramesMemoria() {
-	framesMemoria = list_create();
-	int inicio = 0;
-	for(int x = 0; x < framesTotales; x++) {
-		Frame* frame = malloc(sizeof(Frame));
-		frame->disponible = 1;
-		frame->inicio = inicio;
-		frame->fin = inicio + lineasPorFrame - 1;
-		frame->lineas = list_create();
-		list_add(framesMemoria, frame);
-		inicio += lineasPorFrame;
+		framesMemoria = list_create();
+		int inicio = 0;
+		for(int x = 0; x < framesTotales; x++) {
+			Frame* frame = malloc(sizeof(Frame));
+			frame->disponible = 1;
+			frame->inicio = inicio;
+			frame->fin = inicio + lineasPorFrame - 1;
+			frame->lineas = list_create();
+			list_add(framesMemoria, frame);
+			inicio += lineasPorFrame;
+		}
 	}
 }
 
@@ -622,7 +656,7 @@ void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo) {
 			list_add(procesoNuevo->segmentos, segmento);
 			list_add(procesos, procesoNuevo);
 		}
-		agregarArhivoYProcesoATabla(pid, path);
+		agregarArchivoYProcesoATabla(pid, path);
 	} else {
 		//el archivo no existe? lo cargo. A su vez el proceso existe?
 		if(list_count_satisfying(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return pp->idProceso == pid;}))) {
@@ -654,7 +688,7 @@ void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo) {
 				}
 				list_add(proceso->segmentos, segmento);
 				list_add(procesos, proceso);
-				agregarArhivoYProcesoATabla(pid, path);
+				agregarArchivoYProcesoATabla(pid, path);
 			} else {
 				printf("No hay frames libres para cargar el archivo indicado");
 			}
@@ -689,7 +723,7 @@ void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo) {
 				}
 				list_add(procesoNuevo->segmentos, segmento);
 				list_add(procesos, procesoNuevo);
-				agregarArhivoYProcesoATabla(pid, path);
+				agregarArchivoYProcesoATabla(pid, path);
 			} else {
 				printf("No hay frames libres para cargar el archivo indicado");
 			}
@@ -703,7 +737,8 @@ int main() {
 	obtenerValoresArchivoConfiguracion();
 	imprimirArchivoConfiguracion();
 	asignarMemoriaLineas();
-	imprimirMemoria();
+	inicializar(MODO);
+//	imprimirMemoria();
 	pthread_t hiloConsola; //un hilo para la consola
 	pthread_create(&hiloConsola, NULL, (void*) consola, NULL);
 	ServidorConcurrente(IP_FM9, PUERTO_FM9, FM9, &listaHilos, &end, accion);
