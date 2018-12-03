@@ -64,7 +64,7 @@ int retardo;
 int transfer_size;
 sem_t sem_bitarray;
 
-int validar_archivo(Paquete *paquete, char *);
+int validar_archivo(char *, char *);
 void crear_archivo(Paquete *paquete);
 void obtener_datos(Paquete *paquete);
 void guardar_datos(Paquete *paquete);
@@ -390,7 +390,7 @@ void borrar_archivo(Paquete *paquete)
     int offset = 0;
     char *ruta = string_deserializar(paquete->Payload, &offset);
 
-    int existe = validar_archivo(paquete, file_path);
+    int existe = validar_archivo(ruta, file_path);
 
     if (!existe)
         enviar_error(ARCHIVO_NO_EXISTE);

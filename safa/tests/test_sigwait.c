@@ -246,7 +246,7 @@ context(wait_signal_recursos)
             return serializado;
         }
 
-        char *string_deserializar(void *data, int *desplazamiento)
+        char *: string_deserializar(void *data, int *desplazamiento)
         {         
             u_int32_t len_string = 0;
             memcpy(&len_string, data + *desplazamiento, sizeof(len_string));

@@ -245,6 +245,11 @@ int pedir_validar(char *path)
 {
 	int desplazamiento = 0;
 	void *serializado = string_serializar(path, &desplazamiento);
+	log_debug(logger, "Path %s", path);
+	int b = 0;
+	char *prueba = string_deserializar(serializado, &b);
+
+	log_debug(logger, "Prueba %s", prueba);
 
 	Paquete validar;
 	validar.header = cargar_header(desplazamiento, VALIDAR_ARCHIVO, ELDIEGO);

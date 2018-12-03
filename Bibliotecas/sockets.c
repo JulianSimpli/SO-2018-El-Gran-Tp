@@ -267,8 +267,8 @@ int RecibirPaqueteCliente(int socketFD, Paquete* paquete) {
 
 int recibir_paquete(int socket, Paquete *paquete)
 {
-	log_debug(logger, "Recibo el header");
 	recibir_partes(socket, &paquete->header, TAMANIOHEADER);
+	log_debug(logger, "Recibi el header");
 
 	if (paquete->header.tamPayload == 0)
 		return TAMANIOHEADER;

@@ -43,7 +43,7 @@ void *atender_dam()
 	while (recibir_paquete(socket_dam, &paquete) > 0)
 	{
 		pthread_t p_thread;
-		pthread_create(&p_thread, NULL, atender_peticion, (void *)&paquete);
+		pthread_create(&p_thread, NULL, atender_peticion, &paquete);
 	}
 }
 
@@ -136,7 +136,13 @@ void interpretar_paquete(Paquete *paquete)
 	{
 	case VALIDAR_ARCHIVO:
 		log_info(logger, "Validar archivo");
-		int tamanio = validar_archivo(paquete, file_path);
+
+		int desplazamiento = 0;
+		char *prueba = string_deserializar(paquete->Payload, &desplazamiento);
+		char *search_file = malloc(paquete->header.tamPayload + 1);
+		strcpy(search_file, prueba);
+
+		int tamanio = validar_archivo(search_file, file_path);
 
 		if (tamanio == 0) {
 			enviar_error(PATH_INEXISTENTE);
@@ -223,18 +229,14 @@ void enviar_error(Tipo tipo)
 
 //TODO: Controlar el tamanio que tiene el paquete en la segunda call
 //TODO: Liberar los que son punteros al finalizar cada recursividad
-int validar_archivo(Paquete *paquete, char *current_path)
+int validar_archivo(char *search_file, char *current_path)
 {
 	DIR *dir;
 	struct dirent *ent;
 	char *current = malloc(strlen(current_path) + 1);
 	strcpy(current, current_path);
 	//Agarra el path del paquete
-	int desplazamiento = 0;
-	char *prueba = string_deserializar(paquete->Payload, &desplazamiento);
-	log_debug(logger, "Payload: %s", prueba);
-	char *search_file = malloc(paquete->header.tamPayload + 1);
-	strcpy(search_file, prueba);
+
 	char *route = strtok(search_file, "/");
 	log_info(logger, "Busco: %s", route);
 
@@ -250,11 +252,11 @@ int validar_archivo(Paquete *paquete, char *current_path)
 			if (ent->d_type == DT_DIR)
 			{
 				int position = strlen(route) + 1;
-				route = string_substring_from(paquete->Payload, position);
+				route = string_substring_from(search_file, position);
+				log_debug(logger, "sub es %s", route);
 				strcat(current, "/");
 				strcat(current, ent->d_name);
-				paquete->Payload = route;
-				if (validar_archivo(paquete, current))
+				if (validar_archivo(route, current))
 					return 1;
 			} else {
 				log_info(logger, "Encontré el archivo %s", ent->d_name);
@@ -383,7 +385,7 @@ void guardar_datos(Paquete *paquete)
 	offset += size;
 	char *datos_a_guardar = string_deserializar(paquete->Payload, &offset);
 
-	int tamanio = validar_archivo(paquete, file_path);
+	int tamanio = validar_archivo(ruta, file_path);
 
 	if (tamanio == 0)
 		enviar_error(ARCHIVO_NO_EXISTE_FLUSH);

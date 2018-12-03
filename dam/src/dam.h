@@ -162,11 +162,14 @@ void enviar_paquete(int socket, Paquete *paquete)
 	int enviar = transfer_size;
 		
 	int enviado = send(socket, &paquete->header, TAMANIOHEADER, 0);
-	log_debug(logger, "Envie el header %d", enviado);
+
+	if (enviado == -1)
+		_exit_with_error(socket, "No pudo enviar el header", paquete);
+
 	sleep(1);
 
-	void *buffer = malloc(INTSIZE);
-	memcpy(buffer, paquete->Payload, INTSIZE);
+	void *buffer = malloc(paquete->header.tamPayload);
+	memcpy(buffer, paquete->Payload, paquete->header.tamPayload);
 
 	while (desplazamiento < total)
 	{
@@ -180,7 +183,7 @@ void enviar_paquete(int socket, Paquete *paquete)
 			_exit_with_error(socket, "No pudo enviar el paquete", paquete);
 
 		desplazamiento += enviado;
-		log_debug(logger, "%i bytes de %i/%i", enviado, enviar, total);
+		log_debug(logger, "Envie %i bytes, voy %i/%i", enviado, desplazamiento, total);
 	}
 }
 
