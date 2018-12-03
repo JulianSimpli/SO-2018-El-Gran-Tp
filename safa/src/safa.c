@@ -6,6 +6,8 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
+int transfer_size = 0;
+
 /*Creación de Logger*/
 void crear_loggers()
 {
@@ -184,27 +186,43 @@ void accion(void *socket)
 	// void* datos;
 	//while que recibe paquetes que envian a safa, de qué socket y el paquete mismo
 	//el socket del cliente conectado lo obtiene con la funcion servidorConcurrente en el main
-	while (RecibirPaqueteServidorSafa(socketFD, SAFA, &paquete) > 0)
+
+	//El transfer size no puede ser menor al tamanio del header porque sino no se puede saber quien es el emisor
+	//while (RecibirPaqueteServidorSafa(socketFD, SAFA, &paquete) > 0)
+	while (RecibirDatos(&paquete.header , socketFD, TAMANIOHEADER) > 0)
 	{
-		log_info(logger, "Emisor: %i", paquete.header.emisor);
 		switch (paquete.header.emisor)
 		{
 		case ELDIEGO:
 		{
+			if (paquete.header.tipoMensaje != ESHANDSHAKE && paquete.header.tamPayload > 0) {
+				paquete.Payload = malloc(paquete.header.tamPayload);
+				recibir_partes(socketFD, paquete.Payload, paquete.header.tamPayload);
+			}
+
 			manejar_paquetes_diego(&paquete, socketFD);
 			break;
 		}
 		case CPU:
 		{
+			if (paquete.header.tamPayload > 0) {
+				paquete.Payload = malloc(paquete.header.tamPayload);
+				RecibirDatos(paquete.Payload, socketFD, paquete.header.tamPayload);
+			}
+
 			manejar_paquetes_CPU(&paquete, socketFD);
 			break;
 		}
+		default:
+			log_warning(logger, "No se reconoce el emisor %d", paquete.header.emisor);
+			break;
 		}
 	}
 	// Si sale del while hubo error o desconexion
 	manejar_desconexion(socketFD);
 	if (paquete.Payload != NULL)
 		free(paquete.Payload);
+
 	close(socketFD);
 }
 
@@ -264,6 +282,8 @@ void manejar_desconexion_cpu(int socket)
 
 void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 {
+	log_debug(logger, "Interpreto mensajes del diego");
+
 	u_int32_t pid = 0;
 	int tam_pid = sizeof(u_int32_t);
 	switch (paquete->header.tipoMensaje)
@@ -272,7 +292,10 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		{
 			sem_post(&mutex_handshake_diego);
 			socket_diego = socketFD;
+			paquete->Payload = malloc(paquete->header.tamPayload);
+			RecibirDatos(paquete->Payload, socketFD, INTSIZE);
 			log_info(logger, "llegada de el diego en socket %d", socketFD);
+			memcpy(&transfer_size, paquete->Payload, INTSIZE);
 			enviar_handshake_diego(socketFD);
 			break;
 		}
@@ -719,11 +742,10 @@ void enviar_handshake_cpu(int socketFD)
 
 void enviar_handshake_diego(int socketFD)
 {
-	Paquete *paquete = malloc(sizeof(Paquete));
-	paquete->header = cargar_header(0, ESHANDSHAKE, SAFA);
-	log_info(logger, "Handshake a diego: %d", socketFD );
-	EnviarPaquete(socketFD, paquete);
-	free(paquete);
+	Paquete paquete;
+	paquete.header = cargar_header(0, ESHANDSHAKE, SAFA);
+	log_info(logger, "Handshake a diego: %d", socketFD);
+	EnviarPaquete(socketFD, &paquete);
 }
 
 void event_watcher()
@@ -804,6 +826,11 @@ void enviar_valores_config(void *_cpu)
 	free(paquete);
 }
 
+void handshake_dam()
+{
+
+}
+
 int main(void)
 {
 	crear_loggers();
@@ -827,6 +854,7 @@ int main(void)
 	pthread_create(&hilo_pcp, NULL, (void *)planificador_corto_plazo, NULL);
 
 	pthread_create(&hilo_event_watcher, NULL, (void *)event_watcher, NULL);
+
 
 	ServidorConcurrente(IP, PUERTO, SAFA, &lista_hilos, &end, accion);
 

@@ -32,8 +32,6 @@ void handshake(int, int);
 int escuchar_conexiones();
 int crear_socket_mdj();
 int ligar_socket();
-void recibir_paquete(int socket, Paquete *paquete);
-void recibir_partes(int socket, Paquete *paquete, int cant_a_recibir);
 
 // Finalmente, los prototipos de las funciones que vamos a implementar
 void configure_logger();
@@ -159,17 +157,24 @@ int ligar_socket()
 
 void enviar_paquete(int socket, Paquete *paquete)
 {
-	int total = TAMANIOHEADER + paquete->header.tamPayload;
+	int total = paquete->header.tamPayload;
 	int desplazamiento = 0;
 	int enviar = transfer_size;
-	log_debug(logger, "Emisor %d", paquete->header.emisor);
+		
+	int enviado = send(socket, &paquete->header, TAMANIOHEADER, 0);
+	log_debug(logger, "Envie el header %d", enviado);
+	sleep(1);
 
-	while (desplazamiento != total)
+	void *buffer = malloc(INTSIZE);
+	memcpy(buffer, paquete->Payload, INTSIZE);
+
+	while (desplazamiento < total)
 	{
 		if ((total - desplazamiento) < transfer_size)
 			enviar = total - desplazamiento;
 
-		int enviado = send(socket, paquete->Payload + desplazamiento, enviar, 0);
+		//int enviado = send(socket, paquete->Payload + desplazamiento, enviar, 0);
+		int enviado = send(socket, buffer + desplazamiento, enviar, 0);
 
 		if (enviado == -1)
 			_exit_with_error(socket, "No pudo enviar el paquete", paquete);

@@ -90,8 +90,8 @@ void enviar_handshake(int socket)
 	handshake.header = cargar_header(4, ESHANDSHAKE, ELDIEGO);
 	handshake.Payload = malloc(4);
 	memcpy(handshake.Payload, &transfer_size, 4);
+	log_debug(logger, "Enviar handshake");
 	enviar_paquete(socket, &handshake);
-	free(handshake.Payload);
 }
 
 /**
@@ -157,15 +157,14 @@ void handshake_safa()
 	socket_safa = crear_socket_safa();
 
 	enviar_handshake(socket_safa);
+	
+	sleep(2);
 
 	Paquete paquete;
-	log_debug(logger, "socket safa : %i", socket_safa);
 	recibir_paquete(socket_safa, &paquete);
 
 	if (paquete.header.tipoMensaje != ESHANDSHAKE)
 		_exit_with_error(socket_safa, "No se logro el primer paso de datos", NULL);
-
-	free(paquete.Payload);
 }
 
 

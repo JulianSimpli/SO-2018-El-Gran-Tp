@@ -22,7 +22,7 @@ t_log *logger;
 t_config *config;
 t_bitarray *bitarray;
 
-int transfer_size;
+int transfer_size = 0;
 
 typedef struct archivo_metadata
 {
@@ -93,10 +93,15 @@ void handshake_dam()
 {
     socket_dam = escuchar_conexiones();
     Paquete paquete;
-    recibir_paquete(socket_dam, &paquete);
+    RecibirDatos(&paquete, socket_dam, TAMANIOHEADER);
+
     if (paquete.header.tipoMensaje != ESHANDSHAKE)
         _exit_with_error(socket_dam, "No se logro el handshake", NULL);
+
+    paquete.Payload = malloc(paquete.header.tamPayload);
+    RecibirDatos(paquete.Payload, socket_dam, paquete.header.tamPayload);
     memcpy(&transfer_size, paquete.Payload, INTSIZE);
+    log_debug(logger, "Transfer size %d", transfer_size);
     EnviarHandshake(socket_dam, MDJ);
 }
 
@@ -114,6 +119,8 @@ void imprimir_directorios(char *path_a_imprimir)
 
 void com_list(char **parametros)
 {
+    system("ls -la");
+    /*
     printf("The folder has this currents files: \n");
 
     char *punto_montaje;
@@ -135,6 +142,7 @@ void com_list(char **parametros)
             imprimir_directorios(punto_montaje);
         }
     }
+    */
     //fijarse en que path está y mostrar que es directorio y que es archivo
 }
 

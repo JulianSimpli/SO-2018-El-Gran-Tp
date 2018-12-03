@@ -84,7 +84,7 @@ int RecibirPaqueteServidor(int socketFD, Emisor receptor, Paquete* paquete); //R
 int RecibirPaqueteCliente(int socketFD, Paquete* paquete); //No responde los Handshakes
 
 void recibir_paquete(int socket, Paquete *paquete);
-void recibir_partes(int socket, Paquete *paquete, int cant_a_recibir);
+void recibir_partes(int socket, void *buffer, int cant_a_recibir);
 
 int RecibirPaqueteServidorSafa(int socketFD, Emisor receptor, Paquete* paquete);
 int RecibirPaqueteServidorFm9(int socketFD, Emisor receptor, Paquete* paquete);
