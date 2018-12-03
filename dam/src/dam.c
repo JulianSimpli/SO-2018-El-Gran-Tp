@@ -87,9 +87,15 @@ void enviar_handshake(int socket)
 {
 	Paquete handshake;
 	//handshake.header = cargar_header(INTSIZE, ESHANDSHAKE, ELDIEGO);
+<<<<<<< 64fcd3cfcf9eade0a6d0da63b4dfdc51aec09cc1
 	handshake.header = cargar_header(4, ESHANDSHAKE, ELDIEGO);
 	handshake.Payload = malloc(4);
 	memcpy(handshake.Payload, &transfer_size, 4);
+=======
+	handshake.header = cargar_header(INTSIZE, ESHANDSHAKE, ELDIEGO);
+	handshake.Payload = malloc(INTSIZE);
+	memcpy(handshake.Payload, &transfer_size, INTSIZE);
+>>>>>>> Arregle ls, handshake cpu-dam. Agregamos semaforo para los hilos de cpu
 	log_debug(logger, "Enviar handshake");
 	enviar_paquete(socket, &handshake);
 }
@@ -106,7 +112,7 @@ void handshake_cpu(int socket)
 		_exit_with_error(socket, "No se logro el handshake", NULL);
 
 	enviar_handshake(socket);
-	free(paquete.Payload);
+	// free(paquete.Payload);
 }
 
 /**

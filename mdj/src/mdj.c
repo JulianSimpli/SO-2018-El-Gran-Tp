@@ -64,7 +64,9 @@ void leer_config(char *path)
 	mnt_path = malloc(strlen(mnt_config) + 1);
 	strcpy(mnt_path, mnt_config);
 	file_path = malloc(strlen(mnt_config) + strlen("Archivos") + 1);
+	current_path = malloc(strlen(mnt_config) + strlen("Archivos") + 1);
 	strcpy(file_path, mnt_path);
+	strcpy(current_path,mnt_path);
 	strcat(file_path, "Archivos");
 }
 
@@ -105,7 +107,7 @@ int interpretar(char *linea)
 
 	for (i; i < command_size; i++)
 	{
-		if (!strcmp(commands[i].name, linea))
+		if (!strcmp(commands[i].name, parametros[0]))
 		{
 			existe = 1;
 			log_info(logger, commands[i].doc);

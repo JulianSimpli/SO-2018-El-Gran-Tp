@@ -113,8 +113,9 @@ void imprimir_directorios(char *path_a_imprimir)
     dir = opendir(path_a_imprimir);
     while ((ent = readdir(dir)) != NULL)
     {
-        printf("%s\n", ent->d_name);
+        printf("%s ", ent->d_name);
     }
+    printf("\n");
 }
 
 void com_list(char **parametros)
@@ -123,7 +124,7 @@ void com_list(char **parametros)
     /*
     printf("The folder has this currents files: \n");
 
-    char *punto_montaje;
+    char *punto_montaje = malloc(strlen(mnt_path) + 1);
     strcpy(punto_montaje, mnt_path);
     char *path = parametros[1];
     if (path == NULL)
@@ -138,6 +139,7 @@ void com_list(char **parametros)
         }
         else
         {
+            punto_montaje = realloc(punto_montaje, strlen(mnt_path) + strlen(path) + 1);
             strcat(punto_montaje, path);
             imprimir_directorios(punto_montaje);
         }
@@ -278,20 +280,18 @@ int create_block(int index, int cantidad_bytes)
 {
     char *block_path = get_block_full_path(index);
 
-	sem_wait(&sem_bitarray);	
+    sem_wait(&sem_bitarray);
     bitarray_set_bit(bitarray, index);
-	sem_post(&sem_bitarray);	
+    sem_post(&sem_bitarray);
 
     return create_block_file(block_path, cantidad_bytes) != 0;
 }
 
 int destroy_block(int index)
 {
-    char *block_path = get_block_full_path(index);
-
-	sem_wait(&sem_bitarray);	
+    sem_wait(&sem_bitarray);
     bitarray_clean_bit(bitarray, index);
-	sem_post(&sem_bitarray);	
+    sem_post(&sem_bitarray);
 
     return 0;
 }
@@ -387,14 +387,13 @@ int escuchar_conexiones()
 
 void borrar_archivo(Paquete *paquete)
 {
-
     int offset = 0;
     char *ruta = string_deserializar(paquete->Payload, &offset);
 
-	int existe = validar_archivo(paquete, file_path);
+    int existe = validar_archivo(paquete, file_path);
 
-	if (!existe)
-		enviar_error(ARCHIVO_NO_EXISTE);
+    if (!existe)
+        enviar_error(ARCHIVO_NO_EXISTE);
 
     //TODO: Lee metadata del archivo y devuelve los bloques
     t_config *metadata = config_create(ruta);
@@ -404,11 +403,9 @@ void borrar_archivo(Paquete *paquete)
 
     for (int i = 0; i < cantidad_bloques_del_path; i++)
     {
-        //TODO: Borra los .bin
-        //remove();
+        destroy_block(atoi(bloques_ocupados[i]));
+        // Modifica el bitarray
     }
-
-    //TODO: Modifica el bitarray
     //liberar();
     config_destroy(metadata);
     //Borra los metadata

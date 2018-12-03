@@ -7,6 +7,8 @@ int socket_dam;
 int socket_safa;
 int socket_fm9;
 int retardo;
+sem_t sem_recibir_paquete;
+int transfer_size = 0;
 
 sem_t *cambios;
 bool finalizar;
@@ -25,6 +27,7 @@ int main(int argc, char **argv)
 	handshake_dam();
 	log_debug(logger, "Concrete handshake con dam");
 	//handshake_fm9();
+	sem_init(&sem_recibir_paquete,0,1);
 	pthread_t p_thread_one;
 	pthread_create(&p_thread_one, NULL, hilo_safa, NULL);
 	pthread_t p_thread_two;
@@ -35,14 +38,15 @@ int main(int argc, char **argv)
 	return 0;
 }
 
-//
 void *hilo_safa()
 {
 	while (1)
 	{
 		Paquete *paquete = malloc(sizeof(Paquete));
 		log_info(logger, "Soy el hilo %d, espero paquete de safa", process_get_thread_id());
+		sem_wait(&sem_recibir_paquete);
 		RecibirPaqueteCliente(socket_safa, paquete);
+		sem_post(&sem_recibir_paquete);
 		interpretar_safa(paquete);
 	}
 }
@@ -191,9 +195,12 @@ void handshake_dam()
 {
 	socket_dam = crear_socket_dam();
 	EnviarHandshake(socket_dam, CPU);
-	Paquete *paquete = malloc(sizeof(Paquete));
-	RecibirPaqueteCliente(socket_dam, paquete);
-	if (paquete->header.tipoMensaje != ESHANDSHAKE)
+	Paquete paquete;
+	RecibirDatos(&paquete.header , socket_dam, TAMANIOHEADER);
+	paquete.Payload = malloc(paquete.header.tamPayload);
+	RecibirDatos(paquete.Payload, socket_dam, paquete.header.tamPayload);
+	memcpy(&transfer_size, paquete.Payload, paquete.header.tamPayload);
+	if (paquete.header.tipoMensaje != ESHANDSHAKE)
 		_exit_with_error(socket_dam, "No se logro el handshake", NULL);
 
 	log_info(logger, "Se concreto el handshake con DAM, empiezo a recibir mensajes");
@@ -646,7 +653,7 @@ int ejecutar_borrar(char **parametros, DTB *dtb)
 	bloqueate_safa->header.emisor = CPU;
 	int tam_pid_y_pc = 0;
 	bloqueate_safa->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
-	bloqueate_safa->header.tamPayload = tam_pid_y_pc+sizeof(u_int32_t);
+	bloqueate_safa->header.tamPayload = tam_pid_y_pc + sizeof(u_int32_t);
 	dtb->entrada_salidas++;
 	memcpy(bloqueate_safa + tam_pid_y_pc, &dtb->entrada_salidas, sizeof(u_int32_t));
 	EnviarPaquete(socket_safa, bloqueate_safa);
