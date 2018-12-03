@@ -14,12 +14,12 @@ void crear_loggers()
 	logger = log_create("logs/safa.log", "safa", true, LOG_LEVEL_DEBUG);
 	logger_fin = log_create ("logs/DTB_finalizados.log", "safa", true, LOG_LEVEL_INFO);
 	log_info(logger, "Iniciando SAFA.log");
-	log_info(logger_fin, "INFORMACION DE ARCHIVOS FINALIZADOS");
+	log_info(logger_fin, "INFORMACION DE DTBs FINALIZADOS");
 }
 
 void obtener_valores_archivo_configuracion()
 {
-	t_config *arch = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src/SAFA.config");
+	t_config *arch = config_create("/home/utnso/TPSO/tp-2018-2c-Nene-Malloc/safa/src/SAFA.config");
 	IP = "127.0.0.1";
 	log_info(logger, "IP: %s", IP);
 	PUERTO = config_get_int_value(arch, "PUERTO");
