@@ -8,11 +8,11 @@
 #ifndef FM9_H_
 #define FM9_H_
 
-// #include "sockets.h"
-#include <commons/collections/list.h>
-#include "../../Bibliotecas/sockets.h"
-#include "../../Bibliotecas/helper.h"
-#include "../../Bibliotecas/dtb.h"
+#include "sockets.h"
+//#include <commons/collections/list.h>
+//#include "../../Bibliotecas/sockets.h"
+//#include "../../Bibliotecas/helper.h"
+//#include "../../Bibliotecas/dtb.h"
 
 typedef struct {
 	char* idArchivo; //path del archivo
@@ -23,6 +23,7 @@ typedef struct {
 
 typedef struct {
 	char* idArchivo; //path del archivo
+	int cantidadLineas;
 	t_list* paginas; //tabla de paginas cuyo contenido de cada elemento es un frame
 	int cantidadPaginas; //cantidad de paginas que representa ese segmento
 } SegmentoArchivoSPA;
@@ -52,7 +53,7 @@ typedef struct {
 } PidPath;
 
 void inicializarFramesMemoria();
-int cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo); //va a devolver void
+void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo); //va a devolver void
 void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo);
 void printGloriosoSegmentacion(int pid);
 void imprimirMemoria();
