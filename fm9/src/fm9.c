@@ -244,6 +244,17 @@ void accion(void* socket) {
 	}
 }
 
+int contar_lineas (char *file)
+{
+	int i, lineas = 0;
+	for (i = 0; i < strlen(file); i++)
+	{
+		if(file[i] == '\n')
+			lineas++;
+	}
+	return lineas-1;
+}
+
 //implementado solo para SEG y SPA por ahora
 int contarLineas(char* path) {
 	if(!strcmp(MODO, "SEG")) {
@@ -264,35 +275,35 @@ int contarLineas(char* path) {
 	}
 }
 
-//void enviar_abrio_a_dam(int socketFD, u_int32_t pid, char *fid, char *file)
-//{
-//	int desplazamiento = 0;
-//	int desplazamiento_archivo = 0;
-//	int tam_pid = sizeof(u_int32_t);
-//
-//	ArchivoAbierto archivo;
-//	strcpy(archivo.path, fid);
-//	archivo.cantLineas = contarLineas(fid);
-//	void *archivo_serializado = DTB_serializar_archivo(&archivo, &desplazamiento_archivo);
-//
-//	Paquete abrio;
-//	abrio.Payload = malloc(tam_pid + desplazamiento_archivo);
-//	memcpy(abrio.Payload, &pid, tam_pid);
-//	desplazamiento += tam_pid;
-//	memcpy(abrio.Payload + tam_pid, archivo_serializado, desplazamiento_archivo);
-//	desplazamiento += desplazamiento_archivo;
-//
-//	abrio.header = cargar_header(desplazamiento, ABRIR, FM9);
-//	bool envio = EnviarPaquete(socketFD, &abrio);
-//
-//	if(envio)
-//		printf("Paquete a dam archivo abierto enviado %s\n", (char *)abrio.Payload);
-//	else
-//		printf("Paquete a dam archivo abierto fallo\n");
-//
-//	free(archivo_serializado);
-//	free(abrio.Payload);
-//}
+void enviar_abrio_a_dam(int socketFD, u_int32_t pid, char *fid, char *file)
+{
+	int desplazamiento = 0;
+	int desplazamiento_archivo = 0;
+	int tam_pid = sizeof(u_int32_t);
+
+	ArchivoAbierto archivo;
+	strcpy(archivo.path, fid);
+	archivo.cantLineas = contar_lineas(file);
+	void *archivo_serializado = DTB_serializar_archivo(&archivo, &desplazamiento_archivo);
+
+	Paquete abrio;
+	abrio.Payload = malloc(tam_pid + desplazamiento_archivo);
+	memcpy(abrio.Payload, &pid, tam_pid);
+	desplazamiento += tam_pid;
+	memcpy(abrio.Payload + tam_pid, archivo_serializado, desplazamiento_archivo);
+	desplazamiento += desplazamiento_archivo;
+
+	abrio.header = cargar_header(desplazamiento, ABRIR, FM9);
+	bool envio = EnviarPaquete(socketFD, &abrio);
+
+	if(envio)
+		printf("Paquete a dam archivo abierto enviado %s\n", (char *)abrio.Payload);
+	else
+		printf("Paquete a dam archivo abierto fallo\n");
+
+	free(archivo_serializado);
+	free(abrio.Payload);
+}
 
 void consola() {
 	char* linea;

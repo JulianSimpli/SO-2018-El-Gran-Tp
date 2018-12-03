@@ -826,11 +826,6 @@ void enviar_valores_config(void *_cpu)
 	free(paquete);
 }
 
-void handshake_dam()
-{
-
-}
-
 int main(void)
 {
 	crear_loggers();
