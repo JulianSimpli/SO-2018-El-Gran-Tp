@@ -228,7 +228,7 @@ void handshake(int socket, int emisor)
 
 void leer_config(char *path)
 {
-	config = config_create("/home/utnso/tp-2018-2c-Nene-Malloc/cpu/src/CPU.config");
+	config = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/cpu/src/CPU.config");
 }
 
 void inicializar_log(char *program)

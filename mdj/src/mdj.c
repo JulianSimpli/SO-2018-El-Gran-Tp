@@ -38,11 +38,10 @@ void *atender_dam()
 	//Hace el handshake y empieza a recibir paquetes
 	handshake_dam();
 	log_info(logger, "Se concreto el handshake con DAM, empiezo a recibir paquetes");
+	Paquete paquete;
 
-	while (1)
+	while (recibir_paquete(socket_dam, &paquete) > 0)
 	{
-		Paquete paquete;
-		RecibirPaqueteCliente(socket_dam, &paquete);
 		pthread_t p_thread;
 		pthread_create(&p_thread, NULL, atender_peticion, (void *)&paquete);
 	}
@@ -228,14 +227,19 @@ int validar_archivo(Paquete *paquete, char *current_path)
 {
 	DIR *dir;
 	struct dirent *ent;
+	char *current = malloc(strlen(current_path) + 1);
+	strcpy(current, current_path);
 	//Agarra el path del paquete
+	int desplazamiento = 0;
+	char *prueba = string_deserializar(paquete->Payload, &desplazamiento);
+	log_debug(logger, "Payload: %s", prueba);
 	char *search_file = malloc(paquete->header.tamPayload + 1);
-	strcpy(search_file, paquete->Payload);
+	strcpy(search_file, prueba);
 	char *route = strtok(search_file, "/");
 	log_info(logger, "Busco: %s", route);
 
-	dir = opendir(current_path);
-	log_info(logger, "Entro al dir: %s", current_path);
+	dir = opendir(current);
+	log_info(logger, "Entro al dir: %s", current);
 
 	//Recorrer el directorio Archivos
 	while ((ent = readdir(dir)) != NULL)
@@ -247,10 +251,10 @@ int validar_archivo(Paquete *paquete, char *current_path)
 			{
 				int position = strlen(route) + 1;
 				route = string_substring_from(paquete->Payload, position);
-				strcat(current_path, "/");
-				strcat(current_path, ent->d_name);
+				strcat(current, "/");
+				strcat(current, ent->d_name);
 				paquete->Payload = route;
-				if (validar_archivo(paquete, current_path))
+				if (validar_archivo(paquete, current))
 					return 1;
 			} else {
 				log_info(logger, "Encontré el archivo %s", ent->d_name);
@@ -265,6 +269,9 @@ int validar_archivo(Paquete *paquete, char *current_path)
 
 void crear_archivo(Paquete *paquete)
 {
+	// STRTOK CON /
+	// Valido si existe directorio, cuando no exista creo directorio nuevo
+	// Cuando llego al ultimo char* de lo que strtokie, creo el archivo
 	int offset = 0;
 	char *ruta = string_deserializar(paquete->Payload, &offset);
 	int bytes_a_crear = 0;

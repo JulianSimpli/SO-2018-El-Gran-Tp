@@ -265,17 +265,19 @@ int RecibirPaqueteCliente(int socketFD, Paquete* paquete) {
 	return resul;
 }
 
-void recibir_paquete(int socket, Paquete *paquete)
+int recibir_paquete(int socket, Paquete *paquete)
 {
 	log_debug(logger, "Recibo el header");
 	recibir_partes(socket, &paquete->header, TAMANIOHEADER);
 
 	if (paquete->header.tamPayload == 0)
-		return;
+		return TAMANIOHEADER;
 
 	paquete->Payload = malloc(paquete->header.tamPayload);
 	log_debug(logger, "Recibo el payload de tamanio %i", paquete->header.tamPayload);
 	recibir_partes(socket, paquete->Payload, paquete->header.tamPayload);
+
+	return TAMANIOHEADER + paquete->header.tamPayload;
 }
 
 void recibir_partes(int socket, void *buffer, int cant_a_recibir)

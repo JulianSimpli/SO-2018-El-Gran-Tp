@@ -17,11 +17,9 @@ int main(int argc, char **argv)
 	//inicializamos el semaforo en maximas_conexiones - 3 que son fijas
 
 	pthread_t safa = levantar_hilo(interpretar_mensajes_de_safa);
-	pthread_t mdj = levantar_hilo(interpretar_mensajes_de_mdj);
 	//pthread_t fm9 = levantar_hilo(interpretar_mensajes_de_fm9);
 	aceptar_cpus();
 	pthread_join(safa, NULL);
-	pthread_join(mdj, NULL);
 	//pthread_join(fm9, NULL);
 	return 0;
 }
@@ -87,15 +85,9 @@ void enviar_handshake(int socket)
 {
 	Paquete handshake;
 	//handshake.header = cargar_header(INTSIZE, ESHANDSHAKE, ELDIEGO);
-<<<<<<< 64fcd3cfcf9eade0a6d0da63b4dfdc51aec09cc1
-	handshake.header = cargar_header(4, ESHANDSHAKE, ELDIEGO);
-	handshake.Payload = malloc(4);
-	memcpy(handshake.Payload, &transfer_size, 4);
-=======
 	handshake.header = cargar_header(INTSIZE, ESHANDSHAKE, ELDIEGO);
 	handshake.Payload = malloc(INTSIZE);
 	memcpy(handshake.Payload, &transfer_size, INTSIZE);
->>>>>>> Arregle ls, handshake cpu-dam. Agregamos semaforo para los hilos de cpu
 	log_debug(logger, "Enviar handshake");
 	enviar_paquete(socket, &handshake);
 }
@@ -174,28 +166,6 @@ void handshake_safa()
 }
 
 
-void *interpretar_mensajes_de_mdj(void *args)
-{
-	Paquete paquete;
-	RecibirPaqueteCliente(socket_mdj, &paquete);
-
-	//interpreta
-	Tipo accion = paquete.header.tipoMensaje;
-	switch (accion)
-	{
-	case VALIDAR_ARCHIVO:
-		RecibirPaqueteCliente(socket_mdj, &paquete);
-		log_debug(logger, "El archivo tiene el tamanio");
-		break;
-	case ARCHIVO:
-		break;
-	default:
-		log_warning(logger, "No se pudo interpretar el mensaje enviado por MDJ");
-		break;
-	}
-	//enviar_mensaje
-}
-
 void *interpretar_mensajes_de_safa(void *args)
 {
 	Paquete paquete;
@@ -273,15 +243,20 @@ pthread_t levantar_hilo(void *funcion)
 
 int pedir_validar(char *path)
 {
-	int len = strlen(path);
+	int desplazamiento = 0;
+	void *serializado = string_serializar(path, &desplazamiento);
+
 	Paquete validar;
-	validar.header = cargar_header(len, VALIDAR_ARCHIVO, ELDIEGO);
-	validar.Payload = malloc(len);
-	memcpy(validar.Payload, path, len);
-	EnviarPaquete(socket_mdj, &validar);
+	validar.header = cargar_header(desplazamiento, VALIDAR_ARCHIVO, ELDIEGO);
+	validar.Payload = malloc(desplazamiento);
+	memcpy(validar.Payload, serializado, desplazamiento);
+	
+	enviar_paquete(socket_mdj, &validar);
+	free(serializado);
+
 	Paquete respuesta;
-	RecibirPaqueteCliente(socket_mdj, &respuesta);
-	return respuesta.header.tipoMensaje == PATH_INEXISTENTE?0:(intptr_t)respuesta.Payload;
+	recibir_paquete(socket_mdj, &respuesta);
+	return respuesta.header.tipoMensaje == PATH_INEXISTENTE? 0 : (intptr_t)respuesta.Payload;
 }
 
 int cargar_a_memoria(u_int32_t pid, char *path, Paquete *paquete, Paquete *respuesta)
