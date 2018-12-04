@@ -96,7 +96,6 @@ void planificar_iobound();
 
 void ejecutar_primer_dtb_listo();
 void ejecutar_primer_dtb_prioridad();
-t_cpu *cpu_buscar_libre();
 
 //Funciones de DTB
 DTB *dtb_crear(u_int32_t pid, char *path, int flag_inicializacion);

@@ -159,6 +159,7 @@ int interpretar_safa(Paquete *paquete)
 	case ESDTBDUMMY:
 		log_debug(logger, "ESDTBDUMMY");
 		EnviarPaquete(socket_dam, paquete); //envia el dtb al diego para que este haga el pedido correspondiente a MDJ
+		bloquea_dummy(paquete);
 		break;
 	case ESDTB:
 		log_debug(logger, "ESDTB");
@@ -173,6 +174,16 @@ int interpretar_safa(Paquete *paquete)
 	default:
 		break;
 	}
+}
+
+void bloquea_dummy(Paquete *paquete)
+{
+	DTB *dtb = DTB_deserializar(paquete->Payload);
+	Paquete dummy;
+	dummy.Payload = malloc(INTSIZE);
+	dummy.header = cargar_header(INTSIZE, DUMMY_BLOQUEA, CPU);
+	memcpy(dummy.Payload, &dtb->gdtPID, INTSIZE);
+	EnviarPaquete(socket_safa, &dummy);
 }
 
 void handshake_safa()

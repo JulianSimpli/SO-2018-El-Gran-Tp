@@ -121,8 +121,9 @@
 
 	//Funciones planificador corto plazo
 	void ejecutar_primer_dtb_listo() {
-	    t_cpu *cpu_libre = cpu_buscar_libre();
-		log_debug(logger, "Tengo libre el cpu %d\n", cpu_libre->socket);
+		t_cpu* cpu_libre = list_find(lista_cpu, esta_libre_cpu);
+	    cpu_libre->estado = CPU_OCUPADA;
+		log_debug(logger, "Esta libre la cpu %d\n", cpu_libre->socket);
 	    DTB *dtb_exec = list_get(lista_listos, 0);
 	    
 	    Paquete *paquete = malloc(sizeof(Paquete));
@@ -153,7 +154,8 @@
 
 	void ejecutar_primer_dtb_prioridad()
 	{
-	    t_cpu *cpu_libre = cpu_buscar_libre();
+	    t_cpu* cpu_libre = list_find(lista_cpu, esta_libre_cpu);
+	    cpu_libre->estado = CPU_OCUPADA;
 	    DTB *dtb = list_get(lista_prioridad, 0);
 	    DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
 
@@ -170,14 +172,6 @@
 	    dtb_actualizar(dtb, lista_prioridad, lista_ejecutando, dtb->PC, DTB_EJECUTANDO, cpu_libre->socket);
 	}
 
-	t_cpu *cpu_buscar_libre()
-	{
-	    t_cpu* cpu_libre = list_find(lista_cpu, esta_libre_cpu);
-	    cpu_libre->estado = CPU_OCUPADA;
-
-	    return cpu_libre;
-	}
-
 //Funciones asociadas a DTB
 DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
 {
@@ -186,7 +180,7 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
     dtb_nuevo->PC = 1;
     dtb_nuevo->entrada_salidas = 0;
     dtb_nuevo->archivosAbiertos = list_create();
-    DTB_agregar_archivo(dtb_nuevo, 0, path);
+    DTB_agregar_archivo(dtb_nuevo, 0, 0, path);
 
     switch(flag_inicializacion)
     {
@@ -314,6 +308,7 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
 	{
 	    t_cpu* cpu_actual = cpu_con_socket(socket);
 	    cpu_actual->estado = CPU_LIBRE;
+		log_info(logger, "Libere la cpu %d", cpu_actual->socket);
 	}
 
 	bool dtb_coincide_socket(int socket, void *dtb)

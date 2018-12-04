@@ -19,8 +19,8 @@ void crear_loggers()
 
 void obtener_valores_archivo_configuracion()
 {
-	t_config *arch = config_create("/home/utnso/TPSO/tp-2018-2c-Nene-Malloc/safa/src/SAFA.config");
-	IP = "127.0.0.1";
+	t_config *arch = config_create("/home/utnso/tp-2018-2c-Nene-Malloc/safa/src/SAFA.config");
+	IP = string_duplicate(config_get_string_value(arch, "IP"));
 	log_info(logger, "IP: %s", IP);
 	PUERTO = config_get_int_value(arch, "PUERTO");
 	log_info(logger, "Puerto: %d", PUERTO);
@@ -232,10 +232,12 @@ void manejar_desconexion(int socket)
 	{
 		log_error(logger, "Desconexion en el socket %d, donde estaba El Diego", socket_diego);
 		printf("Se desconecto El Diego, que hacemo?\n");
-		//exit(1); ?
+		exit(1);
 	}
 	else
-		manejar_desconexion_cpu(socket);		
+	{
+		manejar_desconexion_cpu(socket);
+	}		
 }
 
 void manejar_desconexion_cpu(int socket)
@@ -247,10 +249,14 @@ void manejar_desconexion_cpu(int socket)
 	{
 		return dtb_coincide_socket(socket, _dtb);
 	}
+
 	DTB *dtb = list_find(lista_ejecutando, _dtb_compara_socket);
-	dtb_actualizar(dtb, lista_ejecutando, lista_listos, dtb->PC, DTB_LISTO, socket);
-	log_info(logger, "GDT %d desalojado de cpu %d desconectada", dtb->gdtPID, socket);
-	printf("Se desalojo al gdt %d de la cpu %d desconectada\n", dtb->gdtPID, socket);
+	if(dtb != NULL)
+	{
+		dtb_actualizar(dtb, lista_ejecutando, lista_listos, dtb->PC, DTB_LISTO, socket);
+		log_info(logger, "GDT %d desalojado de cpu %d desconectada", dtb->gdtPID, socket);
+		printf("Se desalojo al GDT %d de la cpu %d desconectada\n", dtb->gdtPID, socket);
+	}
 
 	bool _compara_cpu(void *_cpu)
 	{
@@ -285,7 +291,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 	log_debug(logger, "Interpreto mensajes del diego");
 
 	u_int32_t pid = 0;
-	int tam_pid = sizeof(u_int32_t);
+	int tam_pid = INTSIZE;
 	switch (paquete->header.tipoMensaje)
 	{
 		case ESHANDSHAKE:
@@ -302,17 +308,17 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 
 		case DUMMY_SUCCESS:
 		{
-			// Mensaje contiene pid, cantidad lineas y Capaz direccion logica
+			// Payload contiene pid + ArchivoAbierto
 			memcpy(&pid, paquete->Payload, tam_pid);
 			DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
 			log_info(logger, "GDT %d fue cargado en memoria correctamente", dtb->gdtPID);
 
 			ArchivoAbierto *escriptorio_cargado = DTB_leer_struct_archivo(paquete->Payload, &tam_pid);
 			ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
-			memcpy(&escriptorio->cantLineas, &escriptorio_cargado->cantLineas, sizeof(u_int32_t));
+			escriptorio->cantLineas = escriptorio_cargado->cantLineas;
+			escriptorio->dir_logica = escriptorio_cargado->dir_logica;
 
 			liberar_archivo_abierto(escriptorio_cargado);
-			bloquear_dummy(lista_ejecutando, dtb->gdtPID);
 
 			if(verificar_si_murio(dtb, lista_nuevos, dtb->PC))
 				break;
@@ -322,6 +328,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		}
 		case DUMMY_FAIL_CARGA:
 		{
+			log_debug(logger, "DUMMY_FAIL_CARGA");
 			memcpy(&pid, paquete->Payload, tam_pid);
 			DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
 			log_error(logger, "Fallo la carga en memoria del GDT %d", dtb->gdtPID);
@@ -331,6 +338,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 
 		case DUMMY_FAIL_NO_EXISTE:
 		{
+			log_debug(logger, "DUMMY_FAIL_NO_EXISTE");
 			memcpy(&pid, paquete->Payload, tam_pid);
 			DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
 			ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
@@ -441,13 +449,21 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		break;
 	}
 
+	case DUMMY_BLOQUEA:
+		liberar_cpu(socketFD);
+		log_debug(logger, "DUMMY_BLOQUEA");
+		memcpy(&pid, paquete->Payload, INTSIZE);
+		log_info(logger, "Se ejecuto el dummy de GDT %d", pid);
+		bloquear_dummy(lista_ejecutando, pid);
+		break;
+
         case DTB_BLOQUEAR:
 		{
 			liberar_cpu(socketFD);
 			deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
 
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
-			memcpy(&dtb->entrada_salidas, paquete->Payload + desplazamiento, sizeof(u_int32_t));
+			memcpy(&dtb->entrada_salidas, paquete->Payload + desplazamiento, INTSIZE);
 			actualizar_sentencias_al_diego(dtb);
 			sentencias_globales_del_diego++;
 			metricas_actualizar(dtb, pc);
@@ -711,11 +727,11 @@ t_recurso *recurso_recibir(void *payload, int *pid, int *pc, Tipo senial)
 
 void *config_cpu_serializar(int *tamanio_payload)
 {
-	void *payload = malloc(sizeof(u_int32_t));
+	void *payload = malloc(INTSIZE);
 	int desplazamiento = 0;
 
-	memcpy(payload, &QUANTUM, sizeof(u_int32_t));
-	desplazamiento += sizeof(u_int32_t);
+	memcpy(payload, &QUANTUM, INTSIZE);
+	desplazamiento += INTSIZE;
 
 	int tamanio_serializado = 0;
 	void *algoritmo_serializado = string_serializar(ALGORITMO_PLANIFICACION, &tamanio_serializado);
@@ -760,7 +776,7 @@ void event_watcher()
 		if(fd_config < 0)
 			log_error(logger, "Fallo creacion de File Descriptor para SAFA.config (inotify_init)");
 		
-		int watch_descriptor = inotify_add_watch(fd_config, "/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src", IN_MODIFY);
+		int watch_descriptor = inotify_add_watch(fd_config, "/home/utnso/tp-2018-2c-Nene-Malloc/safa/src", IN_MODIFY);
 		if(watch_descriptor < 0)
 			log_error(logger, "Fallo creacion de observador de eventos en archivos (inotify_add_watch)");
 		
