@@ -8,11 +8,12 @@
 #ifndef FM9_H_
 #define FM9_H_
 
-#include "sockets.h"
-//#include <commons/collections/list.h>
-//#include "../../Bibliotecas/sockets.h"
-//#include "../../Bibliotecas/helper.h"
-//#include "../../Bibliotecas/dtb.h"
+//#include "sockets.h"
+//#include "dtb.h"
+#include <commons/collections/list.h>
+#include "../../Bibliotecas/sockets.h"
+#include "../../Bibliotecas/helper.h"
+#include "../../Bibliotecas/dtb.h"
 
 typedef struct {
 	char* idArchivo; //path del archivo
@@ -49,19 +50,19 @@ typedef struct {
 typedef struct {
 	int idProceso;
 	char* pathArchivo;
-	int cantidadLineas;
 } PidPath;
 
 void inicializarFramesMemoria();
 void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo); //va a devolver void
 void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo);
-void printGloriosoSegmentacion(int pid);
+void printSEG(int pid);
+void printSPA(int pid);
 void imprimirMemoria();
-void printSegmentacion(int pid);
 void liberarMemoriaDesdeHasta(int nroLineaInicio, int nroLineaFin);
 bool archivoAbierto(char* path);
 void liberarArchivoSEG(int pid, char* path);
 char* lineaDeUnaPosicionSEG(int pid, int pc);
+char* lineaDeUnaPosicionSPA(int pid, int pc);
 void enviar_abrio_a_dam(int socketFD, u_int32_t pid, char *fid, char *file);
 
 #endif /* FM9_H_ */
