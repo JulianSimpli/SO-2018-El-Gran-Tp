@@ -62,29 +62,13 @@
       "options": {
         "automatic-rename": "off"
       },
-      "window_name": "FM9",
-      "layout": "9ff1,201x19,0,0{100x19,0,0,4,100x19,101,0,13}",
-      "panes": [
-        {
-          "shell_command": [
-            "make",
-            "./fm9"
-          ]
-        }
-      ],
-      "start_directory": "/home/utnso/workspace/tp-2018-2c-Nene-Malloc/fm9/src"
-    },
-    {
-      "options": {
-        "automatic-rename": "off"
-      },
       "window_name": "CPUS",
       "layout": "9ff1,201x19,0,0{100x19,0,0,4,100x19,101,0,13}",
       "panes": [
         {
           "shell_command": [
             "make",
-            "sleep 8",
+            "sleep 9",
             "./cpu"
           ]
         },

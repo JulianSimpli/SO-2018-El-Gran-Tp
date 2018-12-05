@@ -45,7 +45,9 @@ void *hilo_safa()
 		Paquete *paquete = malloc(sizeof(Paquete));
 		log_info(logger, "Soy el hilo %d, espero paquete de safa", process_get_thread_id());
 		sem_wait(&sem_recibir_paquete);
-		RecibirPaqueteCliente(socket_safa, paquete);
+		int r = RecibirPaqueteCliente(socket_safa, paquete);
+		if (r <= 0) 
+			_exit_with_error(socket_safa, "Se desconecto safa", paquete);
 		sem_post(&sem_recibir_paquete);
 		interpretar_safa(paquete);
 	}

@@ -1,7 +1,7 @@
-LIBS = -lcommons -lcspecs -lreadline ../src/mdj.c ../../Bibliotecas/sockets.c ../../Bibliotecas/helper.c
+LIBS = -lcommons -lcspecs -lreadline
 
-borrar_archivos:
-	gcc -pthread -o borrar_archivos test_borrar_archivos.c $(LIBS) 
+validar_archivo:
+	gcc -pthread -o validar_archivo test_validar_archivo.c $(LIBS) 
 
 clean:
 	-rm -f *.o

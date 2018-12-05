@@ -261,7 +261,9 @@ int pedir_validar(char *path)
 
 	Paquete respuesta;
 	recibir_paquete(socket_mdj, &respuesta);
-	return respuesta.header.tipoMensaje == PATH_INEXISTENTE? 0 : (intptr_t)respuesta.Payload;
+	int size = 0;
+	memcpy(&size, respuesta.Payload, INTSIZE);
+	return respuesta.header.tipoMensaje == PATH_INEXISTENTE? 0 : size;
 }
 
 int cargar_a_memoria(u_int32_t pid, char *path, Paquete *paquete, Paquete *respuesta)
@@ -366,11 +368,11 @@ void enviar_obtener_datos(char *path, int size)
 {
 	Paquete pedido_escriptorio;
 	int desplazamiento = 0;
-	char *serializado = string_serializar(path, &desplazamiento);
+	void *serializado = string_serializar(path, &desplazamiento);
 
 	pedido_escriptorio.Payload = malloc(desplazamiento + 2 * INTSIZE);
 
-	memcpy(pedido_escriptorio.Payload + desplazamiento, serializado, desplazamiento);
+	memcpy(pedido_escriptorio.Payload, serializado, desplazamiento);
 	int offset = 0;
 	memcpy(pedido_escriptorio.Payload + desplazamiento, &offset, INTSIZE);
 	desplazamiento += INTSIZE;
@@ -380,6 +382,7 @@ void enviar_obtener_datos(char *path, int size)
 	pedido_escriptorio.header = cargar_header(desplazamiento, OBTENER_DATOS, ELDIEGO);
 
 	enviar_paquete(socket_mdj, &pedido_escriptorio);
+	free(serializado);
 	free(pedido_escriptorio.Payload);
 }
 
@@ -413,6 +416,8 @@ void es_dtb_dummy(Paquete *paquete)
 	log_debug(logger, "Pido que me devuelva el escriptorio %s", escriptorio->path);
 
 	int validar = pedir_validar(escriptorio->path);
+
+	log_debug(logger, "El archivo pesa %d bytes", validar);
 
 	if (validar == 0)
 	{

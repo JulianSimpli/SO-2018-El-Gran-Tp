@@ -63,10 +63,16 @@ void leer_config(char *path)
 	mnt_path = malloc(strlen(mnt_config) + 1);
 	strcpy(mnt_path, mnt_config);
 	file_path = malloc(strlen(mnt_config) + strlen("Archivos") + 1);
+	blocks_path = malloc(strlen(mnt_config) + strlen("Bloques") + 1);
+	metadata_path = malloc(strlen(mnt_config) + strlen("Metadata") + 1);
 	current_path = malloc(strlen(mnt_config) + strlen("Archivos") + 1);
 	strcpy(file_path, mnt_path);
+	strcpy(blocks_path, mnt_path);
+	strcpy(metadata_path, mnt_path);
 	strcpy(current_path, mnt_path);
 	strcat(file_path, "Archivos");
+	strcat(blocks_path, "Bloques");
+	strcat(metadata_path, "Metadata");
 }
 
 void inicializar_log(char *program)
@@ -124,6 +130,16 @@ int interpretar(char *linea)
 	return 0;
 }
 
+int obtener_size_escriptorio(char *path)
+{
+	char *ruta = ruta_absoluta(path);
+	t_config *metadata = config_create(ruta);
+	int size = config_get_int_value(metadata, "TAMANIO");
+	config_destroy(metadata);
+	free(ruta);
+	return size;
+}
+
 void interpretar_paquete(Paquete *paquete)
 {
 	Paquete *respuesta = malloc(sizeof(Paquete));
@@ -153,7 +169,9 @@ void interpretar_paquete(Paquete *paquete)
 		char *ruta_absoluta = malloc(strlen(file_path) + strlen(prueba) + 1);
 		strcpy(ruta_absoluta, file_path);
 		strcat(ruta_absoluta, prueba);
-		int tamanio = file_size(ruta_absoluta);
+		int tamanio = obtener_size_escriptorio(ruta_absoluta);
+
+		log_debug(logger, "%s pesa %d bytes", ruta_absoluta, tamanio);
 
 		Paquete respuesta;
 		respuesta.header = cargar_header(INTSIZE, SUCCESS, MDJ);
@@ -335,24 +353,35 @@ void crear_archivo(Paquete *paquete)
 	free(nuevo_archivo.nombre);
 }
 
+char *ruta_absoluta(char *ruta)
+{
+	char *path = malloc(strlen(file_path) + strlen(ruta) + 1);
+	strcpy(path, file_path);
+	strcat(path, ruta);
+	return path;
+}
+
 void obtener_datos(Paquete *paquete)
 {
-	log_debug(logger, "Recibi el payload %s", paquete->Payload);
+	log_debug(logger, "Recibi el payload de tamanio %d", paquete->header.tamPayload);
 
 	int offset = 0;
 	int size = sizeof(u_int32_t);
 	char *ruta = string_deserializar(paquete->Payload, &offset);
-	//TODO: Agregar en una lista que este archivo esta siendo leido
-	//TODO: Si esta abierto hace un wait en ese semaforo y queda bloqueado
 	int bytes_offset = 0;
 	memcpy(&bytes_offset, paquete->Payload + offset, size);
 	offset += size;
 	int bytes_a_devolver = 0;
 	memcpy(&bytes_a_devolver, paquete->Payload + offset, size);
+	offset += size;
+
+	log_debug(logger, "Obtener %s %d %d", ruta, bytes_offset, bytes_a_devolver);
 
 	//Calcular en que bloque cae segun el offset y cuantos bloques va leer segun el size
 	//Lee metadata del archivo pasado por el path
-	t_config *metadata = config_create(ruta);
+	char *path = ruta_absoluta(ruta);
+	log_debug(logger, "Abro la metadata de %s", path);
+	t_config *metadata = config_create(path);
 	char **bloques_ocupados = config_get_array_value(metadata, "BLOQUES");
 
 	int bloque_inicial = bytes_offset / tamanio_bloques;
@@ -363,19 +392,24 @@ void obtener_datos(Paquete *paquete)
 
 	for (int i = bloque_inicial; bytes_a_devolver > 0; i++)
 	{
-		int bloque_actual = atoi(bloques_ocupados[i]);
-		char *ubicacion = get_block_full_path(bloque_actual);
-		FILE *bloque_abierto = fopen(ubicacion, "r");
+		int bloque = atoi(bloques_ocupados[i]);
+		log_debug(logger, "Full path de %d", bloque);
+		char *ubicacion = get_block_full_path(bloque);
+		log_debug(logger, "Abro el bloque que esta en %s", ubicacion);
+		FILE *bloque_abierto = fopen(ubicacion, "rb");
 		fseek(bloque_abierto, offset_interno, SEEK_SET);
-		offset_interno = 0;
 		int leer = tamanio_bloques - offset_interno;
 		//bytes_a_devolver < tamanio_bloques - offset_interno, leo la cantidad de bytes_a_devolver
 		//sino, lee la resta y pasa al siguiente archivo
 
 		if (bytes_a_devolver < leer)
 			leer = bytes_a_devolver;
+
+		log_debug(logger, "Leo %d", leer);
 		fread(buffer, 1, leer, bloque_abierto);
 		fclose(bloque_abierto);
+		bytes_a_devolver -= leer;
+		log_debug(logger, "bytes_a_devolver %d", bytes_a_devolver);
 	}
 
 	//Es el caso que el archivo no se pudo leer por alguna razon
@@ -385,10 +419,12 @@ void obtener_datos(Paquete *paquete)
 	Paquete respuesta;
 	int desplazamiento = 0;
 	void *serializado = string_serializar(buffer, &desplazamiento);
+	log_debug(logger, "La respuesta pesa %d", desplazamiento);
 	respuesta.header = cargar_header(desplazamiento, SUCCESS, MDJ);
 	respuesta.Payload = serializado;
 
 	EnviarPaquete(socket_dam, &respuesta);
+	config_destroy(metadata);
 	free(respuesta.Payload);
 	free(buffer);
 }
@@ -424,8 +460,8 @@ void guardar_datos(Paquete *paquete)
 
 	for (int i = bloque_inicial; buffer_size > 0 && i < cantidad_bloques_del_path; i++)
 	{
-		int bloque_actual = atoi(bloques_ocupados[i]);
-		char *ubicacion = get_block_full_path(bloque_actual);
+		int bloque = atoi(bloques_ocupados[i]);
+		char *ubicacion = get_block_full_path(bloque);
 		FILE *bloque_abierto = fopen(ubicacion, "r+");
 		fseek(bloque_abierto, offset_interno, SEEK_SET);
 		int escribir = tamanio_bloques - offset_interno;
@@ -467,8 +503,8 @@ void guardar_datos(Paquete *paquete)
 
 		for (int i = 0; buffer_size > 0; i++)
 		{
-			int bloque_actual = atoi(list_get(nuevos_bloques, i));
-			char *ubicacion = get_block_full_path(bloque_actual);
+			int bloque = atoi((char*)list_get(nuevos_bloques, i));
+			char *ubicacion = get_block_full_path(bloque);
 			FILE *bloque_abierto = fopen(ubicacion, "r+");
 			fseek(bloque_abierto, 0, SEEK_SET);
 			int escribir = tamanio_bloques;

@@ -53,6 +53,9 @@ void enviar_error(Tipo tipo);
 void cargar_metadata();
 char *leer_bitmap();
 int file_size(char*);
+int obtener_size_escriptorio(char *path);
+char *ruta_absoluta(char *ruta);
+char *get_block_full_path(int bloque);
 char *mnt_path;
 char *file_path;
 char *blocks_path;
@@ -245,11 +248,11 @@ Mensaje *recibir_mensaje(int conexion)
     return buffer;
 }
 
-char *get_block_full_path(int index)
+char *get_block_full_path(int bloque)
 {
-    char *block_path = malloc(strlen(blocks_path) + 1);
-    strcpy(block_path, blocks_path);
-    sprintf(block_path, "%s/%d.bin", block_path, index);
+    char *block_path = malloc(strlen(blocks_path) + strlen("/") + strlen(".bin") + 1 + 10);
+    log_debug(logger, "%d", bloque);
+    sprintf(block_path, "%s/%d.bin", blocks_path, bloque);
     return block_path;
 }
 
