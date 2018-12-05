@@ -52,6 +52,7 @@ void imprimir_directorios(char *);
 void enviar_error(Tipo tipo);
 void cargar_metadata();
 char *leer_bitmap();
+int file_size(char*);
 char *mnt_path;
 char *file_path;
 char *blocks_path;
@@ -332,7 +333,7 @@ int escuchar_conexiones()
 
     char *port = config_get_string_value(config, "PUERTO");
     char *ip = "127.0.0.1";
-
+    // char * ip = config_get_string_value();
     struct addrinfo hints;
     struct addrinfo *server_info;
 

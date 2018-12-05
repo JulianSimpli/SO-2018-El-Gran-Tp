@@ -65,7 +65,7 @@ void leer_config(char *path)
 	file_path = malloc(strlen(mnt_config) + strlen("Archivos") + 1);
 	current_path = malloc(strlen(mnt_config) + strlen("Archivos") + 1);
 	strcpy(file_path, mnt_path);
-	strcpy(current_path,mnt_path);
+	strcpy(current_path, mnt_path);
 	strcat(file_path, "Archivos");
 }
 
@@ -85,7 +85,7 @@ void inicializar(char **argv)
 	log_info(logger, "Log cargado");
 	leer_config(argv[1]);
 	log_info(logger, "Config cargada");
-    cargar_bitarray();
+	cargar_bitarray();
 	log_info(logger, "Bitarray cargado");
 	inicializar_semaforos();
 }
@@ -142,12 +142,18 @@ void interpretar_paquete(Paquete *paquete)
 		char *search_file = malloc(paquete->header.tamPayload + 1);
 		strcpy(search_file, prueba);
 
-		int tamanio = validar_archivo(search_file, file_path);
+		int existe = validar_archivo(search_file, file_path);
 
-		if (tamanio == 0) {
+		if (existe == 0)
+		{
 			enviar_error(PATH_INEXISTENTE);
 			return;
 		}
+
+		char *ruta_absoluta = malloc(strlen(file_path) + strlen(prueba) + 1);
+		strcpy(ruta_absoluta, file_path);
+		strcat(ruta_absoluta, prueba);
+		int tamanio = file_size(ruta_absoluta);
 
 		Paquete respuesta;
 		respuesta.header = cargar_header(INTSIZE, SUCCESS, MDJ);
@@ -216,6 +222,7 @@ int file_size(char *path)
 	FILE *f = fopen(path, "rb");
 	fseek(f, 0, SEEK_END);
 	int size = ftell(f);
+	fseek(f, 0, SEEK_SET);
 	fclose(f);
 	return size;
 }
@@ -231,36 +238,53 @@ void enviar_error(Tipo tipo)
 //TODO: Liberar los que son punteros al finalizar cada recursividad
 int validar_archivo(char *search_file, char *current_path)
 {
+	char current[2000];
 	DIR *dir;
 	struct dirent *ent;
-	char *current = malloc(strlen(current_path) + 1);
-	strcpy(current, current_path);
-	//Agarra el path del paquete
+	// char *current = malloc(strlen(current_path) + 1);
+	// strcpy(current, current_path);
+	log_debug(logger, "esta es mi ruta completa a buscar: %s", search_file);
 
-	char *route = strtok(search_file, "/");
-	log_info(logger, "Busco: %s", route);
+	char **directorios = string_split(search_file, "/");
+	char *route = directorios[0];
+	log_debug(logger, "estoy parado en: %s", current_path);
+	log_debug(logger, "nuevo acceso a %s", route);
 
-	dir = opendir(current);
-	log_info(logger, "Entro al dir: %s", current);
+	dir = opendir(current_path);
+	if (dir == NULL)
+	{
+		log_info(logger, "No pude abrir este directorio: %s", current_path);
+		return 0;
+	}
 
-	//Recorrer el directorio Archivos
+	log_info(logger, "Entre al dir: %s", current_path);
 	while ((ent = readdir(dir)) != NULL)
 	{
 		//Verificar con strcmp si ya existe
+		log_info(logger, "Busco: %s", route);
 		if (strcmp(route, ent->d_name) == 0)
 		{
 			if (ent->d_type == DT_DIR)
 			{
 				int position = strlen(route) + 1;
-				route = string_substring_from(search_file, position);
-				log_debug(logger, "sub es %s", route);
+				char *ruta_parcial = string_substring_from(search_file, position);
+				log_debug(logger, "sub es %s", ruta_parcial);
+				strcpy(current, current_path);
 				strcat(current, "/");
 				strcat(current, ent->d_name);
-				if (validar_archivo(route, current))
+				if (validar_archivo(ruta_parcial, current) > 0)
+				{
+					// closedir(dir);
 					return 1;
-			} else {
-				log_info(logger, "Encontré el archivo %s", ent->d_name);
-				return file_size(ent->d_name);
+				}
+			}
+			else
+			{
+				char *archivo = malloc(strlen(ent->d_name) + 1);
+				strcpy(archivo, ent->d_name);
+				log_info(logger, "Encontré el archivo %s", archivo);
+				closedir(dir);
+				return 1;
 			}
 		}
 	}
@@ -363,7 +387,7 @@ void obtener_datos(Paquete *paquete)
 	void *serializado = string_serializar(buffer, &desplazamiento);
 	respuesta.header = cargar_header(desplazamiento, SUCCESS, MDJ);
 	respuesta.Payload = serializado;
- 
+
 	EnviarPaquete(socket_dam, &respuesta);
 	free(respuesta.Payload);
 	free(buffer);
