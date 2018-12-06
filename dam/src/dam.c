@@ -12,15 +12,13 @@ int main(int argc, char **argv)
 	log_info(logger, "Se concreto handshake SAFA");
 	handshake_mdj();
 	log_info(logger, "Se concreto handshake MDJ");
-	//handshake_fm9();
+	handshake_fm9();
 
 	//inicializamos el semaforo en maximas_conexiones - 3 que son fijas
 
 	pthread_t safa = levantar_hilo(interpretar_mensajes_de_safa);
-	//pthread_t fm9 = levantar_hilo(interpretar_mensajes_de_fm9);
 	aceptar_cpus();
 	pthread_join(safa, NULL);
-	//pthread_join(fm9, NULL);
 	return 0;
 }
 
@@ -84,7 +82,6 @@ int crear_socket_mdj() {
 void enviar_handshake(int socket)
 {
 	Paquete handshake;
-	//handshake.header = cargar_header(INTSIZE, ESHANDSHAKE, ELDIEGO);
 	handshake.header = cargar_header(INTSIZE, ESHANDSHAKE, ELDIEGO);
 	handshake.Payload = malloc(INTSIZE);
 	memcpy(handshake.Payload, &transfer_size, INTSIZE);
@@ -427,9 +424,12 @@ void es_dtb_dummy(Paquete *paquete)
 
 	enviar_obtener_datos(escriptorio->path, validar);	
 
-	log_debug(logger, "Le envie el pedido a mdj");
 	recibir_paquete(socket_mdj, paquete);
-	log_debug(logger, "Le envie el pedido a mdj");
+	int d = 0;
+	char *script = string_deserializar(paquete->Payload, &d);
+	log_debug(logger, "Escriptorio \n%s", script);
+	
+	log_debug(logger, "Le envio el pedido a fm9");
 
 	Paquete respuesta;
 	int cargado = cargar_a_memoria(dummy->gdtPID, escriptorio->path, paquete, &respuesta);

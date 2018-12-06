@@ -296,7 +296,7 @@ void recibir_partes(int socket, void *buffer, int cant_a_recibir)
 
 		//man recv en el caso de -1 es error pero tambien lo matamos
 		if (recibido <= 0)
-			_exit_with_error(socket, "No pudo recibir el paquete", buffer);
+			_exit_with_error(socket, "No pudo recibir el paquete", NULL);
 
 		total_recibido += recibido;
 	}

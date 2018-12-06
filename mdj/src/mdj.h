@@ -251,7 +251,6 @@ Mensaje *recibir_mensaje(int conexion)
 char *get_block_full_path(int bloque)
 {
     char *block_path = malloc(strlen(blocks_path) + strlen("/") + strlen(".bin") + 1 + 10);
-    log_debug(logger, "%d", bloque);
     sprintf(block_path, "%s/%d.bin", blocks_path, bloque);
     return block_path;
 }

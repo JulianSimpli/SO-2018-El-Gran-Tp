@@ -21,9 +21,6 @@
 t_config *config;
 int tamanio_linea;
 
-#define IP "127.0.0.1"
-#define PUERTO "8080"
-
 // Comunes de carga
 void leer_config();
 void inicializar_log(char *program);
@@ -115,7 +112,7 @@ int ligar_socket()
 {
 
 	char *port = config_get_string_value(config, "PUERTO");
-	char *ip = "127.0.0.1";
+	char *ip = config_get_string_value(config, "IP");
 
 	struct addrinfo hints;
 	struct addrinfo *server_info;

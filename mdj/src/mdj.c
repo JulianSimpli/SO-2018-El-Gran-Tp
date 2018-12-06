@@ -166,10 +166,7 @@ void interpretar_paquete(Paquete *paquete)
 			return;
 		}
 
-		char *ruta_absoluta = malloc(strlen(file_path) + strlen(prueba) + 1);
-		strcpy(ruta_absoluta, file_path);
-		strcat(ruta_absoluta, prueba);
-		int tamanio = obtener_size_escriptorio(ruta_absoluta);
+		int tamanio = obtener_size_escriptorio(prueba);
 
 		log_debug(logger, "%s pesa %d bytes", ruta_absoluta, tamanio);
 
@@ -374,6 +371,7 @@ void obtener_datos(Paquete *paquete)
 	int bytes_a_devolver = 0;
 	memcpy(&bytes_a_devolver, paquete->Payload + offset, size);
 	offset += size;
+	int final = bytes_a_devolver;
 
 	log_debug(logger, "Obtener %s %d %d", ruta, bytes_offset, bytes_a_devolver);
 
@@ -386,14 +384,14 @@ void obtener_datos(Paquete *paquete)
 
 	int bloque_inicial = bytes_offset / tamanio_bloques;
 	int offset_interno = bytes_offset % tamanio_bloques;
+	int leido = 0;
 
 	//Crear paquete de payload del tamanio leido y cargar el contenido de los bloques con un for
-	char *buffer = malloc(bytes_a_devolver);
+	char *buffer = malloc(bytes_a_devolver + 1);
 
 	for (int i = bloque_inicial; bytes_a_devolver > 0; i++)
 	{
 		int bloque = atoi(bloques_ocupados[i]);
-		log_debug(logger, "Full path de %d", bloque);
 		char *ubicacion = get_block_full_path(bloque);
 		log_debug(logger, "Abro el bloque que esta en %s", ubicacion);
 		FILE *bloque_abierto = fopen(ubicacion, "rb");
@@ -406,11 +404,18 @@ void obtener_datos(Paquete *paquete)
 			leer = bytes_a_devolver;
 
 		log_debug(logger, "Leo %d", leer);
-		fread(buffer, 1, leer, bloque_abierto);
+		char *aux = malloc(leer);
+		fread(aux, 1, leer, bloque_abierto);
+		memcpy(buffer + leido, aux, leer);
 		fclose(bloque_abierto);
-		bytes_a_devolver -= leer;
 		log_debug(logger, "bytes_a_devolver %d", bytes_a_devolver);
+		bytes_a_devolver -= leer;
+		leido += leer;
+		free(aux);
 	}
+
+	buffer[final] = '\0';
+	log_debug(logger, "EL contenido es \n%s", buffer);
 
 	//Es el caso que el archivo no se pudo leer por alguna razon
 	if (buffer == NULL)

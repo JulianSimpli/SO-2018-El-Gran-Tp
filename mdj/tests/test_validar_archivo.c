@@ -5,12 +5,38 @@
 #include <cspecs/cspec.h>
 #include <string.h>
 #include <dirent.h>
+#include "../src/mdj.h"
 
 context(test_interpretar_archivos)
 {
 
 	describe("MDJ maneja metadata de archivos")
 	{
+
+//mock de Paquete que envia dam
+Paquete *mock_enviar_obtener_datos(char *path, int size)
+{
+	Paquete *pedido_escriptorio = malloc(sizeof(Paquete));
+	int desplazamiento = 0;
+	void *serializado = string_serializar(path, &desplazamiento);
+
+	pedido_escriptorio->Payload = malloc(desplazamiento + 2 * INTSIZE);
+
+	memcpy(pedido_escriptorio->Payload, serializado, desplazamiento);
+	int offset = 0;
+	memcpy(pedido_escriptorio->Payload + desplazamiento, &offset, INTSIZE);
+	desplazamiento += INTSIZE;
+	memcpy(pedido_escriptorio->Payload + desplazamiento, &size, INTSIZE);
+	desplazamiento += INTSIZE;
+
+	pedido_escriptorio->header = cargar_header(desplazamiento, OBTENER_DATOS, ELDIEGO);
+	return pedido_escriptorio;
+}
+
+
+		before {
+			inicializar_log("MDJTEST");
+		} end
 
 		it("Deberia poder conseguir el nombre del escriptorio")
 		{
@@ -35,6 +61,7 @@ context(test_interpretar_archivos)
 			char *r = malloc(strlen(ent->d_name) + 1);
 			strcpy(r, ent->d_name);
 			should_string(r) be equal to("share");
+			/*
 
 			FILE *f = fopen("/home/utnso/0.bin", "rb");
 			fseek(f, 0, SEEK_END);
@@ -42,7 +69,7 @@ context(test_interpretar_archivos)
 
 			should_int(size) be equal to(50);
 
-			/*
+			
 			strtok(search_file, "/");
 			char *split = "scripts";
 			if (split == NULL)
@@ -59,6 +86,13 @@ context(test_interpretar_archivos)
 
 			should_int(size) be equal to(50);
 		} end
+
+		it ("Deberia leer todos los bloques") 
+		{
+			Paquete *paquete = mock_enviar_obtener_datos("/scripts/simple.escriptorio", 159);
+			obtener_datos(paquete);
+		} end
+
 	}
 	end
 }
