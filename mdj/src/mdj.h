@@ -66,7 +66,7 @@ int socket_dam;
 char *current_path;
 int retardo;
 int transfer_size;
-sem_t sem_bitarray;
+sem_t sem_io;
 
 int validar_archivo(char *, char *);
 void crear_archivo(Paquete *paquete);
@@ -283,19 +283,14 @@ int create_block(int index, int cantidad_bytes)
 {
     char *block_path = get_block_full_path(index);
 
-    sem_wait(&sem_bitarray);
     bitarray_set_bit(bitarray, index);
-    sem_post(&sem_bitarray);
 
     return create_block_file(block_path, cantidad_bytes) != 0;
 }
 
 int destroy_block(int index)
 {
-    sem_wait(&sem_bitarray);
     bitarray_clean_bit(bitarray, index);
-    sem_post(&sem_bitarray);
-
     return 0;
 }
 

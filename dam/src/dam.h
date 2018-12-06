@@ -20,11 +20,13 @@
 // Definimos algunas variables globales
 t_config *config;
 int tamanio_linea;
+sem_t sem_mdj;
 
 // Comunes de carga
 void leer_config();
 void inicializar_log(char *program);
 void inicializar(char **argv);
+void inicializar_semaforos();
 void handshake(int, int);
 int escuchar_conexiones();
 int crear_socket_mdj();

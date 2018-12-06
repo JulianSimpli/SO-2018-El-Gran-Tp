@@ -82,7 +82,7 @@ void inicializar_log(char *program)
 
 void inicializar_semaforos()
 {
-	sem_init(&sem_bitarray, 0, 0);
+	sem_init(&sem_io, 0, 1);
 }
 
 void inicializar(char **argv)
@@ -146,7 +146,8 @@ void interpretar_paquete(Paquete *paquete)
 	respuesta->header = cargar_header(0, SUCCESS, MDJ);
 
 	int accion = paquete->header.tipoMensaje;
-	//sleep(retardo);
+	sleep(retardo);
+    	sem_wait(&sem_io);
 
 	switch (accion)
 	{
@@ -196,6 +197,8 @@ void interpretar_paquete(Paquete *paquete)
 		log_warning(logger, "La accion %d no tiene respuesta posible", accion);
 		break;
 	}
+
+    	sem_post(&sem_io);
 }
 
 int calcular_bloques(int tamanio)

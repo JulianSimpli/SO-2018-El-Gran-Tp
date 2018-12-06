@@ -12,7 +12,7 @@ int main(int argc, char **argv)
 	log_info(logger, "Se concreto handshake SAFA");
 	handshake_mdj();
 	log_info(logger, "Se concreto handshake MDJ");
-	handshake_fm9();
+	//handshake_fm9();
 
 	//inicializamos el semaforo en maximas_conexiones - 3 que son fijas
 
@@ -203,6 +203,11 @@ void inicializar_log(char *program)
 	logger = log_create("DAM.log", program, true, LOG_LEVEL_DEBUG);
 }
 
+void inicializar_semaforos()
+{
+	sem_init(&sem_mdj, 0, 1);
+}
+
 void inicializar(char **argv)
 {
 	inicializar_log(argv[0]);
@@ -211,6 +216,7 @@ void inicializar(char **argv)
 	log_info(logger, "Config cargada exitosamente");
 	transfer_size = config_get_int_value(config, "TRANSFER_SIZE");
 	log_debug(logger, "Transfer size: %i", transfer_size);
+	inicializar_semaforos();
 }
 
 int escuchar_conexiones(int server_socket)
@@ -378,7 +384,9 @@ void enviar_obtener_datos(char *path, int size)
 
 	pedido_escriptorio.header = cargar_header(desplazamiento, OBTENER_DATOS, ELDIEGO);
 
+    	sem_wait(&sem_mdj);
 	enviar_paquete(socket_mdj, &pedido_escriptorio);
+    	sem_post(&sem_mdj);
 	free(serializado);
 	free(pedido_escriptorio.Payload);
 }
@@ -402,7 +410,9 @@ void enviar_guardar_datos(char *path, Paquete *paquete)
 
 	guardar.header = cargar_header(desplazamiento, OBTENER_DATOS, ELDIEGO);
 
+    	sem_wait(&sem_mdj);
 	enviar_paquete(socket_mdj, &guardar);
+    	sem_post(&sem_mdj);
 	free(guardar.Payload);
 }
 
@@ -432,6 +442,7 @@ void es_dtb_dummy(Paquete *paquete)
 	log_debug(logger, "Le envio el pedido a fm9");
 
 	Paquete respuesta;
+	/*
 	int cargado = cargar_a_memoria(dummy->gdtPID, escriptorio->path, paquete, &respuesta);
 
 	if (!cargado)
@@ -439,8 +450,24 @@ void es_dtb_dummy(Paquete *paquete)
 		enviar_error(DUMMY_FAIL_CARGA, dummy->gdtPID);
 		return;
 	}
+	*/
 
-	respuesta.header = cargar_header(respuesta.header.tamPayload, DUMMY_SUCCESS, ELDIEGO);
+	int desplazamiento_archivo = 0;
+	int desplazamiento = 0;
+	ArchivoAbierto archivo;
+	archivo.path = malloc(strlen(escriptorio->path) + 1);
+	strcpy(archivo.path, escriptorio->path);
+	//archivo.cantLineas = contar_lineas(fid);
+	archivo.cantLineas = 6;
+	void *archivo_serializado = DTB_serializar_archivo(&archivo, &desplazamiento_archivo);
+
+	respuesta.Payload = malloc(INTSIZE + desplazamiento_archivo);
+	memcpy(respuesta.Payload, &dummy->gdtPID, INTSIZE);
+	desplazamiento += INTSIZE;
+	memcpy(respuesta.Payload + INTSIZE, archivo_serializado, desplazamiento_archivo);
+	desplazamiento += desplazamiento_archivo;
+
+	respuesta.header = cargar_header(desplazamiento, DUMMY_SUCCESS, ELDIEGO);
 	enviar_paquete(socket_safa, &respuesta);
 	free(respuesta.Payload);
 }
@@ -505,7 +532,9 @@ void flush(Paquete *paquete)
 	enviar_guardar_datos(path, &respuesta_fm9);
 
 	Paquete respuesta_mdj;
+    	sem_wait(&sem_mdj);
 	recibir_paquete(socket_mdj, &respuesta_mdj);
+    	sem_post(&sem_mdj);
 
 	if (respuesta_mdj.header.tipoMensaje == ESPACIO_INSUFICIENTE_FLUSH)
 	{
@@ -545,7 +574,10 @@ void crear_archivo(Paquete *paquete)
 	pedido.header = cargar_header(size, CREAR_ARCHIVO, ELDIEGO);
 	pedido.Payload = malloc(size);
 	memmove(pedido.Payload, paquete->Payload + INTSIZE, size);
+
+    	sem_wait(&sem_mdj);
 	enviar_paquete(socket_mdj, paquete);
+    	sem_post(&sem_mdj);
 
 	Paquete respuesta_mdj;
 	recibir_paquete(socket_mdj, &respuesta_mdj);
@@ -575,10 +607,15 @@ void borrar_archivo(Paquete *paquete)
 	pedido.header = cargar_header(size, BORRAR_ARCHIVO, ELDIEGO);
 	pedido.Payload = malloc(size);
 	memmove(pedido.Payload, paquete->Payload + INTSIZE, size);
+
+    	sem_wait(&sem_mdj);
 	enviar_paquete(socket_mdj, paquete);
+    	sem_post(&sem_mdj);
 
 	Paquete respuesta_mdj;
+    	sem_wait(&sem_mdj);
 	recibir_paquete(socket_mdj, &respuesta_mdj);
+    	sem_post(&sem_mdj);
 
 	if (respuesta_mdj.header.tipoMensaje == ARCHIVO_NO_EXISTE)
 	{

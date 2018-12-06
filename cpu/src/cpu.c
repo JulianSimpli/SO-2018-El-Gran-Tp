@@ -83,13 +83,18 @@ int ejecutar(char *linea, DTB *dtb)
 
 int ejecutar_quantum(Paquete *paquete)
 {
+	log_debug(logger, "Voy a deserializar el dtb");
 	DTB *dtb = DTB_deserializar(paquete);
+	log_debug(logger, "Deserialize el dtb");
+	log_debug(logger, "pid %d", dtb->gdtPID);
 	int i;
 	// cambios = 1;
 	for (i = 0; i < quantum; i++)
 	{
 		// sem_wait(cambios);
+		log_debug(logger, "Quantum %d", i);
 		char *primitiva = pedir_primitiva(dtb);
+		log_debug(logger, "Primitiva %s", primitiva);
 		int flag = ejecutar(primitiva, dtb); //avanzar el PC dentro del paquete
 		dtb->PC++;
 		if (!flag || finalizar)
@@ -141,6 +146,9 @@ char *pedir_primitiva(DTB *dtb)
 	memcpy(paquete->Payload, &dtb->gdtPID, sizeof(u_int32_t));
 	memcpy(paquete->Payload + sizeof(u_int32_t), &dtb->PC, sizeof(u_int32_t));
 	// pedido_de_primitiva->header.tamPayload = 0;
+
+	log_debug(logger, "Pido a fm9 siguiente primitiva");
+
 	int ret = EnviarPaquete(socket_fm9, paquete);
 	if (ret != 1)
 	{
