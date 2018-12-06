@@ -26,7 +26,7 @@ int main(int argc, char **argv)
 	log_debug(logger, "Concrete handshake con safa");
 	handshake_dam();
 	log_debug(logger, "Concrete handshake con dam");
-	//handshake_fm9();
+	handshake_fm9();
 	sem_init(&sem_recibir_paquete,0,1);
 	pthread_t p_thread_one;
 	pthread_create(&p_thread_one, NULL, hilo_safa, NULL);
@@ -227,6 +227,18 @@ void handshake_dam()
 	log_info(logger, "Se concreto el handshake con DAM, empiezo a recibir mensajes");
 }
 
+void handshake_fm9()
+{
+	socket_fm9 = crear_socket_fm9();
+	EnviarHandshake(socket_fm9,CPU);
+	Paquete paquete;
+	RecibirDatos(&paquete.header,socket_fm9,TAMANIOHEADER);
+	if (paquete.header.tipoMensaje != ESHANDSHAKE)
+		_exit_with_error(socket_dam, "No se logro el handshake", NULL);
+
+	log_info(logger, "Se concreto el handshake con FM9");
+}
+
 void cargar_config_safa(Paquete *paquete)
 {
 	memcpy(&quantum, paquete->Payload, sizeof(u_int32_t));
@@ -346,6 +358,13 @@ int crear_socket_dam()
 {
 	char *puerto = config_get_string_value(config, "PUERTO_DIEGO");
 	char *ip = config_get_string_value(config, "IP_DIEGO");
+	return connect_to_server(ip, puerto);
+}
+
+int crear_socket_fm9()
+{
+	char *puerto = config_get_string_value(config, "PUERTO_FM9");
+	char *ip = config_get_string_value(config, "IP_FM9");
 	return connect_to_server(ip, puerto);
 }
 

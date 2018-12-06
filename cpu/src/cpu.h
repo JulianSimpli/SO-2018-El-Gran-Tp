@@ -46,6 +46,7 @@ void enviar_mensaje(Mensaje mensaje);
 Mensaje *recibir_mensaje(int conexion);
 int crear_socket_safa();
 int crear_socket_dam();
+int crear_socket_fm9();
 
 //Primitivas
 int ejecutar_abrir(char **, DTB*);
