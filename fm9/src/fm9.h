@@ -8,12 +8,12 @@
 #ifndef FM9_H_
 #define FM9_H_
 
-//#include "sockets.h"
-//#include "dtb.h"
-#include <commons/collections/list.h>
-#include "../../Bibliotecas/sockets.h"
-#include "../../Bibliotecas/helper.h"
-#include "../../Bibliotecas/dtb.h"
+#include "sockets.h"
+#include "dtb.h"
+//#include <commons/collections/list.h>
+//#include "../../Bibliotecas/sockets.h"
+//#include "../../Bibliotecas/helper.h"
+//#include "../../Bibliotecas/dtb.h"
 
 typedef struct {
 	char* idArchivo; //path del archivo
@@ -52,17 +52,25 @@ typedef struct {
 	char* pathArchivo;
 } PidPath;
 
+void consola();
 void inicializarFramesMemoria();
-void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo); //va a devolver void
-void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo);
+void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo, int socketFD);
+void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo, int socketFD);
 void printSEG(int pid);
 void printSPA(int pid);
 void imprimirMemoria();
 void liberarMemoriaDesdeHasta(int nroLineaInicio, int nroLineaFin);
 bool archivoAbierto(char* path);
-void liberarArchivoSEG(int pid, char* path);
+void liberarArchivoSEG(int pid, char* path, int socketFD);
+void liberarArchivoSPA(int pid, char* path, int socketFD);
 char* lineaDeUnaPosicionSEG(int pid, int pc);
 char* lineaDeUnaPosicionSPA(int pid, int pc);
-void enviar_abrio_a_dam(int socketFD, u_int32_t pid, char *fid, char *file);
+void enviar_abrio_a_dam(int socketFD, u_int32_t pid, char* fid, char* file);
+void manejar_paquetes_diego(Paquete* paquete, int socketFD);
+void manejar_paquetes_CPU(Paquete* paquete, int socketFD);
+void asignarSEG(int pid, char* path, int pos, char* dato, int socketFD);
+void asignarSPA(int pid, char* path, int pos, char* dato, int socketFD);
+void flushSEG(char* path, int socketFD);
+void flushSPA(char* path, int socketFD);
 
 #endif /* FM9_H_ */
