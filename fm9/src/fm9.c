@@ -523,25 +523,11 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 	switch (paquete->header.tipoMensaje) {
 
 		case ESHANDSHAKE: {
-			void EnviarHandshakeELDIEGO(int socketFD) {
-				Paquete* paquete = malloc(TAMANIOHEADER + sizeof(MAX_LINEA));
-				Header header;
-				header.tipoMensaje = ESHANDSHAKE;
-				header.tamPayload = sizeof(MAX_LINEA);
-				header.emisor = FM9;
-				paquete->header = header;
-				paquete->Payload = malloc(sizeof(MAX_LINEA));
-				memcpy(paquete->Payload, &MAX_LINEA, sizeof(u_int32_t));
-				bool valor_retorno=EnviarPaquete(socketFD, paquete);
-				free(paquete);
-			}
-			// ó EnviarHandshake(socketFD, FM9);
 			socketElDiego = socketFD;
 			paquete->Payload = malloc(paquete->header.tamPayload);
 			RecibirDatos(paquete->Payload, socketFD, INTSIZE);
-			log_info(logger, "llegada de el diego en socket %d", socketFD);
 			memcpy(&transfer_size, paquete->Payload, INTSIZE);
-			EnviarHandshakeELDIEGO(socketFD);
+			log_info(logger, "transfersize del diego %d\n", transfer_size);
 		} break;
 
 		case ABRIR: {
@@ -735,6 +721,19 @@ void consola() {
 }
 
 int RecibirPaqueteServidorFm9(int socketFD, Emisor receptor, Paquete* paquete) {
+	void EnviarHandshakeELDIEGO(int socketFD) {
+		Paquete* paquete = malloc(TAMANIOHEADER + sizeof(MAX_LINEA));
+		Header header;
+		header.tipoMensaje = ESHANDSHAKE;
+		header.tamPayload = sizeof(MAX_LINEA);
+		header.emisor = FM9;
+		paquete->header = header;
+		paquete->Payload = malloc(sizeof(MAX_LINEA));
+		memcpy(paquete->Payload, &MAX_LINEA, sizeof(u_int32_t));
+		bool valor_retorno=EnviarPaquete(socketFD, paquete);
+		free(paquete);
+	}
+
 	paquete->Payload = NULL;
 	int resul = RecibirDatos(&(paquete->header), socketFD, TAMANIOHEADER);
 	char* n = Emisores[paquete->header.emisor];
