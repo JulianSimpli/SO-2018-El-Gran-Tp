@@ -16,7 +16,8 @@ typedef struct DTB{
 
 typedef struct {
     u_int32_t cantLineas;
-	u_int32_t dir_logica;
+	u_int32_t segmento;
+	u_int32_t pagina;
     char *path;
 }__attribute__((packed)) ArchivoAbierto;
 
@@ -38,9 +39,9 @@ void DTB_cargar_archivos_abiertos(t_list *archivos_abiertos, void *data, int *de
 
 DTB *DTB_deserializar(void *data);
 
-ArchivoAbierto *_DTB_crear_archivo(u_int32_t cant_lineas, u_int32_t dir_logica, char *path);
+ArchivoAbierto *_DTB_crear_archivo(u_int32_t cant_lineas, u_int32_t segmento, u_int32_t pagina, char *path);
 void liberar_archivo_abierto(void *archivo);
-void DTB_agregar_archivo(DTB *dtb, u_int32_t cant_lineas, u_int32_t dir_logica, char *path);
+void DTB_agregar_archivo(DTB *dtb, u_int32_t cant_lineas, u_int32_t segmento, u_int32_t pagina, char *path);
 bool find_file(t_list *files, char *path_archivo);
 ArchivoAbierto *_DTB_encontrar_archivo(DTB *dtb, char *path_archivo);
 bool coincide_archivo(void *archivo, char *path);

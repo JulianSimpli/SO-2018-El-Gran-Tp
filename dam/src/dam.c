@@ -12,7 +12,7 @@ int main(int argc, char **argv)
 	log_info(logger, "Se concreto handshake SAFA");
 	handshake_mdj();
 	log_info(logger, "Se concreto handshake MDJ");
-	//handshake_fm9();
+	handshake_fm9();
 
 	//inicializamos el semaforo en maximas_conexiones - 3 que son fijas
 
@@ -269,16 +269,18 @@ int pedir_validar(char *path)
 	return respuesta.header.tipoMensaje == PATH_INEXISTENTE? 0 : size;
 }
 
-int cargar_a_memoria(u_int32_t pid, char *path, Paquete *paquete, Paquete *respuesta)
+int cargar_a_memoria(u_int32_t pid, char *path, char *file, Paquete *respuesta)
 {
 	int desplazamiento = 0;
 	int tam_pid = sizeof(u_int32_t);
 	int tam_serial_path = 0;
-	int tam_serial_file = paquete->header.tamPayload;
+	int tam_serial_file = 0;
 
 	void *serial_path = string_serializar(path, &tam_serial_path);
-	void *serial_file = paquete->Payload;
+	void *serial_file = string_serializar(file, &tam_serial_file);
 
+	log_debug(logger, "Cargo el paquete con:\npid %d\ntam_serial_path: %d\npath: %s\ntam_serial_file: %d\nfile: %s",
+	pid, tam_serial_path, path, tam_serial_file, file);
 	// payload = pid, len path, path, len archivo, archivo
 	Paquete cargar;
 	cargar.Payload = malloc(tam_pid + tam_serial_path + tam_serial_file);
@@ -289,14 +291,26 @@ int cargar_a_memoria(u_int32_t pid, char *path, Paquete *paquete, Paquete *respu
 	memcpy(cargar.Payload + desplazamiento, serial_file, tam_serial_file);
 	desplazamiento += tam_serial_file;
 
+	int prueba = 0;
+	memcpy(&prueba, cargar.Payload, INTSIZE);
+	int desplprueba = INTSIZE;
+	char *path_prueba = string_deserializar(cargar.Payload, &desplprueba);
+	char *file_prueba = string_deserializar(cargar.Payload, &desplprueba);
+
+	log_debug(logger, "Enviado:\nPID: %d\npath: %s\nfile: %s\n",
+	prueba, path_prueba, file_prueba);
+
 	cargar.header = cargar_header(desplazamiento, ABRIR, ELDIEGO);
+	log_debug(logger, "Total a enviar: %d", desplazamiento);
 	enviar_paquete(socket_fm9, &cargar);
 
+	log_debug(logger, "Pedido de carga a memoria a FM9 enviado"); // Aca no llega
 	free(serial_path);
 	free(serial_file);
 	free(cargar.Payload);
 
 	recibir_paquete(socket_fm9, respuesta);
+	log_debug(logger, "FM9 respondio el pedido de carga a memoria");
 	return respuesta->header.tipoMensaje != ESPACIO_INSUFICIENTE_ABRIR;
 }
 
@@ -442,8 +456,9 @@ void es_dtb_dummy(Paquete *paquete)
 	log_debug(logger, "Le envio el pedido a fm9");
 
 	Paquete respuesta;
+
 	/*
-	int cargado = cargar_a_memoria(dummy->gdtPID, escriptorio->path, paquete, &respuesta);
+	int cargado = cargar_a_memoria(dummy->gdtPID, escriptorio->path, script, &respuesta);
 
 	if (!cargado)
 	{
@@ -451,6 +466,7 @@ void es_dtb_dummy(Paquete *paquete)
 		return;
 	}
 	*/
+
 
 	int desplazamiento_archivo = 0;
 	int desplazamiento = 0;
@@ -495,13 +511,15 @@ void abrir(Paquete *paquete)
 	log_debug(logger, "Le envie el pedido a mdj");
 
 	Paquete respuesta;
-	int cargado = cargar_a_memoria(pid, path, paquete, &respuesta);
+	/*
+	int cargado = cargar_a_memoria(pid, path, script, &respuesta);
 
 	if (!cargado)
 	{
 		enviar_error(ESPACIO_INSUFICIENTE_ABRIR, pid);
 		return;
 	}
+	*/
 
 	respuesta.header = cargar_header(respuesta.header.tamPayload, ARCHIVO_ABIERTO, ELDIEGO);
 	enviar_paquete(socket_safa, &respuesta);

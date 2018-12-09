@@ -23,12 +23,15 @@ void *DTB_serializar_archivo(ArchivoAbierto *archivo, int *desplazamiento)
     int tamanio = sizeof(u_int32_t);
     u_int32_t tamanio_direccion = strlen(archivo->path);
 
-    void *serializado = malloc(tamanio * 3 + tamanio_direccion);
+    void *serializado = malloc(tamanio * 4 + tamanio_direccion);
 
     memcpy(serializado + *desplazamiento, &archivo->cantLineas, tamanio);
     *desplazamiento += tamanio;
 
-    memcpy(serializado + *desplazamiento, &archivo->dir_logica, tamanio);
+    memcpy(serializado + *desplazamiento, &archivo->segmento, tamanio);
+    *desplazamiento += tamanio;
+
+    memcpy(serializado + *desplazamiento, &archivo->pagina, tamanio);
     *desplazamiento += tamanio;
 
     memcpy(serializado + *desplazamiento, &tamanio_direccion, tamanio);
@@ -116,7 +119,10 @@ ArchivoAbierto *DTB_leer_struct_archivo(void *data, int *desplazamiento)
     memcpy(&archivo->cantLineas, data + *desplazamiento, tamanio);
     *desplazamiento += tamanio;
 
-    memcpy(&archivo->dir_logica, data + *desplazamiento, tamanio);
+    memcpy(&archivo->segmento, data + *desplazamiento, tamanio);
+    *desplazamiento += tamanio;
+
+    memcpy(&archivo->pagina, data + *desplazamiento, tamanio);
     *desplazamiento += tamanio;
 
     u_int32_t tamanio_direccion;
@@ -155,11 +161,12 @@ DTB *DTB_deserializar(void *data)
     return dtb;
 }
 
-ArchivoAbierto *_DTB_crear_archivo(u_int32_t cant_lineas, u_int32_t dir_logica, char *path)
+ArchivoAbierto *_DTB_crear_archivo(u_int32_t cant_lineas, u_int32_t segmento, u_int32_t pagina, char *path)
 {
     ArchivoAbierto *archivo = malloc(sizeof(ArchivoAbierto));
     archivo->cantLineas = cant_lineas;
-    archivo->dir_logica = dir_logica;
+    archivo->segmento = segmento;
+    archivo->pagina = pagina;
     archivo->path = malloc(strlen(path)+1);
     strcpy(archivo->path, path);
     return archivo;
@@ -171,9 +178,9 @@ void liberar_archivo_abierto(void *archivo)
     free(archivo);
 }
 
-void DTB_agregar_archivo(DTB *dtb, u_int32_t cant_lineas, u_int32_t dir_logica, char *path)
+void DTB_agregar_archivo(DTB *dtb, u_int32_t cant_lineas, u_int32_t segmento, u_int32_t pagina, char *path)
 {
-    ArchivoAbierto *archivo = _DTB_crear_archivo(cant_lineas, dir_logica, path);
+    ArchivoAbierto *archivo = _DTB_crear_archivo(cant_lineas, segmento, pagina, path);
     list_add(dtb->archivosAbiertos, archivo);
 }
 

@@ -10,10 +10,10 @@
 
 #include "sockets.h"
 #include "dtb.h"
-//#include <commons/collections/list.h>
-//#include "../../Bibliotecas/sockets.h"
-//#include "../../Bibliotecas/helper.h"
-//#include "../../Bibliotecas/dtb.h"
+// #include <commons/collections/list.h>
+// #include "../../Bibliotecas/sockets.h"
+// #include "../../Bibliotecas/helper.h"
+// #include "../../Bibliotecas/dtb.h"
 
 typedef struct {
 	char* idArchivo; //path del archivo
@@ -67,6 +67,7 @@ char* lineaDeUnaPosicionSEG(int pid, int pc);
 char* lineaDeUnaPosicionSPA(int pid, int pc);
 void enviar_abrio_a_dam(int socketFD, u_int32_t pid, char* fid, char* file);
 void manejar_paquetes_diego(Paquete* paquete, int socketFD);
+void EnviarHandshakeELDIEGO(int socketFD);
 void manejar_paquetes_CPU(Paquete* paquete, int socketFD);
 void asignarSEG(int pid, char* path, int pos, char* dato, int socketFD);
 void asignarSPA(int pid, char* path, int pos, char* dato, int socketFD);

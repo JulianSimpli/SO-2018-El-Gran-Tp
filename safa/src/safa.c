@@ -316,7 +316,8 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			ArchivoAbierto *escriptorio_cargado = DTB_leer_struct_archivo(paquete->Payload, &tam_pid);
 			ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
 			escriptorio->cantLineas = escriptorio_cargado->cantLineas;
-			escriptorio->dir_logica = escriptorio_cargado->dir_logica;
+			escriptorio->segmento = escriptorio_cargado->segmento;
+			escriptorio->pagina = escriptorio_cargado->pagina;
 
 			liberar_archivo_abierto(escriptorio_cargado);
 

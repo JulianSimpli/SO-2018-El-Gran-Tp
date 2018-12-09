@@ -180,7 +180,7 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
     dtb_nuevo->PC = 1;
     dtb_nuevo->entrada_salidas = 0;
     dtb_nuevo->archivosAbiertos = list_create();
-    DTB_agregar_archivo(dtb_nuevo, 0, 0, path);
+    DTB_agregar_archivo(dtb_nuevo, 0, 0, 0, path);
 
     switch(flag_inicializacion)
     {
@@ -430,9 +430,14 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
 	            printf( "PID: %i\tEscriptorio: %s",
 	                    dtb->gdtPID, escriptorio->path);
 	            if (escriptorio->cantLineas)
-	                printf(", cantidad de lineas: %d", escriptorio->cantLineas);
-	            printf("\n");
-	            break;
+				{
+	                printf(", cantidad de lineas: %d\n", escriptorio->cantLineas);
+					mostrar_posicion(escriptorio);
+				}
+				else
+	            	printf("\n");
+
+				break;
 	        }
 	    }
 	}
@@ -453,7 +458,8 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
 	            list_size(dtb->archivosAbiertos) - 1);
 		
 		// Muestra archivos desde el indice 1 (todos menos el escriptorio)
-		for(int i = 1; i < list_size(dtb->archivosAbiertos); i++)
+		int i = 0;
+		for(i = 1; i < list_size(dtb->archivosAbiertos); i++)
 	    {
 	        ArchivoAbierto *archivo = list_get(dtb->archivosAbiertos, i);
 	        mostrar_archivo(archivo, i);
@@ -484,6 +490,24 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
 	            printf("Estado: %s\n", Estados[info_dtb->estado]);
 	            break;
 	        }
+			case DTB_FINALIZADO:
+			{
+				if(dtb->PC == 1 && !info_dtb->kill)
+				{
+					dtb_imprimir_basico(dtb);
+				    printf("Estado: %s\n", Estados[info_dtb->estado]);
+					if(info_dtb->kill)
+						printf("Proceso finalizado por el usuario antes de empezar a ejecutar\n");
+					else
+						printf("Fallo la carga de este DTB en memoria\n");
+				}
+				else
+				{
+					dtb_imprimir_basico(dtb);
+					dtb_imprimir_polenta(dtb);
+				}
+				break;
+			}
 	        default:
 	        {
 				dtb_imprimir_basico(dtb);
@@ -503,7 +527,16 @@ DTB *dtb_crear(u_int32_t pid, char* path, int flag_inicializacion)
 	    if (archivo->cantLineas) 
 		printf(", cantidad de lineas: %i", archivo->cantLineas);
 	    printf("\n");
+		mostrar_posicion(archivo);
 	}
+
+	void mostrar_posicion(ArchivoAbierto *archivo)
+	{
+		printf("Posicion en memoria:\n"
+		"Segmento: %d\n"
+		"Pagina: %d\n",
+		archivo->segmento, archivo->pagina);
+	}	
 
 	bool es_dummy(void *dtb)
 	{
@@ -639,6 +672,16 @@ void loggear_finalizacion(DTB* dtb, DTB_info* info_dtb)
 
 	FILE* logger_fin = fopen("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src/logs/DTB_finalizados.log", "a");
     
+	if(dtb->PC > 1)
+	{
+		if(info_dtb->socket_cpu)
+			fprintf(logger_fin, "Ultima cpu usada: %d", info_dtb->socket_cpu);
+		
+		fprintf(logger_fin, "Ejecuto %d operaciones de entrada/salida", dtb->entrada_salidas);
+	}
+	else if(dtb->PC == 1 && !info_dtb->kill)
+		fprintf(logger_fin, "El proceso nunca pudo ser cargado en memoria");
+
     fprintf(logger_fin, "Archivos abiertos: %d\n", list_size(dtb->archivosAbiertos));
     for(int i = 0; i < list_size(dtb->archivosAbiertos); i++)
     {
@@ -657,6 +700,7 @@ void loggear_finalizacion(DTB* dtb, DTB_info* info_dtb)
         recurso = list_get(info_dtb->recursos_asignados, i);
         fprintf(logger_fin, "Recurso retenido n° %i: %s\n", i, recurso->id);
     }
+	
 	fclose(logger_fin);
 }
 

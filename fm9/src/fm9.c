@@ -528,6 +528,7 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 			RecibirDatos(paquete->Payload, socketFD, INTSIZE);
 			memcpy(&transfer_size, paquete->Payload, INTSIZE);
 			log_info(logger, "transfersize del diego %d\n", transfer_size);
+			EnviarHandshakeELDIEGO(socketElDiego);
 		} break;
 
 		case ABRIR: {
@@ -674,35 +675,37 @@ int contarLineas(char* path) {
 	}
 }
 
-//void enviar_abrio_a_dam(int socketFD, u_int32_t pid, char *fid, char *file)
-//{
-//	int desplazamiento = 0;
-//	int desplazamiento_archivo = 0;
-//	int tam_pid = sizeof(u_int32_t);
-//
-//	ArchivoAbierto archivo;
-//	strcpy(archivo.path, fid);
-//	archivo.cantLineas = contar_lineas(fid);
-//	void *archivo_serializado = DTB_serializar_archivo(&archivo, &desplazamiento_archivo);
-//
-//	Paquete abrio;
-//	abrio.Payload = malloc(tam_pid + desplazamiento_archivo);
-//	memcpy(abrio.Payload, &pid, tam_pid);
-//	desplazamiento += tam_pid;
-//	memcpy(abrio.Payload + tam_pid, archivo_serializado, desplazamiento_archivo);
-//	desplazamiento += desplazamiento_archivo;
-//
-//	abrio.header = cargar_header(desplazamiento, ABRIR, FM9);
-//	bool envio = EnviarPaquete(socketFD, &abrio);
-//
-//	if(envio)
-//		printf("Paquete a dam archivo abierto enviado %s\n", (char *)abrio.Payload);
-//	else
-//		printf("Paquete a dam archivo abierto fallo\n");
-//
-//	free(archivo_serializado);
-//	free(abrio.Payload);
-//}
+void enviar_abrio_a_dam(int socketFD, u_int32_t pid, char *fid, char *file)
+{
+	int desplazamiento = 0;
+	int desplazamiento_archivo = 0;
+	int tam_pid = sizeof(u_int32_t);
+
+	ArchivoAbierto archivo;
+	archivo.path = string_duplicate(fid);
+	archivo.cantLineas = contar_lineas(fid);
+	archivo.segmento = 0; // Aca iria el segmento donde esta cargado
+	archivo.pagina = 0; // Aca iria la pagina donde esta cargado
+	void *archivo_serializado = DTB_serializar_archivo(&archivo, &desplazamiento_archivo);
+
+	Paquete abrio;
+	abrio.Payload = malloc(tam_pid + desplazamiento_archivo);
+	memcpy(abrio.Payload, &pid, tam_pid);
+	desplazamiento += tam_pid;
+	memcpy(abrio.Payload + tam_pid, archivo_serializado, desplazamiento_archivo);
+	desplazamiento += desplazamiento_archivo;
+
+	abrio.header = cargar_header(desplazamiento, ABRIR, FM9);
+	bool envio = EnviarPaquete(socketFD, &abrio);
+
+	if(envio)
+		printf("Paquete a dam archivo abierto enviado %s\n", (char *)abrio.Payload);
+	else
+		printf("Paquete a dam archivo abierto fallo\n");
+
+	free(archivo_serializado);
+	free(abrio.Payload);
+}
 
 void consola() {
 	char* linea;
@@ -720,19 +723,20 @@ void consola() {
 	}
 }
 
+void EnviarHandshakeELDIEGO(int socketFD) {
+	Paquete* paquete = malloc(TAMANIOHEADER + sizeof(MAX_LINEA));
+	Header header;
+	header.tipoMensaje = ESHANDSHAKE;
+	header.tamPayload = sizeof(MAX_LINEA);
+	header.emisor = FM9;
+	paquete->header = header;
+	paquete->Payload = malloc(sizeof(MAX_LINEA));
+	memcpy(paquete->Payload, &MAX_LINEA, sizeof(u_int32_t));
+	bool valor_retorno=EnviarPaquete(socketFD, paquete);
+	free(paquete);
+}
+
 int RecibirPaqueteServidorFm9(int socketFD, Emisor receptor, Paquete* paquete) {
-	void EnviarHandshakeELDIEGO(int socketFD) {
-		Paquete* paquete = malloc(TAMANIOHEADER + sizeof(MAX_LINEA));
-		Header header;
-		header.tipoMensaje = ESHANDSHAKE;
-		header.tamPayload = sizeof(MAX_LINEA);
-		header.emisor = FM9;
-		paquete->header = header;
-		paquete->Payload = malloc(sizeof(MAX_LINEA));
-		memcpy(paquete->Payload, &MAX_LINEA, sizeof(u_int32_t));
-		bool valor_retorno=EnviarPaquete(socketFD, paquete);
-		free(paquete);
-	}
 
 	paquete->Payload = NULL;
 	int resul = RecibirDatos(&(paquete->header), socketFD, TAMANIOHEADER);
