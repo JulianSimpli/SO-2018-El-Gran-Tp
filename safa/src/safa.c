@@ -19,7 +19,7 @@ void crear_loggers()
 
 void obtener_valores_archivo_configuracion()
 {
-	t_config *arch = config_create("/home/utnso/tp-2018-2c-Nene-Malloc/safa/src/SAFA.config");
+	t_config *arch = config_create("./SAFA.config");
 	IP = string_duplicate(config_get_string_value(arch, "IP"));
 	log_info(logger, "IP: %s", IP);
 	PUERTO = config_get_int_value(arch, "PUERTO");
@@ -334,6 +334,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
 			log_error(logger, "Fallo la carga en memoria del GDT %d", dtb->gdtPID);
 			bloquear_dummy(lista_ejecutando, dtb->gdtPID);
+			dtb_actualizar(dtb, lista_nuevos, lista_finalizados, dtb->PC, DTB_FINALIZADO, 0);
 			break;
 		}
 
@@ -346,7 +347,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			log_error(logger, "No existe el escriptorio %s del GDT %d", escriptorio->path, dtb->gdtPID);
 			printf("No existe el escriptorio %s del dtb %d\nSe removera al dtb de nuevos\n", escriptorio->path, dtb->gdtPID);
 			bloquear_dummy(lista_ejecutando, dtb->gdtPID);
-			list_remove_and_destroy_by_condition(lista_nuevos, LAMBDA (bool _(void *_dtb) {return dtb_coincide_pid(_dtb, pid, GDT); }), dtb_liberar);
+			dtb_actualizar(dtb, lista_nuevos, lista_finalizados, dtb->PC, DTB_FINALIZADO, 0);
 			break;
 		}
 

@@ -41,13 +41,13 @@
     {	
         bloquear_dummy(lista_ejecutando, pid);	
         notificar_al_plp(pid);	
-        log_info(logger, "%d pasa a lista de procesos listos", pid);	
+        log_info(logger, "GDT %d pasa a lista de procesos listos", pid);	
     }
 
 	void notificar_al_plp(u_int32_t pid)
 	{
-	    DTB* DTB_a_mover = dtb_remueve(lista_nuevos, pid, 1);
-	    list_add(lista_listos, DTB_a_mover);
+		DTB* dtb = dtb_encuentra(lista_nuevos, pid, GDT);
+		dtb_actualizar(dtb, lista_nuevos, lista_listos, dtb->PC, DTB_LISTO, 0);
 	}
 
 	bool dummy_creado(DTB *dtb)
@@ -940,9 +940,14 @@ bool ya_finalizo(void *_info_dtb)
 void dtb_liberar(void *dtb)
 {
     if (((DTB *)dtb)->flagInicializacion == GDT)
+	{
         info_liberar(dtb);
+		log_info(logger, "Se libero de memoria del DTB %d", ((DTB *)dtb)->gdtPID);
+	}
+	else
+		log_info(logger, "Se libero de memoria el Dummy del GDT %d", ((DTB *)dtb)->gdtPID);
+
     list_clean_and_destroy_elements(((DTB *)dtb)->archivosAbiertos, liberar_archivo_abierto);
-	log_info(logger, "Se libero de memoria del DTB %d", ((DTB *)dtb)->gdtPID);
     free(dtb);
 }
 
