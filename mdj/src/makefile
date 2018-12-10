@@ -1,5 +1,5 @@
 TARGET = mdj
-LIBS = -lcommons -lreadline
+LIBS = -lcommons -lreadline -lcrypto
 program:
 	gcc -pthread mdj.c -I/home/tp-2018-2c-Nene-Malloc/mdj/src -o $(TARGET) $(LIBS) ../../Bibliotecas/sockets.c ../../Bibliotecas/helper.c
 clean:

@@ -333,8 +333,7 @@ void crear_archivo(Paquete *paquete)
 	int retorno = crear_bloques(bloques_libres, &bytes_a_crear);
 
 	Archivo_metadata nuevo_archivo;
-	nuevo_archivo.nombre = malloc(strlen(ruta) + 1);
-	strcpy(nuevo_archivo.nombre, ruta);
+	nuevo_archivo.nombre = ruta_absoluta(ruta);
 	nuevo_archivo.bloques = bloques_libres;
 	nuevo_archivo.tamanio = bytes_a_crear;
 

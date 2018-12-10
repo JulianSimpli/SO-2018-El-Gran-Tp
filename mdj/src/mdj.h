@@ -16,6 +16,7 @@
 #include <commons/collections/list.h>
 #include <dirent.h>
 #include "../../Bibliotecas/sockets.h"
+#include <openssl/md5.h>
 
 //Logger y config globales
 t_log *logger;
@@ -52,7 +53,7 @@ void imprimir_directorios(char *);
 void enviar_error(Tipo tipo);
 void cargar_metadata();
 char *leer_bitmap();
-int file_size(char*);
+int file_size(char *);
 int obtener_size_escriptorio(char *path);
 char *ruta_absoluta(char *ruta);
 char *get_block_full_path(int bloque);
@@ -124,8 +125,6 @@ void imprimir_directorios(char *path_a_imprimir)
 
 void com_list(char **parametros)
 {
-    system("ls -la");
-    /*
     printf("The folder has this currents files: \n");
 
     char *punto_montaje = malloc(strlen(mnt_path) + 1);
@@ -148,7 +147,6 @@ void com_list(char **parametros)
             imprimir_directorios(punto_montaje);
         }
     }
-    */
     //fijarse en que path está y mostrar que es directorio y que es archivo
 }
 
@@ -185,15 +183,65 @@ void com_cat(char **parametros)
     printf("CAT\n");
 }
 
-void com_cd(char *linea)
+void com_cd(char **parametros)
 {
     printf("CD\n");
-    system("cd /home/daniel");
 }
 
-void com_md5(char *linea)
+void com_md5(char **parametros)
 {
     printf("MD5\n");
+    char *path = parametros[1];
+
+    char *archivo_md5 = ruta_absoluta(path);
+    log_debug(logger, "archivo md5: %s", archivo_md5);
+    t_config *metadata_md5 = config_create(archivo_md5);
+    char **bloques_ocupados = config_get_array_value(metadata_md5, "BLOQUES");
+    log_debug(logger, "bloque 0: %s", bloques_ocupados[0]);
+    int tamanio = config_get_int_value(metadata_md5, "TAMANIO");
+    log_debug(logger, "tamanio %d", tamanio);
+
+    int leido = 0;
+
+    //Crear paquete de payload del tamanio leido y cargar el contenido de los bloques con un for
+    char *buffer = malloc(tamanio + 1);
+
+    for (int i = 0; tamanio > 0; i++)
+    {
+        int bloque = atoi(bloques_ocupados[i]);
+        char *ubicacion = get_block_full_path(bloque);
+        log_debug(logger, "Abro el bloque que esta en %s", ubicacion);
+        FILE *bloque_abierto = fopen(ubicacion, "rb");
+        fseek(bloque_abierto, 0, SEEK_SET);
+        int leer = tamanio_bloques;
+
+        if (tamanio < leer)
+            leer = tamanio;
+        log_debug(logger, "Leo %d", leer);
+        char *aux = malloc(leer);
+        fread(aux, 1, leer, bloque_abierto);
+        memcpy(buffer + leido, aux, leer);
+        fclose(bloque_abierto);
+        tamanio -= leer;
+        leido += leer;
+        free(aux);
+    }
+
+    buffer[leido] = '\0';
+    log_debug(logger, "EL contenido es \n%s", buffer);
+
+    char *digest = malloc(MD5_DIGEST_LENGTH);
+    MD5_CTX context;
+    MD5_Init(&context);
+    MD5_Update(&context, buffer, strlen(buffer) + 1);
+    MD5_Final(digest, &context);
+
+    for (int i = 0; i < MD5_DIGEST_LENGTH; i++)
+        printf("%02x", digest[i]);
+
+    config_destroy(metadata_md5);
+    free(buffer);
+    printf("Este es el MD5: %s \n", digest);
 }
 
 void com_exit(char *linea)
