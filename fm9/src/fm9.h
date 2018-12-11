@@ -74,5 +74,8 @@ void asignarSPA(int pid, char* path, int pos, char* dato, int socketFD);
 void flushSEG(char* path, int socketFD);
 void flushSPA(char* path, int socketFD);
 void agregarArchivoYProcesoATabla(int pid, char* path);
+int lineasLibresConsecutivasMemoria(int lineasAGuardar);
+int numeroDeSegmento(int pid, char* path);
+int numeroDePagina(int pid, char* path);
 
 #endif /* FM9_H_ */
