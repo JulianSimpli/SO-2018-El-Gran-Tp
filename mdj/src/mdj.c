@@ -25,7 +25,9 @@ void *interpretar_consola(void *args)
 	char *linea;
 	while (1)
 	{
-		linea = readline("MDJ>");
+		char *PS1 = malloc(strlen(current_path) + 2); 
+		strcpy(PS1, current_path);
+		linea = readline(strcat(PS1, "$"));
 		if (linea)
 			add_history(linea);
 		interpretar(linea);
@@ -73,6 +75,7 @@ void leer_config(char *path)
 	strcat(file_path, "Archivos");
 	strcat(blocks_path, "Bloques");
 	strcat(metadata_path, "Metadata");
+	strcat(current_path,"Archivos");
 }
 
 void inicializar_log(char *program)

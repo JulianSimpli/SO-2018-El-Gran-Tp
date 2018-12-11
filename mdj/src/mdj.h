@@ -116,6 +116,11 @@ void imprimir_directorios(char *path_a_imprimir)
     struct dirent *ent;
 
     dir = opendir(path_a_imprimir);
+    if (dir == NULL)
+    {
+        log_error(logger, "Fallo al abrir directorio");
+        exit_gracefully(1);
+    }
     while ((ent = readdir(dir)) != NULL)
     {
         printf("%s ", ent->d_name);
@@ -127,24 +132,29 @@ void com_list(char **parametros)
 {
     printf("The folder has this currents files: \n");
 
-    char *punto_montaje = malloc(strlen(mnt_path) + 1);
-    strcpy(punto_montaje, mnt_path);
+    char *root = malloc(strlen(current_path) + 1);
+    strcpy(root, current_path);
     char *path = parametros[1];
     if (path == NULL)
     {
-        imprimir_directorios(punto_montaje);
+        imprimir_directorios(root);
     }
     else
     {
         if (path[0] == '/')
         {
-            imprimir_directorios(path);
+            char *ruta_a_buscar = malloc(strlen(file_path) + strlen(path) + 1);
+            strcpy(ruta_a_buscar, file_path);
+            strcat(ruta_a_buscar, path);
+            imprimir_directorios(file_path);
         }
         else
         {
-            punto_montaje = realloc(punto_montaje, strlen(mnt_path) + strlen(path) + 1);
-            strcat(punto_montaje, path);
-            imprimir_directorios(punto_montaje);
+            char *ruta_a_buscar = malloc(strlen(root) + strlen(path) + 1);
+            strcpy(ruta_a_buscar, root);
+            strcat(ruta_a_buscar, "/");
+            strcat(ruta_a_buscar, path);
+            imprimir_directorios(ruta_a_buscar);
         }
     }
     //fijarse en que path está y mostrar que es directorio y que es archivo
@@ -152,21 +162,27 @@ void com_list(char **parametros)
 
 void com_cat(char **parametros)
 {
-    char *directorio_actual;
+    char *nuevo_path = parametros[1];
+    char *directorio_actual = malloc(strlen(current_path) + 1);
     //cd tiene que actualizar el directorio actual
     strcpy(directorio_actual, current_path);
-    char *nuevo_path = parametros[1];
+    char *archivo_a_leer;
 
     if (nuevo_path[0] == '/')
     {
-        directorio_actual = nuevo_path;
+        archivo_a_leer = malloc(strlen(file_path) + strlen(nuevo_path) + 1);
+        strcpy(archivo_a_leer, file_path);
+        strcat(archivo_a_leer, nuevo_path);
     }
     else
     {
-        strcat(directorio_actual, nuevo_path);
+        archivo_a_leer = malloc(strlen(directorio_actual) + strlen(nuevo_path) + 1);
+        strcpy(archivo_a_leer, directorio_actual);
+        strcat(archivo_a_leer, "/");
+        strcat(archivo_a_leer, nuevo_path);
     }
 
-    FILE *f = fopen(directorio_actual, "rb");
+    FILE *f = fopen(archivo_a_leer, "rb");
 
     if (f == NULL)
         perror("Fallo al abrir el archivo: ");
@@ -186,6 +202,20 @@ void com_cat(char **parametros)
 void com_cd(char **parametros)
 {
     printf("CD\n");
+    //actualiza la global current_path
+    char *path = parametros[1];
+    if (path[0] == '/')
+    {
+        current_path = realloc(current_path,strlen(file_path)+ strlen(path) + 1);
+        strcpy(current_path,file_path);
+        strcat(current_path, path);
+    }
+    else
+    {
+        current_path = realloc(current_path, strlen(current_path) + strlen(path) + 1);
+        strcat(current_path, "/");
+        strcat(current_path, path);
+    }
 }
 
 void com_md5(char **parametros)
@@ -237,7 +267,7 @@ void com_md5(char **parametros)
     MD5_Final(digest, &context);
 
     for (int i = 0; i < MD5_DIGEST_LENGTH; i++)
-        printf("%02x", digest[i]);
+        printf("%02hhx", digest[i]);
 
     config_destroy(metadata_md5);
     free(buffer);
