@@ -18,7 +18,7 @@ t_log* logger;
 
 ////////////////////////////////////////// ↓↓↓  INICIALIZAR ↓↓↓  //////////////////////////////////////////
 void crearLogger() {
-	logger = log_create("FM9.log", "FM9", true, LOG_LEVEL_INFO);
+	logger = log_create("FM9.log", "FM9", true, LOG_LEVEL_DEBUG);
 }
 
 void obtenerValoresArchivoConfiguracion() {
@@ -497,6 +497,7 @@ void accion(void *socket) {
 	//El transfer size no puede ser menor al tamanio del header porque sino no se puede saber quien es el emisor
 	//while (RecibirPaqueteServidorSafa(socketFD, SAFA, &paquete) > 0)
 	while (RecibirDatos(&paquete.header , socketFD, TAMANIOHEADER) > 0) {
+		log_debug(logger, "Recibi paquete en socket %d", socketFD);
 		switch (paquete.header.emisor) {
 		case ELDIEGO: {
 			if (paquete.header.tipoMensaje != ESHANDSHAKE && paquete.header.tamPayload > 0) {
@@ -504,22 +505,26 @@ void accion(void *socket) {
 				recibir_partes(socketFD, paquete.Payload, paquete.header.tamPayload);
 			}
 			manejar_paquetes_diego(&paquete, socketFD);
-		} break;
-
+			break;
+		}
 		case CPU: {
 			if (paquete.header.tamPayload > 0) {
 				paquete.Payload = malloc(paquete.header.tamPayload);
 				RecibirDatos(paquete.Payload, socketFD, paquete.header.tamPayload);
 			}
 			manejar_paquetes_CPU(&paquete, socketFD);
-		} break;
+			break;
+		}
 		default:
 			log_warning(logger, "No se reconoce el emisor %d", paquete.header.emisor);
-		} break;
+			break;
+		}	
 	}
 	// Si sale del while hubo error o desconexion
-	if (paquete.Payload != NULL) free(paquete.Payload);
+	if (paquete.Payload != NULL)
+		free(paquete.Payload);
 	close(socketFD);
+	log_debug(logger, "Hilo para conexion en socket %d terminado", socketFD);
 }
 
 void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
@@ -535,16 +540,18 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 			memcpy(&transfer_size, paquete->Payload, INTSIZE);
 			log_info(logger, "transfersize del diego %d\n", transfer_size);
 			EnviarHandshakeELDIEGO(socketElDiego);
-		} break;
+			break;
+		}
 
 		case ABRIR: {
 			sem_wait(&primitiva);
-			u_int32_t pid;
-			int tam_pid = sizeof(u_int32_t);
 			memcpy(&pid, paquete->Payload, tam_pid);
 			int tam_desplazado = tam_pid;
+			log_debug(logger, "pid: %d", pid);
 			char *path = string_deserializar(paquete->Payload, &tam_desplazado);
+			log_debug(logger, "path: %s", path);
 			char *archivo = string_deserializar(paquete->Payload, &tam_desplazado);
+			log_debug(logger, "file:\n%s", archivo);
 			free(paquete->Payload);
 
 			if(!strcmp(MODO, "SEG")) {
@@ -554,9 +561,11 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 			} else if(!strcmp(MODO, "SPA")) {
 				cargarArchivoAMemoriaSPA(pid, path, archivo, socketFD);
 			}
+
+			//enviar_abrio_a_dam(socketFD, pid, path, archivo);
+			sem_post(&primitiva);
+			break;
 		}
-		sem_wait(&primitiva);
-		break;
 
 		case FLUSH: {
 			//el payload viene con el path
@@ -571,9 +580,9 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 			} else if(!strcmp(MODO, "SPA")) {
 				flushSPA(path, socketFD);
 			}
+			sem_post(&primitiva);
+			break;
 		}
-		sem_wait(&primitiva);
-		break;
 	}
 }
 
@@ -585,7 +594,8 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 		case ESHANDSHAKE: {
 			EnviarHandshake(socketFD, FM9);
 			log_info(logger, "llegada cpu con id %d", socketFD);
-		} break;
+			break;
+		}
 
 		case NUEVA_PRIMITIVA: {
 			//el payload debe ser: int(pid)+int(pc)
@@ -614,7 +624,8 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 					EnviarDatosTipo(socketFD, CPU, NULL, 0, ERROR);
 			}
 			free(linea);
-		} break;
+			break;
+		}
 
 		case ASIGNAR: {
 			//el payload debe ser int+char\0+int+char\0
@@ -639,7 +650,8 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 			free(path);
 			free(dato);
 			sem_post(&primitiva);
-		} break;
+			break;
+		}
 
 		case CLOSE: {
 			//el payload debe ser int+char\0
@@ -656,7 +668,8 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 				liberarArchivoSPA(pid, path, socketFD);
 			}
 			free(path);
-		} break;
+			break;
+		}
 	}
 }
 

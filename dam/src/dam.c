@@ -279,7 +279,7 @@ int cargar_a_memoria(u_int32_t pid, char *path, char *file, Paquete *respuesta)
 	void *serial_path = string_serializar(path, &tam_serial_path);
 	void *serial_file = string_serializar(file, &tam_serial_file);
 
-	log_debug(logger, "Cargo el paquete con:\npid %d\ntam_serial_path: %d\npath: %s\ntam_serial_file: %d\nfile: %s",
+	log_debug(logger, "Cargo el paquete con:\npid %d\ntam_serial_path: %d\npath: %s\ntam_serial_file: %d\nfile:\n%s",
 	pid, tam_serial_path, path, tam_serial_file, file);
 	// payload = pid, len path, path, len archivo, archivo
 	Paquete cargar;
@@ -291,25 +291,16 @@ int cargar_a_memoria(u_int32_t pid, char *path, char *file, Paquete *respuesta)
 	memcpy(cargar.Payload + desplazamiento, serial_file, tam_serial_file);
 	desplazamiento += tam_serial_file;
 
-	int prueba = 0;
-	memcpy(&prueba, cargar.Payload, INTSIZE);
-	int desplprueba = INTSIZE;
-	char *path_prueba = string_deserializar(cargar.Payload, &desplprueba);
-	char *file_prueba = string_deserializar(cargar.Payload, &desplprueba);
-
-	log_debug(logger, "Enviado:\nPID: %d\npath: %s\nfile: %s\n",
-	prueba, path_prueba, file_prueba);
-
 	cargar.header = cargar_header(desplazamiento, ABRIR, ELDIEGO);
 	log_debug(logger, "Total a enviar: %d", desplazamiento);
 	enviar_paquete(socket_fm9, &cargar);
 
-	log_debug(logger, "Pedido de carga a memoria a FM9 enviado"); // Aca no llega
+	log_debug(logger, "Pedido de carga a memoria a FM9 enviado");
 	free(serial_path);
 	free(serial_file);
 	free(cargar.Payload);
 
-	recibir_paquete(socket_fm9, respuesta);
+	recibir_paquete(socket_fm9, respuesta); // Ahora se queda en este recv. Hay que armar el paquete fm9->dam
 	log_debug(logger, "FM9 respondio el pedido de carga a memoria");
 	return respuesta->header.tipoMensaje != ESPACIO_INSUFICIENTE_ABRIR;
 }
@@ -448,16 +439,16 @@ void es_dtb_dummy(Paquete *paquete)
 
 	enviar_obtener_datos(escriptorio->path, validar);	
 
-	recibir_paquete(socket_mdj, paquete);
+	Paquete file_mdj;
+	recibir_paquete(socket_mdj, &file_mdj);
 	int d = 0;
-	char *script = string_deserializar(paquete->Payload, &d);
+	char *script = string_deserializar(file_mdj.Payload, &d);
 	log_debug(logger, "Escriptorio \n%s", script);
 	
 	log_debug(logger, "Le envio el pedido a fm9");
 
 	Paquete respuesta;
 
-	/*
 	int cargado = cargar_a_memoria(dummy->gdtPID, escriptorio->path, script, &respuesta);
 
 	if (!cargado)
@@ -465,8 +456,6 @@ void es_dtb_dummy(Paquete *paquete)
 		enviar_error(DUMMY_FAIL_CARGA, dummy->gdtPID);
 		return;
 	}
-	*/
-
 
 	int desplazamiento_archivo = 0;
 	int desplazamiento = 0;
