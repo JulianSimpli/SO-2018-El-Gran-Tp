@@ -13,6 +13,7 @@ int main(int argc, char **argv)
 	handshake_mdj();
 	log_info(logger, "Se concreto handshake MDJ");
 	handshake_fm9();
+	log_info(logger, "Se concreto handshake FM9");
 
 	//inicializamos el semaforo en maximas_conexiones - 3 que son fijas
 

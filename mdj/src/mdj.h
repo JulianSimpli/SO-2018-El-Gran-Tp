@@ -218,6 +218,7 @@ void com_cd(char **parametros)
     }
 }
 
+}
 void com_md5(char **parametros)
 {
     printf("MD5\n");
@@ -258,12 +259,12 @@ void com_md5(char **parametros)
     }
 
     buffer[leido] = '\0';
-    log_debug(logger, "EL contenido es \n%s", buffer);
+    log_debug(logger, "El contenido es \n%s", buffer);
 
     char *digest = malloc(MD5_DIGEST_LENGTH);
     MD5_CTX context;
     MD5_Init(&context);
-    MD5_Update(&context, buffer, strlen(buffer) + 1);
+    MD5_Update(&context, buffer, strlen(buffer));
     MD5_Final(digest, &context);
 
     for (int i = 0; i < MD5_DIGEST_LENGTH; i++)
@@ -271,7 +272,7 @@ void com_md5(char **parametros)
 
     config_destroy(metadata_md5);
     free(buffer);
-    printf("Este es el MD5: %s \n", digest);
+    printf("Este es el MD5: %s", digest);
 }
 
 void com_exit(char *linea)
