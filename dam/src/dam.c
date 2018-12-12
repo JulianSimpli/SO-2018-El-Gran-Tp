@@ -298,9 +298,10 @@ int cargar_a_memoria(u_int32_t pid, char *path, char *file, Paquete *respuesta)
 	log_debug(logger, "Pedido de carga a memoria a FM9 enviado");
 	free(serial_path);
 	free(serial_file);
-	free(cargar.Payload);
+	// free(cargar.Payload);
 
 	recibir_paquete(socket_fm9, respuesta); // Ahora se queda en este recv. Hay que armar el paquete fm9->dam
+	//EnviarDatosTipo(te envia un paquete con el payload en 0 y tiene que enviar la respuesta con el archivo abierto)
 	log_debug(logger, "FM9 respondio el pedido de carga a memoria");
 	return respuesta->header.tipoMensaje != ESPACIO_INSUFICIENTE_ABRIR;
 }
@@ -457,22 +458,22 @@ void es_dtb_dummy(Paquete *paquete)
 		return;
 	}
 
-	int desplazamiento_archivo = 0;
-	int desplazamiento = 0;
-	ArchivoAbierto archivo;
-	archivo.path = malloc(strlen(escriptorio->path) + 1);
-	strcpy(archivo.path, escriptorio->path);
-	//archivo.cantLineas = contar_lineas(fid);
-	archivo.cantLineas = 6;
-	void *archivo_serializado = DTB_serializar_archivo(&archivo, &desplazamiento_archivo);
+	// int desplazamiento_archivo = 0;
+	// int desplazamiento = 0;
+	// ArchivoAbierto archivo;
+	// archivo.path = malloc(strlen(escriptorio->path) + 1);
+	// strcpy(archivo.path, escriptorio->path);
+	// //archivo.cantLineas = contar_lineas(fid);
+	// archivo.cantLineas = 6;
+	// void *archivo_serializado = DTB_serializar_archivo(&archivo, &desplazamiento_archivo);
 
-	respuesta.Payload = malloc(INTSIZE + desplazamiento_archivo);
-	memcpy(respuesta.Payload, &dummy->gdtPID, INTSIZE);
-	desplazamiento += INTSIZE;
-	memcpy(respuesta.Payload + INTSIZE, archivo_serializado, desplazamiento_archivo);
-	desplazamiento += desplazamiento_archivo;
+	// respuesta.Payload = malloc(INTSIZE + desplazamiento_archivo);
+	// memcpy(respuesta.Payload, &dummy->gdtPID, INTSIZE);
+	// desplazamiento += INTSIZE;
+	// memcpy(respuesta.Payload + INTSIZE, archivo_serializado, desplazamiento_archivo);
+	// desplazamiento += desplazamiento_archivo;
 
-	respuesta.header = cargar_header(desplazamiento, DUMMY_SUCCESS, ELDIEGO);
+	respuesta.header = cargar_header(respuesta.header.tamPayload, DUMMY_SUCCESS, ELDIEGO);
 	enviar_paquete(socket_safa, &respuesta);
 	free(respuesta.Payload);
 }

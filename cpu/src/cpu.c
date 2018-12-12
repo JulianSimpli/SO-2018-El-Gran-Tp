@@ -27,7 +27,7 @@ int main(int argc, char **argv)
 	handshake_dam();
 	log_debug(logger, "Concrete handshake con dam");
 	handshake_fm9();
-	sem_init(&sem_recibir_paquete,0,1);
+	sem_init(&sem_recibir_paquete, 0, 1);
 	pthread_t p_thread_one;
 	pthread_create(&p_thread_one, NULL, hilo_safa, NULL);
 	pthread_t p_thread_two;
@@ -46,7 +46,7 @@ void *hilo_safa()
 		log_info(logger, "Soy el hilo %d, espero paquete de safa", process_get_thread_id());
 		sem_wait(&sem_recibir_paquete);
 		int r = RecibirPaqueteCliente(socket_safa, paquete);
-		if (r <= 0) 
+		if (r <= 0)
 			_exit_with_error(socket_safa, "Se desconecto safa", paquete);
 		sem_post(&sem_recibir_paquete);
 		interpretar_safa(paquete);
@@ -81,21 +81,36 @@ int ejecutar(char *linea, DTB *dtb)
 	return flag;
 }
 
-int ejecutar_quantum(Paquete *paquete)
+int ejecutar_algoritmo(Paquete *paquete)
 {
 	log_debug(logger, "Voy a deserializar el dtb");
-	DTB *dtb = DTB_deserializar(paquete);
-	log_debug(logger, "Deserialize el dtb");
+	DTB *dtb = DTB_deserializar(paquete->Payload);
+	log_debug(logger, "Deserialice el dtb");
 	log_debug(logger, "pid %d", dtb->gdtPID);
+	if (!strcmp(algoritmo, "FIFO"))
+	{
+		while (1)
+		{
+			char *primitiva = pedir_primitiva(dtb);
+			log_debug(logger, "Primitiva %s", primitiva);
+			int flag = ejecutar(primitiva, dtb);
+			dtb->PC++;
+			if (!flag || finalizar)
+				break;
+		}
+	}
+	int quantum_local = quantum;
+	if (paquete->header.tipoMensaje == ESDTBQUANTUM)
+		memcpy(&quantum_local, paquete->Payload + paquete->header.tamPayload - INTSIZE, INTSIZE);
 	int i;
 	// cambios = 1;
-	for (i = 0; i < quantum; i++)
+	for (i = 0; i < quantum_local; i++)
 	{
 		// sem_wait(cambios);
 		log_debug(logger, "Quantum %d", i);
 		char *primitiva = pedir_primitiva(dtb);
 		log_debug(logger, "Primitiva %s", primitiva);
-		int flag = ejecutar(primitiva, dtb); //avanzar el PC dentro del paquete
+		int flag = ejecutar(primitiva, dtb);
 		dtb->PC++;
 		if (!flag || finalizar)
 			break;
@@ -127,7 +142,7 @@ int ejecutar_quantum(Paquete *paquete)
 	{
 		nuevo_paquete->header.tipoMensaje = QUANTUM_FALTANTE;
 		nuevo_paquete->Payload = realloc(nuevo_paquete->Payload, nuevo_paquete->header.tamPayload + sizeof(u_int32_t));
-		int restante = quantum - i;
+		int restante = quantum_local - i;
 		memcpy(nuevo_paquete->Payload + nuevo_paquete->header.tamPayload, &restante, sizeof(u_int32_t));
 		nuevo_paquete->header.tamPayload += sizeof(u_int32_t);
 	}
@@ -136,16 +151,23 @@ int ejecutar_quantum(Paquete *paquete)
 
 char *pedir_primitiva(DTB *dtb)
 {
-	//solo le envio a FM9 el PID y el PC del dtb que me llegó
 	Paquete *paquete = malloc(sizeof(Paquete));
-	int len = sizeof(u_int32_t) * 2;
-	paquete->header.tamPayload = len;
-	paquete->header.tipoMensaje = NUEVA_PRIMITIVA;
-	paquete->header.emisor = CPU;
-	paquete->Payload = malloc(len);
-	memcpy(paquete->Payload, &dtb->gdtPID, sizeof(u_int32_t));
-	memcpy(paquete->Payload + sizeof(u_int32_t), &dtb->PC, sizeof(u_int32_t));
-	// pedido_de_primitiva->header.tamPayload = 0;
+	ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
+	int len_int = INTSIZE * 2;
+	int desplazamiento = 0;
+	int size_archivo = 0;
+	void *serializado = DTB_serializar_archivo(escriptorio, &size_archivo);
+
+	paquete->Payload = malloc(len_int + size_archivo);
+
+	memcpy(paquete->Payload, &dtb->gdtPID, INTSIZE);
+	desplazamiento += INTSIZE;
+	memcpy(paquete->Payload + desplazamiento, &dtb->PC, INTSIZE);
+	desplazamiento += INTSIZE;
+	memcpy(paquete->Payload + desplazamiento, serializado, size_archivo);
+	desplazamiento += size_archivo;
+
+	cargar_header(desplazamiento, NUEVA_PRIMITIVA, CPU);
 
 	log_debug(logger, "Pido a fm9 siguiente primitiva");
 
@@ -173,7 +195,12 @@ int interpretar_safa(Paquete *paquete)
 		break;
 	case ESDTB:
 		log_debug(logger, "ESDTB");
-		ejecutar_quantum(paquete);
+		ejecutar_algoritmo(paquete);
+		break;
+	case ESDTBQUANTUM:
+		log_debug(logger, "ESDTBQUANTUM");
+		ejecutar_algoritmo(paquete);
+
 		break;
 	case FINALIZAR:
 		finalizar = true;
@@ -217,7 +244,7 @@ void handshake_dam()
 	socket_dam = crear_socket_dam();
 	EnviarHandshake(socket_dam, CPU);
 	Paquete paquete;
-	RecibirDatos(&paquete.header , socket_dam, TAMANIOHEADER);
+	RecibirDatos(&paquete.header, socket_dam, TAMANIOHEADER);
 	paquete.Payload = malloc(paquete.header.tamPayload);
 	RecibirDatos(paquete.Payload, socket_dam, paquete.header.tamPayload);
 	memcpy(&transfer_size, paquete.Payload, paquete.header.tamPayload);
@@ -230,9 +257,9 @@ void handshake_dam()
 void handshake_fm9()
 {
 	socket_fm9 = crear_socket_fm9();
-	EnviarHandshake(socket_fm9,CPU);
+	EnviarHandshake(socket_fm9, CPU);
 	Paquete paquete;
-	RecibirDatos(&paquete.header,socket_fm9,TAMANIOHEADER);
+	RecibirDatos(&paquete.header, socket_fm9, TAMANIOHEADER);
 	if (paquete.header.tipoMensaje != ESHANDSHAKE)
 		_exit_with_error(socket_dam, "No se logro el handshake", NULL);
 
@@ -447,22 +474,30 @@ int ejecutar_asignar(char **parametros, DTB *dtb)
 	else
 	{
 		Paquete *datos_a_fm9 = malloc(sizeof(Paquete));
-		datos_a_fm9->header.emisor = CPU;
-		datos_a_fm9->header.tipoMensaje = ASIGNAR;
-		int len_path = 0;
-		int len_dato = 0;
-		void *path_serializado = string_serializar(path, &len_path);
-		void *dato_serializado = string_serializar(dato, &len_dato);
-		datos_a_fm9->header.tamPayload = len_path + len_dato + sizeof(u_int32_t);
-		datos_a_fm9->Payload = malloc(datos_a_fm9->header.tamPayload);
-		memcpy(datos_a_fm9->Payload, path_serializado, len_path);
-		memcpy(datos_a_fm9->Payload + len_path, &linea, sizeof(u_int32_t));
-		memcpy(datos_a_fm9->Payload + len_path + sizeof(u_int32_t), dato_serializado, len_dato);
+
+		int desplazamiento = 0;
+		int len_int = INTSIZE * 2; //pid y linea
+		int size_archivo = 0;
+		int size_dato = 0;
+		void *arch_serializado = DTB_serializar_archivo(archivo_encontrado, &size_archivo);
+		void *dato_serializado = string_serializar(dato, &size_dato);
+
+		datos_a_fm9->Payload = malloc(len_int + size_archivo + size_dato);
+
+		memcpy(datos_a_fm9->Payload, &dtb->gdtPID, INTSIZE);
+		desplazamiento += INTSIZE;
+		memcpy(datos_a_fm9->Payload + desplazamiento, &linea, INTSIZE);
+		desplazamiento += INTSIZE;
+		memcpy(datos_a_fm9->Payload + desplazamiento, arch_serializado, size_archivo);
+		desplazamiento += size_archivo;
+		memcpy(datos_a_fm9->Payload + desplazamiento, dato_serializado, size_dato);
+		desplazamiento += size_dato;
+
+		//mando a FM9 el pid, la linea (offset), la estructura archivo abierto y el dato
+
+		cargar_header(desplazamiento, ASIGNAR, CPU);
 
 		EnviarPaquete(socket_fm9, datos_a_fm9);
-		//mandar mensaje a FM9
-		//TODO:mandar PID a FM9?
-		//enviar parametros. El string sin splitear? o separados?
 	}
 	return 1;
 }
@@ -612,15 +647,21 @@ int ejecutar_close(char **parametros, DTB *dtb)
 	else
 	{
 		Paquete *liberar_memoria = malloc(sizeof(Paquete));
-		liberar_memoria->header.emisor = CPU;
-		liberar_memoria->header.tipoMensaje = CLOSE;
-		int len = 0;
-		void *path_serializado = string_serializar(path, &len);
-		liberar_memoria->header.tamPayload = len + sizeof(u_int32_t);
-		liberar_memoria->Payload = malloc(liberar_memoria->header.tamPayload);
-		memcpy(liberar_memoria->Payload, &dtb->gdtPID, sizeof(u_int32_t));
-		memcpy(liberar_memoria->Payload + sizeof(u_int32_t), path_serializado, len);
-		//mensaje a FM9
+
+		int size_archivo = 0;
+		int desplazamiento = 0;
+		void *arch_serializado = DTB_serializar_archivo(archivo_encontrado, &size_archivo);
+
+		liberar_memoria->Payload = malloc(INTSIZE + size_archivo);
+		memcpy(liberar_memoria->Payload, &dtb->gdtPID, INTSIZE);
+		desplazamiento += INTSIZE;
+		memcpy(liberar_memoria->Payload + desplazamiento, arch_serializado, size_archivo);
+		desplazamiento += size_archivo;
+
+		//mando a FM9 el pid y la estructura archivo abierto serializada
+
+		cargar_header(desplazamiento, CLOSE, CPU);
+
 		EnviarPaquete(socket_fm9, liberar_memoria);
 	}
 	return 1;

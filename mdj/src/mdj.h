@@ -407,8 +407,7 @@ int escuchar_conexiones()
 {
 
     char *port = config_get_string_value(config, "PUERTO");
-    char *ip = "127.0.0.1";
-    // char * ip = config_get_string_value();
+    char * ip = config_get_string_value(config,"IP");
     struct addrinfo hints;
     struct addrinfo *server_info;
 
