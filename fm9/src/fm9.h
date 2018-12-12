@@ -37,14 +37,13 @@ typedef struct {
 } Frame;
 
 typedef struct {
-	t_list* lineas;
 	int inicio;
 	int fin;
 } Pagina;
 
 typedef struct {
 	int idProceso;
-	t_list* segmentos; //tabla segmentos/lista de 'SegmentoArchivo' que posee un proceso
+	t_list* segmentos; //tabla/lista de 'SegmentoArchivo' que posee un proceso
 } ProcesoArchivo;
 
 typedef struct {
@@ -73,9 +72,13 @@ void asignarSEG(int pid, char* path, int pos, char* dato, int socketFD);
 void asignarSPA(int pid, char* path, int pos, char* dato, int socketFD);
 void flushSEG(char* path, int socketFD);
 void flushSPA(char* path, int socketFD);
-void agregarArchivoYProcesoATabla(int pid, char* path);
+void agregarArchivoYProcesoALista(int pid, char* path);
+void quitarArchivoYProcesoDeTabla(int pid, char* path);
 int lineasLibresConsecutivasMemoria(int lineasAGuardar);
 int numeroDeSegmento(int pid, char* path);
 int numeroDePagina(int pid, char* path);
+int primerFrameLibre();
+int contarElementosArray(char** array);
+int framesSuficientes(int lineasAGuardar);
 
 #endif /* FM9_H_ */

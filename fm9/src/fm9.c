@@ -22,9 +22,9 @@ void crearLogger() {
 }
 
 void obtenerValoresArchivoConfiguracion() {
-	t_config* arch = config_create("/home/utnso/tp-2018-2c-Nene-Malloc/fm9/src/FM9.config");
+	t_config* arch = config_create("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/fm9/src/FM9.config");
 
-	IP_FM9 = (char*) string_duplicate(config_get_string_value(arch, "IP_FM9"));
+	IP_FM9 = string_duplicate(config_get_string_value(arch, "IP_FM9"));
 	PUERTO_FM9 = config_get_int_value(arch, "PUERTO_FM9");
 	MODO = (char*) string_duplicate(config_get_string_value(arch, "MODO"));
 	TAMANIO = config_get_int_value(arch, "TAMANIO");
@@ -72,23 +72,80 @@ void inicializar(char* modo) {
 }
 ////////////////////////////////////////// ↑↑↑  INICIALIZAR ↑↑↑  //////////////////////////////////////////
 
-//////////////////////// ↓↓↓ LINEA DE UNA POSICION n ↓↓↓ //////////////////////////////
+///////////////////////////////////// ↓↓↓ AUX ↓↓↓ ////////////////////////////////////////
+bool existePath(char* path) {
+	return list_count_satisfying(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path);}));
+}
+
+bool existePID(int pid) {
+	return list_any_satisfy(procesos, LAMBDA(bool _(ProcesoArchivo* proceso){return proceso->idProceso == pid;}));
+}
+
+int cantidadDeProcesosConElArchivoSEG(char* path) {
+	int contador = 0;
+	for(int x = 0; x < list_size(procesos); x++) {
+		ProcesoArchivo* proceso = list_get(procesos, x);
+		for(int y = 0; y < list_size(proceso->segmentos); y++) {
+			SegmentoArchivoSEG* segmento = list_get(proceso->segmentos, y);
+			if(!strcmp(segmento->idArchivo, path)) contador++;
+		}
+	}
+	return contador;
+}
+
+int cantidadDeProcesosConElArchivoSPA(char* path) {
+	int contador = 0;
+	for(int x = 0; x < list_size(procesos); x++) {
+		ProcesoArchivo* proceso = list_get(procesos, x);
+		for(int y = 0; y < list_size(proceso->segmentos); y++) {
+			SegmentoArchivoSPA* segmento = list_get(proceso->segmentos, y);
+			if(!strcmp(segmento->idArchivo, path)) {
+				contador++;
+			}
+		}
+	}
+	return contador;
+}
+
+bool elPidTieneElPath(int pid, char* path) {
+	return list_any_satisfy(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path) && pp->idProceso == pid;}));
+}
+
+PidPath* obtenerPidPath(int pid, char* path) {
+	return list_find(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path) && pp->idProceso == pid;}));
+}
+
+ProcesoArchivo* obtenerProcesoId(int pid) {
+	return list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pid;}));
+}
+
+SegmentoArchivoSEG* obtenerSegmentoSEG(t_list* lista, char* path) {
+	return list_find(lista, LAMBDA(bool _(SegmentoArchivoSPA* s) {return !strcmp(s->idArchivo, path);}));
+}
+
+SegmentoArchivoSPA* obtenerSegmentoSPA(t_list* lista, char* path) {
+	return list_find(lista, LAMBDA(bool _(SegmentoArchivoSPA* s) {return !strcmp(s->idArchivo, path);}));
+}
+//////////////////////////////////// ↑↑↑ AUX ↑↑↑ /////////////////////////////////////////
+
+///////////////////////////// ↓↓↓ LINEA DE UNA POSICION n ↓↓↓ //////////////////////////////
 char* lineaDeUnaPosicionSPA(int pid, int pc) {
 	int pcReal = pc-1;
-	ProcesoArchivo* unProceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pid;}));
+	ProcesoArchivo* unProceso = obtenerProcesoId(pid);
 	SegmentoArchivoSPA* segmento = list_get(unProceso->segmentos, 0);
 	if(pcReal < segmento->cantidadLineas) {
 		int calculoDePagina = ceil((float) pcReal/(float) lineasPorFrame) - 1; //el -1 es debido a que el index de la primer pagina en la lista es 0
 		int calculoDeLinea = pcReal - (lineasPorFrame * (calculoDePagina));
 		Pagina* pagina = list_get(segmento->paginas, calculoDePagina);
+		Frame* frame = list_find(framesMemoria, LAMBDA(bool _(Frame* f) {return pagina->inicio == f->inicio;}));
 		printf("lineas por pagina: %d\n", lineasPorFrame);
 		printf("nro pagina: %d\n", calculoDePagina);
 		printf("inicio pagina: %d\n", pagina->inicio);
 		printf("fin pagina: %d\n", pagina->fin);
-		for(int x = 0; x < list_size(pagina->lineas); x++) {
-			printf("linea: %d contenido: %s\n", x,(char*) list_get(pagina->lineas, x));
+		for(int x = 0; x < list_size(frame->lineas); x++) {
+			printf("linea: %d contenido: %s\n", x,(char*) list_get(frame->lineas, x));
 		}
-		return ((char*) list_get(pagina->lineas, calculoDeLinea));
+		return ((char*) list_get(frame->lineas, calculoDeLinea));
 	} else {
 		//segmentation fault
 		return NULL;
@@ -97,7 +154,7 @@ char* lineaDeUnaPosicionSPA(int pid, int pc) {
 
 char* lineaDeUnaPosicionSEG(int pid, int pc) {
 	int pcReal = pc-1; //porque la linea 1 del archivo esta guardada en la posicion 0
-	ProcesoArchivo* unProceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pid;}));
+	ProcesoArchivo* unProceso = obtenerProcesoId(pid);
 	SegmentoArchivoSEG* unSegmento = list_get(unProceso->segmentos, 0);
 	if(pcReal < unSegmento->fin) {
 		return ((char*) list_get(unSegmento->lineas, pcReal));
@@ -109,23 +166,27 @@ char* lineaDeUnaPosicionSEG(int pid, int pc) {
 
 //////////////////////// ↓↓↓ PRIMITIVA ABRIR ↓↓↓ //////////////////////////////////////
 void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo, int socketFD) {
-	if(list_find(archivosPorProceso, LAMBDA(bool _(PidPath* p) {return p->idProceso == idProceso && !strcmp(p->pathArchivo, path);}))) {
-		printf("ya tiene ese archivo tal proceso\n");
+	if(elPidTieneElPath(idProceso, path)) {
+		log_info(logger, "el pid: %d ya tiene el archivo: %s\n", idProceso, path);
 		EnviarDatosTipo(socketFD, FM9, NULL, 0, CARGADO);
 	//me fijo si el archivo ya lo posee un proceso y se lo asigno al nuevo. Lo COMPARTEN (VALIDAR EN CLOSE)
 	} else if(list_find(archivosPorProceso, LAMBDA(bool _(PidPath* p) {return !strcmp(p->pathArchivo, path);}))) {
 		//me traigo el proceso que contiene el archivo pedido
 		PidPath* pp = list_find(archivosPorProceso, LAMBDA(bool _(PidPath* p) {return !strcmp(p->pathArchivo, path);}));
 		ProcesoArchivo* procesoConElArchivo = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* proceso) {return proceso->idProceso == pp->idProceso;}));
-		SegmentoArchivoSEG* segmentoConElArchivo = list_find(procesoConElArchivo->segmentos, LAMBDA(bool _(SegmentoArchivoSEG* s) {return !strcmp(s->idArchivo, path);}));
+		SegmentoArchivoSEG* segmentoConElArchivo = obtenerSegmentoSEG(procesoConElArchivo->segmentos, path);
 		//si el proceso ya existe se lo agrego, sino creo todas las estructuras
-		if(list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == idProceso;}))) {
-			ProcesoArchivo* proceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == idProceso;}));
+		if(obtenerProcesoId(idProceso)) {
+			ProcesoArchivo* proceso = obtenerProcesoId(idProceso);
 			SegmentoArchivoSEG* segmentoNuevo = malloc(sizeof(SegmentoArchivoSEG));
 			segmentoNuevo->idArchivo = malloc(strlen(path)+1);
 			strcpy(segmentoNuevo->idArchivo, path);
 			segmentoNuevo->lineas = list_create();
-			segmentoNuevo->lineas = list_duplicate(segmentoConElArchivo->lineas); //duda, duplica los punteros?
+			//segmentoNuevo->lineas = list_duplicate(segmentoConElArchivo->lineas); //duda, duplica los punteros?
+			//la opcion manual: (?
+			for(int x = 0; x < list_size(segmentoConElArchivo->lineas); x++) {
+				strcpy(list_get(segmentoNuevo->lineas, x), list_get(segmentoConElArchivo->lineas, x));
+			}
 			segmentoNuevo->inicio = segmentoConElArchivo->inicio;
 			segmentoNuevo->fin = segmentoConElArchivo->fin;
 			list_add(proceso->segmentos, segmentoNuevo);
@@ -137,40 +198,45 @@ void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo, int sock
 			unSegmentoArchivoSEG->idArchivo = malloc(strlen(path) + 1);
 			strcpy(unSegmentoArchivoSEG->idArchivo, path);
 			unSegmentoArchivoSEG->lineas = list_create();
-			unSegmentoArchivoSEG->lineas = list_duplicate(segmentoConElArchivo->lineas);
+			//unSegmentoArchivoSEG->lineas = list_duplicate(segmentoConElArchivo->lineas); duda
+			//la opcion manual: (?
+			for(int x = 0; x < list_size(segmentoConElArchivo->lineas); x++) {
+				char* dato = malloc(strlen(list_get(segmentoConElArchivo->lineas, x)) + 1);
+				strcpy(dato, list_get(segmentoConElArchivo->lineas, x));
+				list_add(unSegmentoArchivoSEG->lineas, dato);
+			}
 			unSegmentoArchivoSEG->inicio = segmentoConElArchivo->inicio;
 			unSegmentoArchivoSEG->fin = segmentoConElArchivo->fin;
 			list_add(procesoArchivo->segmentos, unSegmentoArchivoSEG);
 			list_add(procesos, procesoArchivo);
 		}
-		agregarArchivoYProcesoATabla(idProceso, path);
-		log_info(logger, "El archivo ya cargado fue agregado a los archivos abiertos del proceso: %d", idProceso);
+		agregarArchivoYProcesoALista(idProceso, path);
+		log_info(logger, "El archivo ya cargado fue agregado a los archivos abiertos del proceso: %d\n", idProceso);
 		EnviarDatosTipo(socketFD, FM9, NULL, 0, CARGADO);
 	} else {
 		char** arrayLineas = (char**) string_split(archivo, "\n"); //deja un elemento con NULL al final
 		int cantidadDeLineas = contarElementosArray(arrayLineas);
-		log_info(logger, "El archivo a cargar es...");
+		log_info(logger, "El archivo a cargar es: %s\n", path);
 		int inicioDeLinea = lineasLibresConsecutivasMemoria(cantidadDeLineas);
 		if (inicioDeLinea >= 0) {
 			//me fijo si ya tengo el proceso en lista y solo le agrego el archivo a su lista de segmentos
-			if (list_any_satisfy(procesos, LAMBDA(bool _(ProcesoArchivo* proceso){return proceso->idProceso == idProceso;}))) {
-				ProcesoArchivo* unProceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == idProceso;}));
+			if (existePID(idProceso)) {
+				ProcesoArchivo* unProceso = obtenerProcesoId(idProceso);
 				SegmentoArchivoSEG* nuevoSegmento = malloc(sizeof(SegmentoArchivoSEG));
 				nuevoSegmento->idArchivo = malloc(strlen(path) + 1);
 				strcpy(nuevoSegmento->idArchivo, path);
-				t_list* lineasArchivo = list_create();
+				nuevoSegmento->lineas = list_create();
 				for (int x = 0; x < cantidadDeLineas; x++) {
-					list_add(lineasArchivo, arrayLineas[x]);
+					list_add(nuevoSegmento->lineas, arrayLineas[x]);
 				}
-				nuevoSegmento->lineas = lineasArchivo;
 				nuevoSegmento->inicio = inicioDeLinea;
-				nuevoSegmento->fin = inicioDeLinea + list_size(lineasArchivo) - 1;
+				nuevoSegmento->fin = inicioDeLinea + cantidadDeLineas - 1;
 				list_add(unProceso->segmentos, nuevoSegmento);
 				for(int x = 0; x < cantidadDeLineas; x++) {
 					strcpy(memoria[inicioDeLinea], arrayLineas[x]);
 					inicioDeLinea++;
 				}
-				printf("archivo cargado correctamente\n");
+				log_info(logger, "Archivo: %s cargado correctamente en el pid: %d\n", path, idProceso);
 			} else {
 				ProcesoArchivo* procesoArchivo = malloc(sizeof(procesoArchivo));
 				procesoArchivo->idProceso = idProceso;
@@ -183,7 +249,7 @@ void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo, int sock
 					list_add(unSegmentoArchivoSEG->lineas, arrayLineas[x]);
 				}
 				unSegmentoArchivoSEG->inicio = inicioDeLinea;
-				unSegmentoArchivoSEG->fin = list_size(unSegmentoArchivoSEG->lineas) - 1;
+				unSegmentoArchivoSEG->fin = cantidadDeLineas - 1;
 				list_add(procesoArchivo->segmentos, unSegmentoArchivoSEG);
 				list_add(procesos, procesoArchivo);
 				for(int x = 0; x < cantidadDeLineas; x++) {
@@ -191,13 +257,12 @@ void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo, int sock
 					inicioDeLinea++;
 				}
 			}
-			log_info(logger, "Archivo cargado con éxito...");
-			agregarArchivoYProcesoATabla(idProceso, path);
+			log_info(logger, "Archivo: %s cargado correctamente en el pid: %d\n", path, idProceso);
+			agregarArchivoYProcesoALista(idProceso, path);
 			free(arrayLineas);
 			EnviarDatosTipo(socketFD, FM9, NULL, 0, CARGADO);
 		} else {
-			printf("No hay espacio suficiente para cargar tal segmento...\n");
-			log_info(logger, "No hay espacio suficiente para cargar tal segmento...");
+			log_info(logger, "No hay espacio suficiente para cargar el segmento\n");
 			EnviarDatosTipo(socketFD, FM9, NULL, 0, ESPACIO_INSUFICIENTE_ABRIR);
 		}
 	}
@@ -206,23 +271,32 @@ void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo, int sock
 //optimizar repeticion de codigo
 void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo, int socketFD) {
 	//ya tiene el archivo el proceso?
-	if(list_find(archivosPorProceso, LAMBDA(bool _(PidPath* p) {return p->idProceso == pid && !strcmp(p->pathArchivo, path);}))) {
-		printf("ya tiene ese archivo tal proceso\n");
+	if(elPidTieneElPath(pid, path)) {
+		log_info(logger, "El pid: %d ya tiene el archivo: %s\n", pid, path);
 	}
 	//el archivo ya existe?
-	else if(list_count_satisfying(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path);}))) {
+	else if(existePath(path)) {
 		//obtengo el segmento y sus paginas que contienen al archivo (Se COMPARTE, ver CLOSE)
 		PidPath* pidPathConElPath = list_find(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path);}));
 		ProcesoArchivo* procesoConElPath = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pidPathConElPath->idProceso;}));
-		SegmentoArchivoSPA* segmentoConElPath = list_find(procesoConElPath->segmentos, LAMBDA(bool _(SegmentoArchivoSPA* s) {return !strcmp(s->idArchivo, path);}));
+		SegmentoArchivoSPA* segmentoConElPath = obtenerSegmentoSPA(procesoConElPath->segmentos, path);
 		//el proceso es nuevo o ya existe?
-		if(list_count_satisfying(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return pp->idProceso == pid;}))) {
+		if(obtenerProcesoId(pid)) {
 			//sólo le agrego el archivo
-			ProcesoArchivo* proceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pid;}));
+			ProcesoArchivo* proceso = obtenerProcesoId(pid);
 			SegmentoArchivoSPA* segmento = malloc(sizeof(SegmentoArchivoSPA));
 			segmento->idArchivo = malloc(strlen(path)+1);
 			strcpy(segmento->idArchivo, path);
-			segmento->paginas = list_duplicate(segmentoConElPath->paginas); //voy a tener el mismo ptr de los 2 lados? duda
+			segmento->paginas = list_create();
+			//segmento->paginas = list_duplicate(segmentoConElPath->paginas); //voy a tener el mismo ptr de los 2 lados? duda
+			//forma manual:
+			for(int x = 0; x < segmentoConElPath->cantidadPaginas; x++) {
+				Pagina* paginaConElPath = list_get(segmentoConElPath->paginas, x);
+				Pagina* pagina = malloc(sizeof(Pagina));
+				pagina->inicio = paginaConElPath->inicio;
+				pagina->fin = paginaConElPath->fin;
+				list_add(segmento->paginas, pagina);
+			}
 			segmento->cantidadPaginas = segmentoConElPath->cantidadPaginas;
 			segmento->cantidadLineas = segmentoConElPath->cantidadLineas;
 			list_add(proceso->segmentos, segmento);
@@ -235,35 +309,44 @@ void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo, int socketFD) 
 			segmento->idArchivo = malloc(strlen(path)+1);
 			strcpy(segmento->idArchivo, path);
 			segmento->paginas = list_create();
-			segmento->paginas = list_duplicate(segmentoConElPath->paginas); // duda
+			//segmento->paginas = list_duplicate(segmentoConElPath->paginas); // duda
+			//forma manual
+			for(int x = 0; x < segmentoConElPath->cantidadPaginas; x++) {
+				Pagina* paginaConElPath = list_get(segmentoConElPath->paginas, x);
+				Pagina* pagina = malloc(sizeof(Pagina));
+				pagina->inicio = paginaConElPath->inicio;
+				pagina->fin = paginaConElPath->fin;
+				list_add(segmento->paginas, pagina);
+			}
 			segmento->cantidadPaginas = segmentoConElPath->cantidadPaginas;
 			segmento->cantidadLineas = segmentoConElPath->cantidadLineas;
 			list_add(procesoNuevo->segmentos, segmento);
 			list_add(procesos, procesoNuevo);
 		}
-		agregarArchivoYProcesoATabla(pid, path);
+		agregarArchivoYProcesoALista(pid, path);
+		log_info(logger, "Archivo: %s de pid: %d, cargado con éxito\n", path, pid);
 	} else {
-		//el archivo no existe? lo cargo. A su vez el proceso existe?
+		//el archivo no existe? lo cargo
 		char** arrayLineas = (char**) string_split(archivo, "\n"); //deja un elemento con NULL al final
 		int cantidadDeLineas = contarElementosArray(arrayLineas);
-		if(list_count_satisfying(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return pp->idProceso == pid;}))) {
+		//el proceso existe?
+		if(obtenerProcesoId(pid)) {
 			//el proceso existe, cargo el archivo y se lo asigno
 			//hay frames libres para cargar el archivo? (espacio en memoria)
 			if(framesSuficientes(cantidadDeLineas)) {
-				ProcesoArchivo* proceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pid;}));
+				ProcesoArchivo* proceso = obtenerProcesoId(pid);
 				SegmentoArchivoSPA* segmento = malloc(sizeof(SegmentoArchivoSPA));
 				segmento->idArchivo = malloc(strlen(path)+1);
 				strcpy(segmento->idArchivo, path);
+				segmento->paginas = list_create();
 				segmento->cantidadPaginas = ceil((float) cantidadDeLineas/(float) lineasPorFrame); //si rompe, ver agregar -lm math.h o 'm' a libraries (eclipse)
 				int lineas = 0;
 				for(int x = 0; x < segmento->cantidadPaginas; x++) {
 					Pagina* pagina = malloc(sizeof(Pagina));
-					pagina->lineas = list_create();
 					Frame* frame = (Frame*) list_get(framesMemoria, primerFrameLibre());
 					int inicioFrame = frame->inicio;
 					while(lineas < cantidadDeLineas && inicioFrame <= frame->fin) {
 						list_add(frame->lineas, arrayLineas[lineas]);
-						list_add(pagina->lineas, arrayLineas[lineas]);
 						strcpy(memoria[inicioFrame], arrayLineas[lineas]);
 						inicioFrame++;
 						lineas++;
@@ -275,12 +358,13 @@ void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo, int socketFD) 
 				}
 				segmento->cantidadLineas = cantidadDeLineas;
 				list_add(proceso->segmentos, segmento);
-				list_add(procesos, proceso);
-				agregarArchivoYProcesoATabla(pid, path);
+				agregarArchivoYProcesoALista(pid, path);
+				log_info(logger, "Archivo: %s de pid: %d, cargado con éxito\n", path, pid);
 			} else {
 				printf("No hay frames libres para cargar el archivo indicado\n");
 			}
 		} else {
+			//el proceso no existe, lo creo
 			//hay frames libres para cargar el archivo? (espacio en memoria)
 			if(framesSuficientes(cantidadDeLineas)) {
 				ProcesoArchivo* procesoNuevo = malloc(sizeof(ProcesoArchivo));
@@ -294,12 +378,10 @@ void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo, int socketFD) 
 				int lineas = 0;
 				for(int x = 0; x < segmento->cantidadPaginas; x++) {
 					Pagina* pagina = malloc(sizeof(Pagina));
-					pagina->lineas = list_create();
 					Frame* frame = (Frame*) list_get(framesMemoria, primerFrameLibre());
 					int inicioFrame = frame->inicio;
 					while(lineas < cantidadDeLineas && inicioFrame <= frame->fin) {
 						list_add(frame->lineas, arrayLineas[lineas]);
-						list_add(pagina->lineas, arrayLineas[lineas]);
 						strcpy(memoria[inicioFrame], arrayLineas[lineas]);
 						inicioFrame++;
 						lineas++;
@@ -312,9 +394,10 @@ void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo, int socketFD) 
 				segmento->cantidadLineas = cantidadDeLineas;
 				list_add(procesoNuevo->segmentos, segmento);
 				list_add(procesos, procesoNuevo);
-				agregarArchivoYProcesoATabla(pid, path);
+				agregarArchivoYProcesoALista(pid, path);
+				log_info(logger, "Archivo: %s de pid: %d, cargado con éxito\n", path, pid);
 			} else {
-				printf("No hay frames libres para cargar el archivo indicado\n");
+				printf("No hay frames libres para cargar el archivo: %s de pid: %d\n", path, pid);
 			}
 		}
 		free(arrayLineas);
@@ -325,62 +408,63 @@ void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo, int socketFD) 
 ////////////////////////////// ↓↓↓  PRIMITIVA CLOSE ↓↓↓  //////////////////////////////////////////////
 void liberarArchivoSPA(int pid, char* path, int socket) {
 	//le pertenece el path al pid?
-	if (list_any_satisfy(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path) && pp->idProceso == pid;}))) {
+	if (elPidTieneElPath(pid, path)) {
+		//traigo el segmento y las paginas que ocupa
+		ProcesoArchivo* proceso = obtenerProcesoId(pid);
+		SegmentoArchivoSPA* segmento = obtenerSegmentoSPA(proceso->segmentos, path);
 		//hay mas de un proceso con el mismo archivo?
-		if (list_count_satisfying(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path);}))<2) {
-			//lo borro de memoria
-			//traigo el segmento y las paginas que ocupa
-			PidPath* pidPath = list_find(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path) && pp->idProceso == pid;}));
-			ProcesoArchivo* proceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pidPath->idProceso;}));
-			SegmentoArchivoSPA* segmento = list_find(proceso->segmentos, LAMBDA(bool _(SegmentoArchivoSPA* s) {return !strcmp(s->idArchivo, path);}));
+		printf("cantidadDeProcesosConElArchivoSPA: %d\n", cantidadDeProcesosConElArchivoSPA(path));
+		if (cantidadDeProcesosConElArchivoSPA(path) < 2) {
+			//es el único -> lo borro de memoria
 			//obtengo las paginas que posee el segmento del archivo a liberar
 			for(int x = 0; x < segmento->cantidadPaginas; x++) {
 				Pagina* pagina = list_get(segmento->paginas, x);
 				//busco el frame en memoria principal por linea de inicio
 				Frame* frame = list_find(framesMemoria, LAMBDA(bool _(Frame* f) {return f->inicio == pagina->inicio;}));
 				frame->disponible = 1;
-				for(int y = frame->inicio; y <= frame->fin; y++) {
-					strcpy(memoria[y], "NaN");
-				}
+				list_clean_and_destroy_elements(frame->lineas, LAMBDA(void _(char* linea) {free(linea);}));
+				liberarMemoriaDesdeHasta(frame->inicio, frame->fin);
 			}
-			list_remove_by_condition(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return pp->idProceso == pid && !strcmp(pp->pathArchivo, path);}));
-			//Se destruye/libera: segmento que contiene el path, la lista de paginas que tenia dentro, y la lista de lineas que habia dentro de cada pagina
-			list_remove_and_destroy_by_condition(proceso->segmentos, LAMBDA(bool _(SegmentoArchivoSPA* s) {return !strcmp(s->idArchivo, path);}), LAMBDA(void _(SegmentoArchivoSPA* seg) {free(seg->idArchivo); list_destroy_and_destroy_elements(seg->paginas, LAMBDA(void _(Pagina* p) {list_destroy_and_destroy_elements(p->lineas, LAMBDA(void _(char* linea) {free(linea);})); free(p);}));}));
-			printf("Archivo liberado correctamente\n");
-		} else {
-		printf("el archivo no se encuentra abierto por tal pid\n");
 		}
+		list_remove_and_destroy_by_condition(proceso->segmentos,
+				LAMBDA(bool _(SegmentoArchivoSPA* s) {return !strcmp(s->idArchivo, path);}),
+				LAMBDA(void _(SegmentoArchivoSPA* ss) {free(ss->idArchivo); list_destroy(ss->paginas); free(ss);}));
+		quitarArchivoYProcesoDeTabla(pid, path);
+		log_info(logger, "Archivo %s liberado correctamente\n", path);
+	} else {
+		log_info(logger, "el archivo %s no se encuentra abierto por el pid %d\n", path, pid);
 	}
 }
 
 void liberarArchivoSEG(int pid, char* path, int socket) {
-	void borrarSegmento(SegmentoArchivoSEG* seg) {
-		//si tengo mas de 1 proceso con un archivo, sólo se lo quito al pedido, no lo limpio de memoria
-		if (list_count_satisfying(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path) && pp->idProceso == pid;}))<2)
-			liberarMemoriaDesdeHasta(seg->inicio, seg->fin);
-		list_destroy_and_destroy_elements(seg->lineas, LAMBDA(void _(char* linea) {free(linea);}));
-		free(seg->idArchivo);
-	}
-	if (list_any_satisfy(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path);}))) {
-		ProcesoArchivo* proceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pid;}));
+	//le pertenece el path al pid?
+	if (elPidTieneElPath(pid, path)) {
+		ProcesoArchivo* proceso = obtenerProcesoId(pid);
+		SegmentoArchivoSEG* segmento = obtenerSegmentoSEG(proceso->segmentos, path);
+		//si el archivo lo tiene abierto un unico pid, lo limpio de memoria
+		if (cantidadDeProcesosConElArchivoSEG(path)<2)
+			liberarMemoriaDesdeHasta(segmento->inicio, segmento->fin);
 		list_remove_and_destroy_by_condition(proceso->segmentos,
 				LAMBDA(bool _(SegmentoArchivoSEG* s) {return !strcmp(s->idArchivo, path);}),
-				(void*) borrarSegmento);
-		printf("Archivo %s liberado\n", path);
-		list_remove_by_condition(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return pp->idProceso == pid && !strcmp(pp->pathArchivo, path);}));
+				LAMBDA(void _(SegmentoArchivoSEG* ss) {
+			free(ss->idArchivo);
+			list_destroy_and_destroy_elements(ss->lineas, LAMBDA(void _(char* linea) {free(linea);}));
+			free(ss);}));
+		log_info(logger, "Archivo %s liberado correctamente\n", path);
+		quitarArchivoYProcesoDeTabla(pid, path);
 	} else {
-		printf("El archivo no se encuentra abierto\n");
+		log_info(logger, "el archivo %s no se encuentra abierto por el pid %d\n", path, pid);
 	}
 }
 //////////////////////////////// ↑↑↑  PRIMITIVA CLOSE ↑↑↑  //////////////////////////////////////////
 
 ////////////////////////////// ↓↓↓ PRIMITIVA ASIGNAR ↓↓↓ ////////////////////////////////////////////
-void asignarSPA(int pid, char* path, int pos, char* dato, int socket) {
+void asignarSPA(int pid, char* path, int pos, char* dato, int socketFD) {
 	int posReal = pos - 1; //dado que la linea 1 de un archivo, se persiste la posicion 0
 	//posee el archivo?
-	if(list_count_satisfying(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return pp->idProceso == pid && !strcmp(pp->pathArchivo, path);}))) {
-		ProcesoArchivo* proceso = (ProcesoArchivo*) list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pid;}));
-		SegmentoArchivoSPA* segmento = (SegmentoArchivoSPA*) list_find(proceso->segmentos, LAMBDA(bool _(SegmentoArchivoSPA* s) {return !strcmp(s->idArchivo, path);}));
+	if(elPidTieneElPath(pid, path)) {
+		ProcesoArchivo* proceso = obtenerProcesoId(pid);
+		SegmentoArchivoSPA* segmento = obtenerSegmentoSPA(proceso->segmentos, path);
 		//esta dentro de su rango de memoria?
 		int calculoDePagina = ceil((float) posReal/(float) lineasPorFrame) -1;
 		if(calculoDePagina < segmento->cantidadPaginas && pos <= segmento->cantidadLineas) {
@@ -389,33 +473,38 @@ void asignarSPA(int pid, char* path, int pos, char* dato, int socket) {
 			int calculoDeLinea = posReal - (calculoDePagina * lineasPorFrame);
 			//busco el frame en memoria principal por linea de inicio
 			Frame* frame = list_find(framesMemoria, LAMBDA(bool _(Frame* f) {return f->inicio == pag->inicio;}));
-			list_replace(pag->lineas, calculoDeLinea, dato);
 			list_replace(frame->lineas, calculoDeLinea, dato);
 			strcpy(memoria[frame->inicio + calculoDeLinea], dato);
+			log_info(logger, "Asignar de pid: %d del dato: %s en la posicion: %d realizado con exito", pid, dato, pos);
+			EnviarDatosTipo(socketFD, FM9, NULL, 0, SUCCESS);
 		} else {
-			printf("no pertenece a su rango de memoria\n");
+			log_info(logger, "la posicion: %d no pertenece al rango de memoria del pid: %d\n", pos, pid);
+			EnviarDatosTipo(socketFD, FM9, NULL, 0, ABORTAR);
 		}
 	} else {
-		printf("el pid no posee tal archivo\n");
+		log_info(logger, "el pid: %d no posee el archivo: %s\n", pid, path);
+		EnviarDatosTipo(socketFD, FM9, NULL, 0, SUCCESS);
 	}
 }
 
 void asignarSEG(int pid, char* path, int pos, char* dato, int socketFD) {
 	int posReal = pos - 1; //dado que la linea 1 de un archivo, se persiste la posicion 0
 	//posee el archivo?
-	if(list_count_satisfying(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return pp->idProceso == pid && !strcmp(pp->pathArchivo, path);}))) {
+	if(elPidTieneElPath(pid, path)) {
 		//la posicion solicitada le pertenece?
-		ProcesoArchivo* proceso = (ProcesoArchivo*) list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pid;}));
-		SegmentoArchivoSEG* segmento = (SegmentoArchivoSEG*) list_find(proceso->segmentos, LAMBDA(bool _(SegmentoArchivoSEG* s) {return !strcmp(s->idArchivo, path);}));
+		ProcesoArchivo* proceso = obtenerProcesoId(pid);
+		SegmentoArchivoSEG* segmento = obtenerSegmentoSEG(proceso->segmentos, path);
 		if((segmento->inicio + posReal) < segmento->fin) {
 			list_replace(segmento->lineas, posReal, dato);
 			strcpy(memoria[segmento->inicio + posReal], dato);
+			log_info(logger, "Asignar de pid: %d del dato: %s en la posicion: %d realizado con exito", pid, dato, pos);
+			EnviarDatosTipo(socketFD, FM9, NULL, 0, SUCCESS);
 		} else {
-			printf("Segmentation fault (cored dumped)\n");
+			log_info(logger, "la posicion: %d no pertenece al rango de memoria del pid: %d\n", pos, pid);
 			EnviarDatosTipo(socketFD, FM9, NULL, 0, ABORTAR);
 		}
 	} else {
-		printf("el proceso no posee tal archivo\n");
+		log_info(logger, "el pid: %d no posee el archivo: %s\n", pid, path);
 		EnviarDatosTipo(socketFD, FM9, NULL, 0, SUCCESS);
 	}
 }
@@ -424,10 +513,10 @@ void asignarSEG(int pid, char* path, int pos, char* dato, int socketFD) {
 //////////////////////// ↓↓↓ PRIMITIVA FLUSH ↓↓↓ ////////////////////////////////////////////
 void flushSEG(char* path, int socketFD) {
 	//archivo abierto?
-	if(list_count_satisfying(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path);}))) {
+	if(existePath(path)) {
 		PidPath* pp = list_find(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path);}));
-		ProcesoArchivo* proceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pp->idProceso;}));
-		SegmentoArchivoSEG* segmento = list_find(proceso->segmentos, LAMBDA(bool _(SegmentoArchivoSEG* s) {return !strcmp(s->idArchivo, path);}));
+		ProcesoArchivo* proceso = obtenerProcesoId(pp->idProceso);
+		SegmentoArchivoSEG* segmento = obtenerSegmentoSEG(proceso->segmentos, path);
 		char* texto = malloc(MAX_LINEA * list_size(segmento->lineas));
 		int posicionPtr = 0;
 		for(int x = segmento->inicio; x < segmento->inicio + list_size(segmento->lineas); x++) {
@@ -446,6 +535,8 @@ void flushSEG(char* path, int socketFD) {
 		texto = texto-posicionPtr;
 		texto = realloc(texto, strlen(texto)+1);
 		printf("%s", texto);
+		//la variable texto es la que se debe enviar a DAM,
+		//contiene las linas unidas por \n y \n\n\0 al final
 	} else {
 		printf("el archivo no se encuentra abierto\n");
 	}
@@ -453,19 +544,20 @@ void flushSEG(char* path, int socketFD) {
 
 void flushSPA(char* path, int socketFD) {
 	//archivo abierto?
-	if(list_count_satisfying(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path);}))) {
+	if(existePath(path)) {
 		PidPath* pp = list_find(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path);}));
-		ProcesoArchivo* proceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pp->idProceso;}));
-		SegmentoArchivoSPA* segmento = list_find(proceso->segmentos, LAMBDA(bool _(SegmentoArchivoSPA* s) {return !strcmp(s->idArchivo, path);}));
+		ProcesoArchivo* proceso = obtenerProcesoId(pp->idProceso);
+		SegmentoArchivoSPA* segmento = obtenerSegmentoSPA(proceso->segmentos, path);
 		char* texto = malloc(MAX_LINEA * (segmento->cantidadPaginas * lineasPorFrame));
 		int lineas = 0;
 		int posicionPtr = 0;
 		for(int x = 0; x < segmento->cantidadPaginas; x++) {
 			Pagina* pagina = list_get(segmento->paginas, x);
+			Frame* frame = list_find(framesMemoria, LAMBDA(bool _(Frame* f) {return pagina->inicio == f->inicio;}));
 			int inicioPagina = pagina->inicio;
 			int contador = 0;
 			while(lineas < segmento->cantidadLineas && inicioPagina <= pagina->fin) {
-				strcpy(texto, (char*) list_get(pagina->lineas, contador));
+				strcpy(texto, list_get(frame->lineas, contador));
 				size_t longitud = strlen(texto);
 				*(texto + longitud) = '\n';
 				*(texto + longitud + 1) = '\0';
@@ -483,6 +575,8 @@ void flushSPA(char* path, int socketFD) {
 		texto = texto-posicionPtr;
 		texto = realloc(texto, strlen(texto)+1);
 		printf("%s", texto);
+		//la variable texto es la que se debe enviar a DAM,
+		//contiene las linas unidas por \n y \n\n\0 al final
 	} else {
 		printf("el archivo no se encuentra abierto\n");
 	}
@@ -518,7 +612,7 @@ void accion(void *socket) {
 		default:
 			log_warning(logger, "No se reconoce el emisor %d", paquete.header.emisor);
 			break;
-		}	
+		}
 	}
 	// Si sale del while hubo error o desconexion
 	if (paquete.Payload != NULL)
@@ -615,7 +709,7 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 			} else if(!strcmp(MODO, "TPI")) {
 				//
 			} else if(!strcmp(MODO, "SPA")) {
-				if(lineaDeUnaPosicionSEG(pid, pc) != NULL) {
+				if(lineaDeUnaPosicionSPA(pid, pc) != NULL) {
 					linea = lineaDeUnaPosicionSPA(pid, pc);
 					linea = realloc(linea, strlen(linea)+1);
 					EnviarDatosTipo(socketFD, CPU, linea, strlen(linea)+1, LINEA_PEDIDA);
@@ -681,29 +775,9 @@ int contar_lineas (char *file) {
 	return lineas-1;
 }
 
-//implementado solo para SEG y SPA por ahora
-int contarLineas(char* path) {
-	if(!strcmp(MODO, "SEG")) {
-		PidPath* pidPath = list_find(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path);}));
-		ProcesoArchivo* proceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pidPath->idProceso;}));
-		SegmentoArchivoSEG* segmento = list_find(proceso->segmentos, LAMBDA(bool _(SegmentoArchivoSPA* s) {return !strcmp(segmento->idArchivo, path);}));
-		return list_size(segmento->lineas);
-	} else {
-		PidPath* pidPath = list_find(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path);}));
-		ProcesoArchivo* proceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pidPath->idProceso;}));
-		SegmentoArchivoSPA* segmento = list_find(proceso->segmentos, LAMBDA(bool _(SegmentoArchivoSPA* s) {return !strcmp(segmento->idArchivo, path);}));
-		Pagina* pag = list_get(segmento->paginas, segmento->cantidadPaginas - 1);
-		int cantLineas = lineasPorFrame * (segmento->cantidadPaginas - 1);
-		for(int x = 0; x < lineasPorFrame; x++) {
-			if(!strcmp(list_get(pag->lineas, x), "NaN")) cantLineas++;
-		}
-		return cantLineas;
-	}
-}
-
 int numeroDeSegmento(int pid, char* path) {
 	int posicion = -1;
-	ProcesoArchivo* proceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pid;}));
+	ProcesoArchivo* proceso = obtenerProcesoId(pid);
 	if(!strcmp(MODO, "SEG")) {
 		for(int x = 0; list_size(proceso->segmentos); x++) {
 			SegmentoArchivoSEG* segmento = list_get(proceso->segmentos, x);
@@ -784,7 +858,7 @@ void EnviarHandshakeELDIEGO(int socketFD) {
 	paquete->header = header;
 	paquete->Payload = malloc(sizeof(MAX_LINEA));
 	memcpy(paquete->Payload, &MAX_LINEA, sizeof(u_int32_t));
-	bool valor_retorno=EnviarPaquete(socketFD, paquete);
+	EnviarPaquete(socketFD, paquete);
 	free(paquete);
 }
 
@@ -813,12 +887,16 @@ void liberarMemoriaDesdeHasta(int nroLineaInicio, int nroLineaFin) {
 	}
 }
 
-void agregarArchivoYProcesoATabla(int pid, char* path) {
+void agregarArchivoYProcesoALista(int pid, char* path) {
 	PidPath* pp = malloc(sizeof(PidPath));
 	pp->pathArchivo = malloc(strlen(path)+1);
 	strcpy(pp->pathArchivo, path);
 	pp->idProceso = pid;
 	list_add(archivosPorProceso, pp);
+}
+
+void quitarArchivoYProcesoDeTabla(int pid, char* path) {
+	list_remove_by_condition(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return pp->idProceso == pid && !strcmp(pp->pathArchivo, path);}));
 }
 
 int cantidadLineasLibresMemoria() {
@@ -885,15 +963,15 @@ int primerFrameLibre() {
 void printSPA(int pid) {
 	ProcesoArchivo* proceso = list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pid;}));
 	printf("Proceso nro: %d\n", pid);
-	if(list_find(procesos, LAMBDA(bool _(PidPath* p) {return p->idProceso == pid;}))) {
+	if(list_find(archivosPorProceso, LAMBDA(bool _(PidPath* p) {return p->idProceso == pid;}))) {
 		for(int x = 0; x < list_size(proceso->segmentos); x++) {
 			SegmentoArchivoSPA* segmento = list_get(proceso->segmentos, x);
 			printf("Nro. Segmento: %d\nArchivo: %s\nCantidad de lineas: %d\n",
 					x, segmento->idArchivo, segmento->cantidadLineas);
 			for(int y = 0; y < segmento->cantidadPaginas; y++) {
 				Pagina* pagina = list_get(segmento->paginas, y);
-				printf("Nro. pagina: %d\nCantidad lineas: %d\nInicio en memoria real: linea %d\nFin en memoria real: linea %d\n",
-						y, list_size(pagina->lineas), pagina->inicio, pagina->fin);
+				printf("Nro. pagina: %d\nInicio en memoria real: linea %d\nFin en memoria real: linea %d\n",
+						y, pagina->inicio, pagina->fin);
 			}
 		}
 	} else printf("No tiene archivos abiertos el proceso con id: %d\n", pid);
