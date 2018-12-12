@@ -26,7 +26,7 @@ int main(int argc, char **argv)
 	log_debug(logger, "Concrete handshake con safa");
 	handshake_dam();
 	log_debug(logger, "Concrete handshake con dam");
-	handshake_fm9();
+	//handshake_fm9();
 	sem_init(&sem_recibir_paquete, 0, 1);
 	pthread_t p_thread_one;
 	pthread_create(&p_thread_one, NULL, hilo_safa, NULL);
@@ -65,10 +65,9 @@ int ejecutar(char *linea, DTB *dtb)
 
 	for (i; i < cantidad_primitivas && flag != 1; i++)
 	{
-		log_debug(logger, "comparo %s", primitivas[i].name);
 		if (!strcmp(primitivas[i].name, parameters[0]))
 		{
-			log_debug(logger, "Interpreto ");
+			log_debug(logger, "Interprete %s", primitivas[i].name);
 			existe = 1;
 			log_info(logger, primitivas[i].doc);
 			//llama a la funcion que tiene guardado esa primitiva en la estructura

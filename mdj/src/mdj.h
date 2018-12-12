@@ -218,7 +218,6 @@ void com_cd(char **parametros)
     }
 }
 
-}
 void com_md5(char **parametros)
 {
     printf("MD5\n");
