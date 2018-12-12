@@ -55,7 +55,7 @@ void *hilo_safa()
 
 int ejecutar(char *linea, DTB *dtb)
 {
-	int i = 0, existe = 0, flag = 1;
+	int i = 0, existe = 0, flag = 0;
 	//Calcula la cantidad de primitivas que hay en el array
 	size_t cantidad_primitivas = sizeof(primitivas) / sizeof(primitivas[0]) - 1;
 
@@ -65,8 +65,10 @@ int ejecutar(char *linea, DTB *dtb)
 
 	for (i; i < cantidad_primitivas && flag != 1; i++)
 	{
+		log_debug(logger, "comparo %s", primitivas[i].name);
 		if (!strcmp(primitivas[i].name, parameters[0]))
 		{
+			log_debug(logger, "Interpreto ");
 			existe = 1;
 			log_info(logger, primitivas[i].doc);
 			//llama a la funcion que tiene guardado esa primitiva en la estructura
@@ -75,8 +77,8 @@ int ejecutar(char *linea, DTB *dtb)
 		}
 	}
 
-	if (!existe)
-		exit_gracefully(1);
+	if (!existe) 
+            _exit_with_error(-1, "No existe la primitiva", NULL);
 
 	return flag;
 }
@@ -108,9 +110,11 @@ int ejecutar_algoritmo(Paquete *paquete)
 	{
 		// sem_wait(cambios);
 		log_debug(logger, "Quantum %d", i);
-		char *primitiva = pedir_primitiva(dtb);
+		//char *primitiva = pedir_primitiva(dtb);
+		char *primitiva = "wait bloqueo";
 		log_debug(logger, "Primitiva %s", primitiva);
-		int flag = ejecutar(primitiva, dtb);
+		int flag = ejecutar(primitiva, dtb); //avanzar el PC dentro del paquete
+		log_debug(logger, "Flag %d", flag);
 		dtb->PC++;
 		if (!flag || finalizar)
 			break;
@@ -505,22 +509,27 @@ int ejecutar_asignar(char **parametros, DTB *dtb)
 int ejecutar_wait(char **parametros, DTB *dtb)
 {
 	printf("WAIT\n");
-	char *recurso = parametros[1];
+	
+	int len_recurso = 0;
+	void *recurso_serializado = string_serializar(parametros[1], &len_recurso);
 
 	Paquete *pedido_recurso = malloc(sizeof(Paquete));
-	pedido_recurso->header.emisor = CPU;
-	pedido_recurso->header.tipoMensaje = WAIT;
+	pedido_recurso->Payload = malloc(len_recurso + INTSIZE * 2);
+	memcpy(pedido_recurso->Payload, recurso_serializado, len_recurso);
 
-	int len_recurso = 0;
-	void *recurso_serializado = string_serializar(recurso, &len_recurso);
-	pedido_recurso->header.tamPayload = len_recurso;
-	pedido_recurso->Payload = malloc(len_recurso);
-	memcpy(pedido_recurso->Payload, recurso, len_recurso);
 
+	memcpy(pedido_recurso->Payload + len_recurso, &dtb->gdtPID, INTSIZE);
+	memcpy(pedido_recurso->Payload + len_recurso + INTSIZE, &dtb->PC, INTSIZE);
+	
+	pedido_recurso->header = cargar_header(len_recurso + INTSIZE * 2, WAIT, CPU);
+
+	log_debug(logger, "Envio a safa");
 	EnviarPaquete(socket_safa, pedido_recurso);
 	//espero la respuesta de SAFA
 	Paquete *paquete_recibido = malloc(sizeof(Paquete));
+	log_debug(logger, "Recibi safa");
 	RecibirPaqueteCliente(socket_safa, paquete_recibido);
+	log_debug(logger, "Recibi safa");
 
 	//si no se pudo asignar, mando mensaje de bloqueo
 	if (paquete_recibido->header.tipoMensaje == ROJADIRECTA)

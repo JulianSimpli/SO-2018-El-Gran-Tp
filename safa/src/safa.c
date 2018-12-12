@@ -679,12 +679,12 @@ void recurso_wait(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket)
 	{
 		list_add(recurso->pid_bloqueados, &pid);
 		avisar_desalojo_a_cpu(socket);
+		log_debug(logger, "El recurso queda bloqueado");
+		return;
 	}
-	else
-	{
-		recurso_asignar_a_pid(recurso, pid);
-		seguir_ejecutando(socket);
-	}
+	
+	recurso_asignar_a_pid(recurso, pid);
+	seguir_ejecutando(socket);
 }
 
 void recurso_signal(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket)
@@ -709,19 +709,8 @@ t_recurso *recurso_recibir(void *payload, int *pid, int *pc, Tipo senial)
 	t_recurso *recurso = recurso_encontrar(id_recurso);
 	if (recurso == NULL)
 	{
-		switch(senial)
-		{
-		case SIGNAL:
-		{
-			recurso_crear(id_recurso, 0);
-			break;
-		}
-		case WAIT:
-		{
-			recurso_crear(id_recurso, 1);
-			break;
-		}
-		}
+		int flag = senial != SIGNAL;
+		recurso = recurso_crear(id_recurso, flag);
 	}
 
 	return recurso;

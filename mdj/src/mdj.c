@@ -252,6 +252,7 @@ void enviar_error(Tipo tipo)
 {
 	Paquete error;
 	error.header = cargar_header(0, tipo, MDJ);
+	log_error(logger, "Error %d", tipo);
 	EnviarPaquete(socket_dam, &error);
 }
 
@@ -457,8 +458,10 @@ void guardar_datos(Paquete *paquete)
 
 	int tamanio = validar_archivo(ruta, file_path);
 
-	if (tamanio == 0)
+	if (tamanio == 0) {
 		enviar_error(ARCHIVO_NO_EXISTE_FLUSH);
+		return;
+	}
 
 	t_config *metadata = config_create(ruta);
 	char **bloques_ocupados = config_get_array_value(metadata, "BLOQUES");
