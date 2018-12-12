@@ -134,7 +134,10 @@ char* lineaDeUnaPosicionSPA(int pid, int pc) {
 	ProcesoArchivo* unProceso = obtenerProcesoId(pid);
 	SegmentoArchivoSPA* segmento = list_get(unProceso->segmentos, 0);
 	if(pcReal < segmento->cantidadLineas) {
-		int calculoDePagina = ceil((float) pcReal/(float) lineasPorFrame) - 1; //el -1 es debido a que el index de la primer pagina en la lista es 0
+		int calculoDePagina;
+		if(pcReal) {
+			calculoDePagina = ceil((float) pcReal/(float) lineasPorFrame) - 1; //el -1 es debido a que el index de la primer pagina en la lista es 0
+		} else calculoDePagina = 0;
 		int calculoDeLinea = pcReal - (lineasPorFrame * (calculoDePagina));
 		Pagina* pagina = list_get(segmento->paginas, calculoDePagina);
 		Frame* frame = list_find(framesMemoria, LAMBDA(bool _(Frame* f) {return pagina->inicio == f->inicio;}));
@@ -519,14 +522,16 @@ void flushSEG(char* path, int socketFD) {
 		SegmentoArchivoSEG* segmento = obtenerSegmentoSEG(proceso->segmentos, path);
 		char* texto = malloc(MAX_LINEA * list_size(segmento->lineas));
 		int posicionPtr = 0;
+		int lineas = 0;
 		for(int x = segmento->inicio; x < segmento->inicio + list_size(segmento->lineas); x++) {
 			//transformo la lista de lineas en un char* concatenado por \n
-			strcpy(texto, list_get(segmento->lineas, x));
+			strcpy(texto, list_get(segmento->lineas, lineas));
 			size_t longitud = strlen(texto);
 			*(texto + longitud) = '\n';
 			*(texto + longitud + 1) = '\0';
 			texto += longitud + 1;
 			posicionPtr += longitud + 1;
+			lineas++;
 		}
 		size_t longitud = strlen(texto);
 		*(texto + longitud) = '\n';
@@ -1019,6 +1024,27 @@ void imprimirArchivoConfiguracion() {
 			IP_FM9, PUERTO_FM9, MODO, TAMANIO, MAX_LINEA, TAM_PAGINA);
 }
 ////////////////////////////////////////// ↑↑↑  PRINTS ↑↑↑  //////////////////////////////////////////
+
+void pruebaNuevaPrimitiva(int pid, int pc) {
+	char* linea = malloc(MAX_LINEA);
+	if(!strcmp(MODO, "SEG")) {
+		if(lineaDeUnaPosicionSEG(pid, pc) != NULL) {
+			linea = lineaDeUnaPosicionSEG(pid, pc);
+			linea = realloc(linea, strlen(linea)+1);
+			log_info(logger, "La linea solicitada es: %s\n", linea);
+		} else
+			log_info(logger, "seg fault", linea);
+	} else if(!strcmp(MODO, "TPI")) {
+		//
+	} else if(!strcmp(MODO, "SPA")) {
+		if(lineaDeUnaPosicionSPA(pid, pc) != NULL) {
+			linea = lineaDeUnaPosicionSPA(pid, pc);
+			linea = realloc(linea, strlen(linea)+1);
+			log_info(logger, "La linea solicitada es: %s\n", linea);
+		} else
+			log_info(logger, "seg fault", linea);
+	}
+}
 
 int main() {
 	crearLogger();
