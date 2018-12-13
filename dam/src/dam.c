@@ -12,7 +12,7 @@ int main(int argc, char **argv)
 	log_info(logger, "Se concreto handshake SAFA");
 	handshake_mdj();
 	log_info(logger, "Se concreto handshake MDJ");
-	//handshake_fm9();
+	handshake_fm9();
 	log_info(logger, "Se concreto handshake FM9");
 
 	//inicializamos el semaforo en maximas_conexiones - 3 que son fijas
@@ -452,7 +452,7 @@ void es_dtb_dummy(Paquete *paquete)
 	log_debug(logger, "Le envio el pedido a fm9");
 
 	Paquete respuesta;
-	/*
+
 	int cargado = cargar_a_memoria(dummy->gdtPID, escriptorio->path, script, &respuesta);
 
 	if (!cargado)
@@ -460,22 +460,6 @@ void es_dtb_dummy(Paquete *paquete)
 		enviar_error(DUMMY_FAIL_CARGA, dummy->gdtPID);
 		return;
 	}
-	*/
-	int desplazamiento_archivo = 0;
-	int desplazamiento = 0;
-	ArchivoAbierto archivo;
-	archivo.path = malloc(strlen(escriptorio->path) + 1);
-	strcpy(archivo.path, escriptorio->path);
-	//archivo.cantLineas = contar_lineas(fid);
-	archivo.cantLineas = 3;
-	void *archivo_serializado = DTB_serializar_archivo(&archivo, &desplazamiento_archivo);
-
-	respuesta.Payload = malloc(INTSIZE + desplazamiento_archivo);
-	memcpy(respuesta.Payload, &dummy->gdtPID, INTSIZE);
-	desplazamiento += INTSIZE;
-	memcpy(respuesta.Payload + INTSIZE, archivo_serializado, desplazamiento_archivo);
-	desplazamiento += desplazamiento_archivo;
-	respuesta.header.tamPayload = INTSIZE + desplazamiento_archivo;
 
 	respuesta.header = cargar_header(respuesta.header.tamPayload, DUMMY_SUCCESS, ELDIEGO);
 	enviar_paquete(socket_safa, &respuesta);
@@ -504,8 +488,13 @@ void abrir(Paquete *paquete)
 	recibir_paquete(socket_mdj, paquete);
 	log_debug(logger, "Le envie el pedido a mdj");
 
+	Paquete file_mdj;
+	recibir_paquete(socket_mdj, &file_mdj);
+	int d = 0;
+	char *script = string_deserializar(file_mdj.Payload, &d);
+	log_debug(logger, "Archivo a abrir:\n%s", script);
 	Paquete respuesta;
-	/*
+
 	int cargado = cargar_a_memoria(pid, path, script, &respuesta);
 
 	if (!cargado)
@@ -513,7 +502,6 @@ void abrir(Paquete *paquete)
 		enviar_error(ESPACIO_INSUFICIENTE_ABRIR, pid);
 		return;
 	}
-	*/
 
 	respuesta.header = cargar_header(respuesta.header.tamPayload, ARCHIVO_ABIERTO, ELDIEGO);
 	enviar_paquete(socket_safa, &respuesta);

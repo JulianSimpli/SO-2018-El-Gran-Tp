@@ -26,7 +26,7 @@ int main(int argc, char **argv)
 	log_debug(logger, "Concrete handshake con safa");
 	handshake_dam();
 	log_debug(logger, "Concrete handshake con dam");
-	//handshake_fm9();
+	handshake_fm9();
 	sem_init(&sem_recibir_paquete, 0, 1);
 	pthread_t p_thread_one;
 	pthread_create(&p_thread_one, NULL, hilo_safa, NULL);
@@ -711,8 +711,8 @@ int ejecutar_crear(char **parametros, DTB *dtb)
 	bloqueate_safa->header.tamPayload = tam_pid_y_pc + sizeof(u_int32_t);
 	bloqueate_safa->Payload = malloc(bloqueate_safa->header.tamPayload);
 	dtb->entrada_salidas++;
-	memcpy(bloqueate_safa, pid_pc_serializados, tam_pid_y_pc);
-	memcpy(bloqueate_safa + tam_pid_y_pc, &dtb->entrada_salidas, sizeof(u_int32_t));
+	memcpy(bloqueate_safa->Payload, pid_pc_serializados, tam_pid_y_pc);
+	memcpy(bloqueate_safa->Payload + tam_pid_y_pc, &dtb->entrada_salidas, sizeof(u_int32_t));
 	EnviarPaquete(socket_safa, bloqueate_safa);
 
 	/*

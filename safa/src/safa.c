@@ -92,7 +92,7 @@ void consola()
 	char *linea;
 	while (true)
 	{
-		linea = readline(">> ");
+		linea = (char *)readline(">> ");
 		if (linea)
 			add_history(linea);
 		char **lineaSpliteada = string_split(linea, " ");
@@ -105,6 +105,7 @@ void consola()
 			free(lineaSpliteada[0]);
 		if (!lineaSpliteada[0])
 			free(lineaSpliteada[1]);
+		free(lineaSpliteada);
 	}
 }
 
@@ -232,6 +233,8 @@ void manejar_desconexion(int socket)
 	{
 		log_error(logger, "Desconexion en el socket %d, donde estaba El Diego", socket_diego);
 		printf("Se desconecto El Diego, que hacemo?\n");
+		log_destroy(logger);
+		log_destroy(logger_fin);
 		exit(1);
 	}
 	else
@@ -382,7 +385,6 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			log_info(logger, "GDT %d abrio %s", dtb->gdtPID, archivo->path);
 			info_dtb->tiempo_respuesta = medir_tiempo(0, (info_dtb->tiempo_ini), (info_dtb->tiempo_fin));
 
-			liberar_archivo_abierto(archivo);
 			if(verificar_si_murio(dtb, lista_bloqueados, dtb->PC))
 				break;
 			
@@ -461,6 +463,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 
         case DTB_BLOQUEAR:
 		{
+			log_debug(logger, "DTB_BLOQUEAR");
 			liberar_cpu(socketFD);
 			deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
 
@@ -471,7 +474,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 			metricas_actualizar(dtb, pc);
 			DTB_info* info_dtb = info_asociada_a_pid(dtb->gdtPID);			
 			dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, pc, DTB_BLOQUEADO, socketFD);
-			medir_tiempo(1,(info_dtb->tiempo_ini), (info_dtb->tiempo_fin));
+			//medir_tiempo(1,(info_dtb->tiempo_ini), (info_dtb->tiempo_fin)); Arreglar
 			break;
     	}
 
