@@ -41,6 +41,7 @@ void handshake_dam();
 void handshake_fm9();
 int interpretar(char *linea);
 void bloquea_dummy(Paquete *paquete);
+void bloqueate_safa(DTB *dtb);
 
 void enviar_mensaje(Mensaje mensaje);
 Mensaje *recibir_mensaje(int conexion);

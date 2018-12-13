@@ -525,9 +525,9 @@ void flush(Paquete *paquete)
 	Paquete respuesta_fm9;
 	recibir_paquete(socket_fm9, &respuesta_fm9);
 
-	if (respuesta_fm9.header.tipoMensaje == FALLO_DE_SEGMENTO)
+	if (respuesta_fm9.header.tipoMensaje == FALLO_DE_SEGMENTO_FLUSH)
 	{
-		enviar_error(FALLO_DE_SEGMENTO, pid);
+		enviar_error(FALLO_DE_SEGMENTO_FLUSH, pid);
 		return;
 	}
 

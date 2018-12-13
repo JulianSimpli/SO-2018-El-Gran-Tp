@@ -355,7 +355,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			break;
 		}
 
-		case DTB_SUCCESS: //DTB_DESBLOQUEAR?
+		case DTB_SUCCESS: //Incluye flush, crear, borrar.
 		{
 			memcpy(&pid, paquete->Payload, tam_pid);
 
@@ -377,6 +377,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		}
 		case ARCHIVO_ABIERTO:
 		{
+			log_debug(logger, "ARCHIVO_ABIERTO");
 			memcpy(&pid, paquete->Payload, tam_pid);
 			DTB *dtb = dtb_encuentra(lista_bloqueados, pid, GDT);
 			DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
@@ -384,25 +385,6 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			ArchivoAbierto *archivo = DTB_leer_struct_archivo(paquete->Payload, &tam_pid);
 			list_add(dtb->archivosAbiertos, archivo);
 			log_info(logger, "GDT %d abrio %s", dtb->gdtPID, archivo->path);
-			info_dtb->tiempo_respuesta = medir_tiempo(0, (info_dtb->tiempo_ini), (info_dtb->tiempo_fin));
-
-			if(verificar_si_murio(dtb, lista_bloqueados, pid, dtb->PC))
-				break;
-			
-			dtb_actualizar(dtb, lista_bloqueados, lista_listos, dtb->PC, DTB_LISTO, info_dtb->socket_cpu);
-			break;
-		}
-		case ARCHIVO_CERRADO:
-		{
-			memcpy(&pid, paquete->Payload, tam_pid);
-			DTB *dtb = dtb_encuentra(lista_bloqueados, pid, GDT);
-			DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
-
-			ArchivoAbierto *archivo = DTB_leer_struct_archivo(paquete->Payload, &tam_pid);
-			list_remove_and_destroy_by_condition(dtb->archivosAbiertos, LAMBDA (bool _(void *_archivo) {return coincide_archivo(_archivo, archivo->path); }), liberar_archivo_abierto);
-			log_info(logger, "GDT %d cerro %s", dtb->gdtPID, archivo->path);
-			liberar_archivo_abierto(archivo);
-
 			info_dtb->tiempo_respuesta = medir_tiempo(0, (info_dtb->tiempo_ini), (info_dtb->tiempo_fin));
 
 			if(verificar_si_murio(dtb, lista_bloqueados, pid, dtb->PC))
@@ -428,16 +410,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			log_error(logger, "Abrir Error %d: GDT %d no pudo abrir archivo por espacio insuficiente en FM9", ESPACIO_INSUFICIENTE_ABRIR, pid);
 			dtb_finalizar(dtb, lista_bloqueados, pid, dtb->PC);
 		}
-		// case DTB_FAIL: Este se convierte en 1 por cada error
-		// {
-		// 	DTB_info *info_dtb;
-		// 	memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
-		// 	bloquear_dummy(lista_ejecutando, pid);
-		// 	log_error(logger, "Fallo la carga en memoria del GDT %d", pid);
-		// 	limpiar_recursos(info_dtb);
-		// 	enviar_finalizar_dam(pid);
-		// 	break;
-		// }
+
 		case DTB_FINALIZAR:
 		{
 			sem_post(&sem_multiprogramacion);
@@ -605,6 +578,62 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 			metricas_actualizar(dtb, pc);
 			
 			dtb_finalizar(dtb, lista_ejecutando, pid, pc);
+			break;
+		}
+		case FALLO_DE_SEGMENTO_ASIGNAR:
+		{
+			liberar_cpu(socketFD);
+
+			memcpy(&pid, paquete->Payload, INTSIZE);
+			desplazamiento += INTSIZE;
+			memcpy(&pc, paquete->Payload + desplazamiento, INTSIZE);
+			desplazamiento += INTSIZE;
+			
+			log_error(logger, "Asignar Error %d: Falla de segmento en FM9 de GDT %d al intentar hacer asignacion", ESPACIO_INSUFICIENTE_ASIGNAR, pid);
+			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
+			dtb_finalizar(dtb, lista_ejecutando, pid, pc);
+			break;
+		}
+		case ESPACIO_INSUFICIENTE_ASIGNAR:
+		{
+			liberar_cpu(socketFD);
+
+			memcpy(&pid, paquete->Payload, INTSIZE);
+			desplazamiento += INTSIZE;
+			memcpy(&pc, paquete->Payload + desplazamiento, INTSIZE);
+			desplazamiento += INTSIZE;
+
+			log_error(logger, "Asignar Error %d: Espacio insuficiente en FM9 de GDT %d al intentar hacer asignacion", ESPACIO_INSUFICIENTE_ASIGNAR, pid);
+			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);			
+			dtb_finalizar(dtb, lista_ejecutando, pid, pc);
+			break;
+		}
+		case FALLO_DE_SEGMENTO_CLOSE:
+		{
+			liberar_cpu(socketFD);
+
+			memcpy(&pid, paquete->Payload, INTSIZE);
+			desplazamiento += INTSIZE;
+			memcpy(&pc, paquete->Payload + desplazamiento, INTSIZE);
+			desplazamiento += INTSIZE;
+
+			log_error(logger, "Close Error %d: Fallo de segmento en FM9 de GDT %d al intentar hacer close", FALLO_DE_SEGMENTO_CLOSE, pid);
+			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);			
+			dtb_finalizar(dtb, lista_ejecutando, pid, pc);
+			break;
+		}
+		case CLOSE:
+		{
+			log_debug(logger, "CLOSE");
+			memcpy(&pid, paquete->Payload, INTSIZE);
+			desplazamiento += INTSIZE;
+			ArchivoAbierto *cerrado = DTB_leer_struct_archivo(paquete->Payload, &desplazamiento);
+
+			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
+			DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
+			log_info(logger, "GDT %d cerro %s", dtb->gdtPID, cerrado->path);
+
+			list_remove_and_destroy_by_condition(dtb->archivosAbiertos, LAMBDA (bool _(void *_archivo) {return coincide_archivo(_archivo, cerrado->path); }), liberar_archivo_abierto);			
 			break;
 		}
 	}
