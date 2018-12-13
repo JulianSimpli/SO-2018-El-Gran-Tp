@@ -8,7 +8,9 @@ int socket_safa;
 int socket_fm9;
 int retardo;
 sem_t sem_recibir_paquete;
+sem_t sem_senial;
 int transfer_size = 0;
+int senial_safa;
 
 sem_t *cambios;
 bool finalizar;
@@ -26,8 +28,9 @@ int main(int argc, char **argv)
 	log_debug(logger, "Concrete handshake con safa");
 	handshake_dam();
 	log_debug(logger, "Concrete handshake con dam");
-	handshake_fm9();
-	sem_init(&sem_recibir_paquete, 0, 1);
+	//handshake_fm9();
+	sem_init(&sem_recibir_paquete, 0, 0);
+	sem_init(&sem_senial, 0, 0);
 	pthread_t p_thread_one;
 	pthread_create(&p_thread_one, NULL, hilo_safa, NULL);
 	pthread_t p_thread_two;
@@ -76,8 +79,8 @@ int ejecutar(char *linea, DTB *dtb)
 		}
 	}
 
-	if (!existe) 
-            _exit_with_error(-1, "No existe la primitiva", NULL);
+	if (!existe)
+		_exit_with_error(-1, "No existe la primitiva", NULL);
 
 	return flag;
 }
@@ -203,7 +206,14 @@ int interpretar_safa(Paquete *paquete)
 	case ESDTBQUANTUM:
 		log_debug(logger, "ESDTBQUANTUM");
 		ejecutar_algoritmo(paquete);
-
+		break;
+	case ROJADIRECTA:
+		senial_safa = ROJADIRECTA;
+		sem_post(&sem_senial);
+		break;
+	case SIGASIGA:
+		senial_safa = SIGASIGA;
+		sem_post(&sem_senial);
 		break;
 	case FINALIZAR:
 		finalizar = true;
@@ -323,7 +333,7 @@ int connect_to_server(char *ip, char *port)
 	struct addrinfo *server_info;
 
 	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC;	 // Permite que la maquina se encargue de verificar si usamos IPv4 o IPv6
+	hints.ai_family = AF_UNSPEC;     // Permite que la maquina se encargue de verificar si usamos IPv4 o IPv6
 	hints.ai_socktype = SOCK_STREAM; // Indica que usaremos el protocolo TCP
 
 	getaddrinfo(ip, port, &hints, &server_info); // Carga en server_info los datos de la conexion
@@ -508,43 +518,38 @@ int ejecutar_asignar(char **parametros, DTB *dtb)
 int ejecutar_wait(char **parametros, DTB *dtb)
 {
 	printf("WAIT\n");
-	
+
 	int len_recurso = 0;
 	void *recurso_serializado = string_serializar(parametros[1], &len_recurso);
 
 	Paquete *pedido_recurso = malloc(sizeof(Paquete));
 	pedido_recurso->Payload = malloc(len_recurso + INTSIZE * 2);
 	memcpy(pedido_recurso->Payload, recurso_serializado, len_recurso);
-
-
 	memcpy(pedido_recurso->Payload + len_recurso, &dtb->gdtPID, INTSIZE);
 	memcpy(pedido_recurso->Payload + len_recurso + INTSIZE, &dtb->PC, INTSIZE);
-	
+
 	pedido_recurso->header = cargar_header(len_recurso + INTSIZE * 2, WAIT, CPU);
 
 	log_debug(logger, "Envio a safa");
 	EnviarPaquete(socket_safa, pedido_recurso);
-	//espero la respuesta de SAFA
-	Paquete *paquete_recibido = malloc(sizeof(Paquete));
-	log_debug(logger, "Recibi safa");
-	RecibirPaqueteCliente(socket_safa, paquete_recibido);
-	log_debug(logger, "Recibi safa");
+
+	log_debug(logger, "Queda bloqueado esperando que lo habilite el otro hilo");
+	sem_wait(&sem_senial);
 
 	//si no se pudo asignar, mando mensaje de bloqueo
-	if (paquete_recibido->header.tipoMensaje == ROJADIRECTA)
-	{
-		Paquete *bloquear_safa = malloc(sizeof(Paquete));
-		bloquear_safa->header.tipoMensaje = DTB_BLOQUEAR;
-		bloquear_safa->header.emisor = CPU;
-		int tam_pid_y_pc = 0;
-		bloquear_safa->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
-		bloquear_safa->header.tamPayload = tam_pid_y_pc + sizeof(u_int32_t);
-		memcpy(bloquear_safa + tam_pid_y_pc, &dtb->entrada_salidas, sizeof(u_int32_t));
-		//TODO: me falta agregar el PID y el PC
-		EnviarPaquete(socket_safa, bloquear_safa);
-		return 0; //agarrar este false en el ejecutar
-	}
-	return 1;
+	if (senial_safa != ROJADIRECTA)
+		return 1;
+
+	Paquete *bloquear_safa = malloc(sizeof(Paquete));
+	bloquear_safa->header.tipoMensaje = DTB_BLOQUEAR;
+	bloquear_safa->header.emisor = CPU;
+	int tam_pid_y_pc = 0;
+	bloquear_safa->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
+	bloquear_safa->header.tamPayload = tam_pid_y_pc + sizeof(u_int32_t);
+	memcpy(bloquear_safa + tam_pid_y_pc, &dtb->entrada_salidas, sizeof(u_int32_t));
+	//TODO: me falta agregar el PID y el PC
+	EnviarPaquete(socket_safa, bloquear_safa);
+	return 0; //agarrar este false en el ejecutar
 }
 
 int ejecutar_signal(char **parametros, DTB *dtb)
@@ -563,11 +568,11 @@ int ejecutar_signal(char **parametros, DTB *dtb)
 	memcpy(liberar_recurso->Payload, recurso, len_recurso);
 
 	EnviarPaquete(socket_safa, liberar_recurso);
-	//SAFA responderá afirmativamente para que pueda continuar
-	Paquete *paquete_recibido = malloc(sizeof(Paquete));
-	RecibirPaqueteCliente(socket_safa, paquete_recibido);
 
-	return paquete_recibido->header.tipoMensaje == SIGASIGA;
+	log_debug(logger, "Queda bloqueado esperando que lo habilite el otro hilo");
+	sem_wait(&sem_senial);
+
+	return senial_safa == SIGASIGA;
 }
 
 int ejecutar_flush(char **parametros, DTB *dtb)
