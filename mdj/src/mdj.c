@@ -25,7 +25,7 @@ void *interpretar_consola(void *args)
 	char *linea;
 	while (1)
 	{
-		char *PS1 = malloc(strlen(current_path) + 2); 
+		char *PS1 = malloc(strlen(current_path) + 2);
 		strcpy(PS1, current_path);
 		linea = readline(strcat(PS1, "$"));
 		if (linea)
@@ -75,7 +75,7 @@ void leer_config(char *path)
 	strcat(file_path, "Archivos");
 	strcat(blocks_path, "Bloques");
 	strcat(metadata_path, "Metadata");
-	strcat(current_path,"Archivos");
+	strcat(current_path, "Archivos");
 }
 
 void inicializar_log(char *program)
@@ -150,7 +150,7 @@ void interpretar_paquete(Paquete *paquete)
 
 	int accion = paquete->header.tipoMensaje;
 	sleep(retardo);
-    	sem_wait(&sem_io);
+	sem_wait(&sem_io);
 
 	switch (accion)
 	{
@@ -201,7 +201,7 @@ void interpretar_paquete(Paquete *paquete)
 		break;
 	}
 
-    	sem_post(&sem_io);
+	sem_post(&sem_io);
 }
 
 int calcular_bloques(int tamanio)
@@ -315,15 +315,48 @@ int validar_archivo(char *search_file, char *current_path)
 	return 0;
 }
 
+int contar_ocurrencias(char *cadena, char caracter)
+{
+	int count = 0;
+	for (int i = 0; cadena[i] != '\0'; i++)
+	{
+		if (cadena[i] = caracter)
+			count++;
+	}
+}
+
 void crear_archivo(Paquete *paquete)
 {
 	// STRTOK CON /
 	// Valido si existe directorio, cuando no exista creo directorio nuevo
 	// Cuando llego al ultimo char* de lo que strtokie, creo el archivo
+	DIR *dir;
+	struct dirent *ent;
 	int offset = 0;
 	char *ruta = string_deserializar(paquete->Payload, &offset);
 	int bytes_a_crear = 0;
 	memcpy(&bytes_a_crear, paquete->Payload + offset, sizeof(u_int32_t));
+
+	char *directorio_actual = malloc(strlen(file_path) + 1);
+	strcpy(directorio_actual, file_path);
+	char **directorios = string_split(ruta, "/");
+
+	int accesos = contar_ocurrencias(ruta, '/');
+
+	for (int i = 0; i < accesos - 1; i++)
+	{
+		char *directorio_a_buscar = directorios[i];
+		directorio_actual = realloc(directorio_actual, strlen(directorio_actual) + strlen(directorio_a_buscar) + 1);
+		strcat(directorio_actual, "/");
+		strcat(directorio_actual, directorio_a_buscar);
+		dir = opendir(directorio_actual);
+		if (dir == NULL)
+		{
+			log_info(logger, "Procedo a crear este directorio: %s", current_path);
+			mkdir(directorio_a_buscar, 0777);
+		}
+		closedir(dir);
+	}
 
 	//Devuelve lista de bloques libres o lista empty
 	t_list *bloques_libres = get_space(bytes_a_crear);
@@ -458,7 +491,8 @@ void guardar_datos(Paquete *paquete)
 
 	int tamanio = validar_archivo(ruta, file_path);
 
-	if (tamanio == 0) {
+	if (tamanio == 0)
+	{
 		enviar_error(ARCHIVO_NO_EXISTE_FLUSH);
 		return;
 	}
@@ -516,7 +550,7 @@ void guardar_datos(Paquete *paquete)
 
 		for (int i = 0; buffer_size > 0; i++)
 		{
-			int bloque = atoi((char*)list_get(nuevos_bloques, i));
+			int bloque = atoi((char *)list_get(nuevos_bloques, i));
 			char *ubicacion = get_block_full_path(bloque);
 			FILE *bloque_abierto = fopen(ubicacion, "r+");
 			fseek(bloque_abierto, 0, SEEK_SET);

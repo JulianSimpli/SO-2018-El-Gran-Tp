@@ -35,7 +35,7 @@
         {
           "shell_command": [
             "make",
-            "sleep 5",
+            "sleep 7",
             "./dam"
           ]
         }
@@ -68,14 +68,14 @@
         {
           "shell_command": [
             "make",
-            "sleep 9",
+            "sleep 11",
             "./cpu"
           ]
         },
         {
           "shell_command": [
             "make",
-            "sleep 9",
+            "sleep 11",
             "./cpu"
           ]
         }

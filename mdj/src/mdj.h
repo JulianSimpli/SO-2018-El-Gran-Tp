@@ -57,6 +57,8 @@ int file_size(char *);
 int obtener_size_escriptorio(char *path);
 char *ruta_absoluta(char *ruta);
 char *get_block_full_path(int bloque);
+int contar_ocurrencias(char *cadena, char caracter);
+
 char *mnt_path;
 char *file_path;
 char *blocks_path;
@@ -218,7 +220,6 @@ void com_cd(char **parametros)
     }
 }
 
-}
 void com_md5(char **parametros)
 {
     printf("MD5\n");
