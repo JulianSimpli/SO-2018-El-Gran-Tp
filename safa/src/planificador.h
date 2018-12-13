@@ -143,7 +143,7 @@ void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *list
 void manejar_finalizar_bloqueado(DTB* dtb, u_int32_t pid, DTB_info *info_dtb, t_list *lista_actual);
 void enviar_finalizar_dam(u_int32_t pid);
 void enviar_finalizar_cpu(u_int32_t pid, int socket);
-void dtb_finalizar(DTB *dtb, t_list *lista_actual, u_int32_t pc);
+void dtb_finalizar(DTB *dtb, t_list *lista_actual, u_int32_t pid, u_int32_t pc);
 void loggear_finalizacion(DTB* dtb, DTB_info* info_dtb);
 
 //Recursos que usa finalizar

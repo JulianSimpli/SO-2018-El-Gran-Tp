@@ -562,10 +562,10 @@ void finalizar(u_int32_t pid)
 	t_list *lista_actual;
 	DTB_info *info_dtb;
 
-	DTB *dtb_finalizar = dtb_buscar_en_todos_lados(pid, &info_dtb, &lista_actual);
+	DTB *dtb = dtb_buscar_en_todos_lados(pid, &info_dtb, &lista_actual);
 	/* lista_actual queda modificada con la lista donde está el pid que busco */
-	if (dtb_finalizar != NULL)
-		manejar_finalizar(dtb_finalizar, pid, info_dtb, lista_actual);
+	if (dtb != NULL)
+		manejar_finalizar(dtb, pid, info_dtb, lista_actual);
 }
 
 void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *lista_actual)
@@ -593,7 +593,7 @@ void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *list
 	case DTB_LISTO:
 	{
 		printf("El GDT con PID %d esta listo\n", pid);
-		dtb_finalizar(dtb, lista_actual, dtb->PC);
+		dtb_finalizar(dtb, lista_actual, pid, dtb->PC);
 		break;
 	}
 	case DTB_EJECUTANDO:
@@ -634,7 +634,7 @@ void manejar_finalizar_bloqueado(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_
 		}
 		list_remove_by_condition(recurso->pid_bloqueados, coincide_pid);
 
-		dtb_finalizar(dtb, lista_actual, dtb->PC);
+		dtb_finalizar(dtb, lista_actual, pid, dtb->PC);
 	}
 	else
 		printf("El GDT %d esta bloqueado esperando que se realice una operacion\n"
@@ -658,13 +658,35 @@ t_recurso *recurso_bloqueando_pid(u_int32_t pid)
 	return list_find(lista_recursos_global, tiene_el_pid);
 }
 
-void dtb_finalizar(DTB *dtb, t_list *lista_actual, u_int32_t pc)
+void dtb_finalizar(DTB *dtb, t_list *lista_actual, u_int32_t pid, u_int32_t pc)
 {
-	DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
+	t_list *actual = lista_actual;
+	DTB_info *info_dtb = info_asociada_a_pid(pid);
+
+	if(dtb == NULL)
+	{
+		dtb = dtb_buscar_en_todos_lados(pid, &info_dtb, &actual);
+		pc = dtb->PC;
+		log_debug(logger, "No se encontro al dtb %d en la lista que deberia estar", dtb->gdtPID);
+	}
+
 	loggear_finalizacion(dtb, info_dtb);
 	limpiar_recursos(info_dtb);
-	dtb_actualizar(dtb, lista_actual, lista_finalizados, pc, DTB_FINALIZADO, info_dtb->socket_cpu);
+	dtb_actualizar(dtb, actual, lista_finalizados, pc, DTB_FINALIZADO, info_dtb->socket_cpu);
 	enviar_finalizar_dam(dtb->gdtPID);
+
+	void dtb_abortar(u_int32_t pid)
+{
+	t_list *actual = lista_bloqueados;
+	DTB_info *info_dtb = info_asociada_a_pid(pid);
+	DTB *dtb = dtb_encuentra(actual, pid, GDT);
+	if(dtb == NULL)
+	{
+		log_debug(logger, "No se encontro en lista_bloqueados a GDT %d", pid);
+		dtb = dtb_buscar_en_todos_lados(pid, &info_dtb, &actual);
+	}
+	dtb_actualizar(dtb, actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
+}
 }
 
 void loggear_finalizacion(DTB *dtb, DTB_info *info_dtb)

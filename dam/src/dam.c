@@ -442,9 +442,11 @@ void es_dtb_dummy(Paquete *paquete)
 	}
 
 	enviar_obtener_datos(escriptorio->path, validar);
+	sem_wait(&sem_mdj);
 
 	Paquete file_mdj;
 	recibir_paquete(socket_mdj, &file_mdj);
+	sem_post(&sem_mdj);
 	int d = 0;
 	char *script = string_deserializar(file_mdj.Payload, &d);
 	log_debug(logger, "Escriptorio \n%s", script);
@@ -483,18 +485,18 @@ void abrir(Paquete *paquete)
 	}
 
 	enviar_obtener_datos(path, validar);
-
 	log_debug(logger, "Le envie el pedido a mdj");
-	recibir_paquete(socket_mdj, paquete);
-	log_debug(logger, "Le envie el pedido a mdj");
+	sem_wait(&sem_mdj);
 
 	Paquete file_mdj;
 	recibir_paquete(socket_mdj, &file_mdj);
+	log_debug(logger, "Recibi el pedido a mdj");
+	sem_post(&sem_mdj);
 	int d = 0;
 	char *script = string_deserializar(file_mdj.Payload, &d);
 	log_debug(logger, "Archivo a abrir:\n%s", script);
-	Paquete respuesta;
 
+	Paquete respuesta;
 	int cargado = cargar_a_memoria(pid, path, script, &respuesta);
 
 	if (!cargado)
@@ -506,6 +508,7 @@ void abrir(Paquete *paquete)
 	respuesta.header = cargar_header(respuesta.header.tamPayload, ARCHIVO_ABIERTO, ELDIEGO);
 	enviar_paquete(socket_safa, &respuesta);
 	free(respuesta.Payload);
+	free(file_mdj.Payload);
 }
 
 void flush(Paquete *paquete)

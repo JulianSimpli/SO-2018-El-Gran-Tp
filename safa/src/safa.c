@@ -299,6 +299,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 	{
 		case ESHANDSHAKE:
 		{
+			log_debug(logger, "ESHANDSHAKE");
 			sem_post(&mutex_handshake_diego);
 			socket_diego = socketFD;
 			paquete->Payload = malloc(paquete->header.tamPayload);
@@ -312,6 +313,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		case DUMMY_SUCCESS:
 		{
 			// Payload contiene pid + ArchivoAbierto
+			log_debug(logger, "DUMMY_SUCCESS");
 			memcpy(&pid, paquete->Payload, tam_pid);
 			DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
 			log_info(logger, "GDT %d fue cargado en memoria correctamente", dtb->gdtPID);
@@ -324,7 +326,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 
 			liberar_archivo_abierto(escriptorio_cargado);
 
-			if(verificar_si_murio(dtb, lista_nuevos, dtb->PC))
+			if(verificar_si_murio(dtb, lista_nuevos, pid, dtb->PC))
 				break;
 			
 			pasaje_a_ready(dtb->gdtPID);
@@ -348,7 +350,6 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
 			ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
 			log_error(logger, "No existe el escriptorio %s del GDT %d", escriptorio->path, dtb->gdtPID);
-			printf("No existe el escriptorio %s del dtb %d\nSe removera al dtb de nuevos\n", escriptorio->path, dtb->gdtPID);
 			bloquear_dummy(lista_ejecutando, dtb->gdtPID);
 			dtb_actualizar(dtb, lista_nuevos, lista_finalizados, dtb->PC, DTB_FINALIZADO, 0);
 			break;
@@ -364,7 +365,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 
 			info_dtb->tiempo_respuesta = medir_tiempo(0, (info_dtb->tiempo_ini), (info_dtb->tiempo_fin));
 
-			if(verificar_si_murio(dtb, lista_bloqueados, dtb->PC))
+			if(verificar_si_murio(dtb, lista_bloqueados, pid, dtb->PC))
 				break;
 			
 			if(info_dtb->quantum_faltante)
@@ -385,7 +386,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			log_info(logger, "GDT %d abrio %s", dtb->gdtPID, archivo->path);
 			info_dtb->tiempo_respuesta = medir_tiempo(0, (info_dtb->tiempo_ini), (info_dtb->tiempo_fin));
 
-			if(verificar_si_murio(dtb, lista_bloqueados, dtb->PC))
+			if(verificar_si_murio(dtb, lista_bloqueados, pid, dtb->PC))
 				break;
 			
 			dtb_actualizar(dtb, lista_bloqueados, lista_listos, dtb->PC, DTB_LISTO, info_dtb->socket_cpu);
@@ -404,11 +405,28 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 
 			info_dtb->tiempo_respuesta = medir_tiempo(0, (info_dtb->tiempo_ini), (info_dtb->tiempo_fin));
 
-			if(verificar_si_murio(dtb, lista_bloqueados, dtb->PC))
+			if(verificar_si_murio(dtb, lista_bloqueados, pid, dtb->PC))
 				break;
 			
 			dtb_actualizar(dtb, lista_bloqueados, lista_listos, dtb->PC, DTB_LISTO, info_dtb->socket_cpu);
 			break;
+		}
+
+		case PATH_INEXISTENTE:
+		{
+			memcpy(&pid, paquete->Payload, INTSIZE);
+			DTB *dtb = dtb_encuentra(lista_bloqueados, pid, GDT);
+			log_error(logger, "Abrir Error %d: GDT %d intento abrir un path inexistente", PATH_INEXISTENTE, pid);
+			dtb_finalizar(dtb, lista_bloqueados, pid, dtb->PC);
+			break;
+		}
+
+		case ESPACIO_INSUFICIENTE_ABRIR:
+		{
+			memcpy(&pid, paquete->Payload, INTSIZE);
+			DTB *dtb = dtb_encuentra(lista_bloqueados, pid, GDT);	
+			log_error(logger, "Abrir Error %d: GDT %d no pudo abrir archivo por espacio insuficiente en FM9", ESPACIO_INSUFICIENTE_ABRIR, pid);
+			dtb_finalizar(dtb, lista_bloqueados, pid, dtb->PC);
 		}
 		// case DTB_FAIL: Este se convierte en 1 por cada error
 		// {
@@ -423,7 +441,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		case DTB_FINALIZAR:
 		{
 			sem_post(&sem_multiprogramacion);
-			memcpy(&pid, paquete->Payload, paquete->header.tamPayload);
+			memcpy(&pid, paquete->Payload, INTSIZE);
 			DTB_info *info_dtb;
 			t_list *lista_actual;
 			DTB *dtb = dtb_buscar_en_todos_lados(pid, &info_dtb, &lista_actual);
@@ -431,6 +449,8 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 			dtb_actualizar(dtb, lista_actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
 		}
 	}
+	if(paquete->header.tamPayload > 0)
+		free(paquete->Payload);
 }
 
 void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
@@ -505,14 +525,11 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
         case DTB_EJECUTO:
 		{
 			liberar_cpu(socketFD);
-			u_int32_t pid = 0;
-			u_int32_t pc = 0;
-			int desplazamiento = 0;
 			deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
 			
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 			metricas_actualizar(dtb, pc);
-			if(verificar_si_murio(dtb, lista_ejecutando, pc))
+			if(verificar_si_murio(dtb, lista_ejecutando, pid, pc))
 				break;
 
 			dtb_actualizar(dtb, lista_ejecutando, lista_listos, pc, DTB_LISTO, socketFD);
@@ -525,7 +542,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 			metricas_actualizar(dtb, pc);
-			dtb_finalizar(dtb, lista_ejecutando, pc);
+			dtb_finalizar(dtb, lista_ejecutando, pid, pc);
 			break;
 		}
 		case WAIT:
@@ -533,7 +550,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 			t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc, WAIT);
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 			metricas_actualizar(dtb, pc);
-			if(verificar_si_murio(dtb, lista_ejecutando, pc))
+			if(verificar_si_murio(dtb, lista_ejecutando, pid, pc))
 			{
 				avisar_desalojo_a_cpu(socketFD);
 				break;
@@ -546,7 +563,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 			t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc, SIGNAL);
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 			metricas_actualizar(dtb, pc);
-			if(verificar_si_murio(dtb, lista_ejecutando, pc))
+			if(verificar_si_murio(dtb, lista_ejecutando, pid, pc))
 			{
 				avisar_desalojo_a_cpu(socketFD);
 				break;
@@ -560,11 +577,10 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 			deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
 
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
-			log_error(logger, "Asignar Error 20001: El archivo no se encuentra abierto por GDT %d", dtb->gdtPID);
-			printf("Asignar Error 20001: El archivo no se encuentra abierto por GDT %d", dtb->gdtPID);
+			log_error(logger, "Asignar Error %d: El archivo no se encuentra abierto por GDT %d", ABORTAR, dtb->gdtPID);
 			metricas_actualizar(dtb, pc);
 			
-			dtb_finalizar(dtb, lista_ejecutando, pc);
+			dtb_finalizar(dtb, lista_ejecutando, pid, pc);
 			break;
 		}
 		case ABORTARF:
@@ -573,11 +589,10 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 			deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
 
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
-			log_error(logger, "Flush Error 30001: El archivo no se encuentra abierto por GDT %d", dtb->gdtPID);
-			printf("Flush Error 30001: El archivo no se encuentra abierto por GDT %d", dtb->gdtPID);
+			log_error(logger, "Flush Error %d: El archivo no se encuentra abierto por GDT %d", ABORTARF, dtb->gdtPID);
 			metricas_actualizar(dtb, pc);
 			
-			dtb_finalizar(dtb, lista_ejecutando, pc);
+			dtb_finalizar(dtb, lista_ejecutando, pid, pc);
 			break;
 		}
 		case ABORTARC:
@@ -586,11 +601,10 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 			deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
 
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
-			log_error(logger, "Cerrar Error 40001: El archivo no se encuentra abierto por GDT %d", dtb->gdtPID);
-			printf("Cerrar Error 40001: El archivo no se encuentra abierto por GDT %d", dtb->gdtPID);
+			log_error(logger, "Cerrar Error %d: El archivo no se encuentra abierto por GDT %d", ABORTARC, dtb->gdtPID);
 			metricas_actualizar(dtb, pc);
 			
-			dtb_finalizar(dtb, lista_ejecutando, pc);
+			dtb_finalizar(dtb, lista_ejecutando, pid, pc);
 			break;
 		}
 	}
@@ -647,12 +661,12 @@ bool es_nuevo(void * _info_dtb)
 	return info_dtb->estado == DTB_NUEVO;
 }
 
-bool verificar_si_murio(DTB *dtb, t_list *lista_origen, u_int32_t pc)
+bool verificar_si_murio(DTB *dtb, t_list *lista_origen, u_int32_t pid, u_int32_t pc)
 {
-	DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
+	DTB_info *info_dtb = info_asociada_a_pid(pid);
 	
 	if(info_dtb->kill)
-		dtb_finalizar(dtb, lista_origen, pc);
+		dtb_finalizar(dtb, lista_origen, pid, pc);
 
 	return info_dtb->kill;
 }
