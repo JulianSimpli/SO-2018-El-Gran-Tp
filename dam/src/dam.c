@@ -70,12 +70,13 @@ int crear_socket_fm9()
 	return socket;
 }
 
-int crear_socket_mdj() {
-	char * puerto_mdj = config_get_string_value(config,"PUERTO_MDJ");
+int crear_socket_mdj()
+{
+	char *puerto_mdj = config_get_string_value(config, "PUERTO_MDJ");
 
-	char * ip_mdj = config_get_string_value(config, "IP_MDJ");
+	char *ip_mdj = config_get_string_value(config, "IP_MDJ");
 
-	return connect_to_server(ip_mdj,puerto_mdj);
+	return connect_to_server(ip_mdj, puerto_mdj);
 }
 
 //Handshakes
@@ -152,7 +153,7 @@ void handshake_safa()
 	socket_safa = crear_socket_safa();
 
 	enviar_handshake(socket_safa);
-	
+
 	sleep(2);
 
 	Paquete paquete;
@@ -161,7 +162,6 @@ void handshake_safa()
 	if (paquete.header.tipoMensaje != ESHANDSHAKE)
 		_exit_with_error(socket_safa, "No se logro el primer paso de datos", NULL);
 }
-
 
 void *interpretar_mensajes_de_safa(void *args)
 {
@@ -258,7 +258,7 @@ int pedir_validar(char *path)
 	validar.header = cargar_header(desplazamiento, VALIDAR_ARCHIVO, ELDIEGO);
 	validar.Payload = malloc(desplazamiento);
 	memcpy(validar.Payload, serializado, desplazamiento);
-	
+
 	enviar_paquete(socket_mdj, &validar);
 	free(serializado);
 
@@ -266,7 +266,7 @@ int pedir_validar(char *path)
 	recibir_paquete(socket_mdj, &respuesta);
 	int size = 0;
 	memcpy(&size, respuesta.Payload, INTSIZE);
-	return respuesta.header.tipoMensaje == PATH_INEXISTENTE? 0 : size;
+	return respuesta.header.tipoMensaje == PATH_INEXISTENTE ? 0 : size;
 }
 
 int cargar_a_memoria(u_int32_t pid, char *path, char *file, Paquete *respuesta)
@@ -280,7 +280,7 @@ int cargar_a_memoria(u_int32_t pid, char *path, char *file, Paquete *respuesta)
 	void *serial_file = string_serializar(file, &tam_serial_file);
 
 	log_debug(logger, "Cargo el paquete con:\npid %d\ntam_serial_path: %d\npath: %s\ntam_serial_file: %d\nfile:\n%s",
-	pid, tam_serial_path, path, tam_serial_file, file);
+			  pid, tam_serial_path, path, tam_serial_file, file);
 	// payload = pid, len path, path, len archivo, archivo
 	Paquete cargar;
 	cargar.Payload = malloc(tam_pid + tam_serial_path + tam_serial_file);
@@ -340,37 +340,40 @@ void *interpretar_mensajes_de_cpu(void *arg)
 	log_debug(logger, "Soy el hilo %d, recibi una conexion en el socket: %d", process_get_thread_id(), socket);
 	log_info(logger, "Interpreto nuevo mensaje");
 
-	Paquete paquete;
-	recibir_paquete(socket, &paquete);
-
-	switch (paquete.header.tipoMensaje)
+	while (1)
 	{
-	case ESDTBDUMMY:
-		log_info(logger, "ESDTBDUMMY");
-		es_dtb_dummy(&paquete);
-		break;
-	case ABRIR:
-		log_info(logger, "ABRIR");
-		abrir(&paquete);
-		break;
-	case CREAR_ARCHIVO:
-		log_info(logger, "CREAR_ARCHIVO");
-		crear_archivo(&paquete);
-		break;
-	case BORRAR_ARCHIVO:
-		log_debug(logger, "BORRAR_ARCHIVO");
-		borrar_archivo(&paquete);
-		break;
-	case FLUSH:
-		log_debug(logger, "FLUSH");
-		flush(&paquete);
-		break;
-	default:
-		log_error(logger, "No entiendo el mensaje");
-		break;
-	}
+		Paquete paquete;
+		recibir_paquete(socket, &paquete);
 
-	free(paquete.Payload);
+		switch (paquete.header.tipoMensaje)
+		{
+		case ESDTBDUMMY:
+			log_info(logger, "ESDTBDUMMY");
+			es_dtb_dummy(&paquete);
+			break;
+		case ABRIR:
+			log_info(logger, "ABRIR");
+			abrir(&paquete);
+			break;
+		case CREAR_ARCHIVO:
+			log_info(logger, "CREAR_ARCHIVO");
+			crear_archivo(&paquete);
+			break;
+		case BORRAR_ARCHIVO:
+			log_debug(logger, "BORRAR_ARCHIVO");
+			borrar_archivo(&paquete);
+			break;
+		case FLUSH:
+			log_debug(logger, "FLUSH");
+			flush(&paquete);
+			break;
+		default:
+			log_error(logger, "No entiendo el mensaje");
+			break;
+		}
+
+		free(paquete.Payload);
+	}
 }
 
 void enviar_obtener_datos(char *path, int size)
@@ -390,9 +393,9 @@ void enviar_obtener_datos(char *path, int size)
 
 	pedido_escriptorio.header = cargar_header(desplazamiento, OBTENER_DATOS, ELDIEGO);
 
-    	sem_wait(&sem_mdj);
+	sem_wait(&sem_mdj);
 	enviar_paquete(socket_mdj, &pedido_escriptorio);
-    	sem_post(&sem_mdj);
+	sem_post(&sem_mdj);
 	free(serializado);
 	free(pedido_escriptorio.Payload);
 }
@@ -416,9 +419,9 @@ void enviar_guardar_datos(char *path, Paquete *paquete)
 
 	guardar.header = cargar_header(desplazamiento, OBTENER_DATOS, ELDIEGO);
 
-    	sem_wait(&sem_mdj);
+	sem_wait(&sem_mdj);
 	enviar_paquete(socket_mdj, &guardar);
-    	sem_post(&sem_mdj);
+	sem_post(&sem_mdj);
 	free(guardar.Payload);
 }
 
@@ -438,14 +441,14 @@ void es_dtb_dummy(Paquete *paquete)
 		return;
 	}
 
-	enviar_obtener_datos(escriptorio->path, validar);	
+	enviar_obtener_datos(escriptorio->path, validar);
 
 	Paquete file_mdj;
 	recibir_paquete(socket_mdj, &file_mdj);
 	int d = 0;
 	char *script = string_deserializar(file_mdj.Payload, &d);
 	log_debug(logger, "Escriptorio \n%s", script);
-	
+
 	log_debug(logger, "Le envio el pedido a fm9");
 
 	Paquete respuesta;
@@ -495,7 +498,7 @@ void abrir(Paquete *paquete)
 		return;
 	}
 
-	enviar_obtener_datos(path, validar);	
+	enviar_obtener_datos(path, validar);
 
 	log_debug(logger, "Le envie el pedido a mdj");
 	recibir_paquete(socket_mdj, paquete);
@@ -541,9 +544,9 @@ void flush(Paquete *paquete)
 	enviar_guardar_datos(path, &respuesta_fm9);
 
 	Paquete respuesta_mdj;
-    	sem_wait(&sem_mdj);
+	sem_wait(&sem_mdj);
 	recibir_paquete(socket_mdj, &respuesta_mdj);
-    	sem_post(&sem_mdj);
+	sem_post(&sem_mdj);
 
 	if (respuesta_mdj.header.tipoMensaje == ESPACIO_INSUFICIENTE_FLUSH)
 	{
@@ -584,9 +587,9 @@ void crear_archivo(Paquete *paquete)
 	pedido.Payload = malloc(size);
 	memmove(pedido.Payload, paquete->Payload + INTSIZE, size);
 
-    	sem_wait(&sem_mdj);
+	sem_wait(&sem_mdj);
 	enviar_paquete(socket_mdj, paquete);
-    	sem_post(&sem_mdj);
+	sem_post(&sem_mdj);
 
 	Paquete respuesta_mdj;
 	recibir_paquete(socket_mdj, &respuesta_mdj);
@@ -617,14 +620,14 @@ void borrar_archivo(Paquete *paquete)
 	pedido.Payload = malloc(size);
 	memmove(pedido.Payload, paquete->Payload + INTSIZE, size);
 
-    	sem_wait(&sem_mdj);
+	sem_wait(&sem_mdj);
 	enviar_paquete(socket_mdj, paquete);
-    	sem_post(&sem_mdj);
+	sem_post(&sem_mdj);
 
 	Paquete respuesta_mdj;
-    	sem_wait(&sem_mdj);
+	sem_wait(&sem_mdj);
 	recibir_paquete(socket_mdj, &respuesta_mdj);
-    	sem_post(&sem_mdj);
+	sem_post(&sem_mdj);
 
 	if (respuesta_mdj.header.tipoMensaje == ARCHIVO_NO_EXISTE)
 	{

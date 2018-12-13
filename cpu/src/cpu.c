@@ -690,14 +690,14 @@ int ejecutar_crear(char **parametros, DTB *dtb)
 	int lineas = atoi(parametros[2]);
 
 	Paquete *crear_archivo = malloc(sizeof(Paquete));
-	crear_archivo->header.emisor = CPU;
-	crear_archivo->header.tipoMensaje = CREAR_ARCHIVO;
 	int len = 0;
 	void *path_serializado = string_serializar(path, &len);
 	crear_archivo->header.tamPayload = len + sizeof(u_int32_t);
 	crear_archivo->Payload = malloc(crear_archivo->header.tamPayload);
-	memcpy(crear_archivo->Payload, path_serializado, sizeof(len));
+	memcpy(crear_archivo->Payload, path_serializado, len);
 	memcpy(crear_archivo->Payload + len, &lineas, sizeof(u_int32_t));
+	cargar_header(crear_archivo->header.tamPayload,CREAR_ARCHIVO,CPU);
+	log_debug(logger,"Pude cargar el paquete para Dam: %s",path );
 	//mensaje a DAM
 	EnviarPaquete(socket_dam, crear_archivo);
 
@@ -706,9 +706,12 @@ int ejecutar_crear(char **parametros, DTB *dtb)
 	bloqueate_safa->header.tipoMensaje = DTB_BLOQUEAR;
 	bloqueate_safa->header.emisor = CPU;
 	int tam_pid_y_pc = 0;
-	bloqueate_safa->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
+	void* pid_pc_serializados;
+	pid_pc_serializados = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
 	bloqueate_safa->header.tamPayload = tam_pid_y_pc + sizeof(u_int32_t);
+	bloqueate_safa->Payload = malloc(bloqueate_safa->header.tamPayload);
 	dtb->entrada_salidas++;
+	memcpy(bloqueate_safa, pid_pc_serializados, tam_pid_y_pc);
 	memcpy(bloqueate_safa + tam_pid_y_pc, &dtb->entrada_salidas, sizeof(u_int32_t));
 	EnviarPaquete(socket_safa, bloqueate_safa);
 
