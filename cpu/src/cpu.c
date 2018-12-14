@@ -136,7 +136,7 @@ int ejecutar_algoritmo(Paquete *paquete)
 		{
 			log_debug(logger, "Quantum %d", i);
 			//char *primitiva = pedir_primitiva(dtb);
-			char *primitiva = "flush /equipos/Rafaela";
+			char *primitiva = "crear /equipos/Rafaela 5";
 			if (!strcmp(primitiva, "Fallo"))
 			{
 				log_debug(logger, "Fallo el pedido de primitiva");
@@ -644,27 +644,38 @@ int ejecutar_flush(char **parametros, DTB *dtb)
 		abortar_gdt->header.tamPayload = tam_pid_y_pc;
 
 		EnviarPaquete(socket_safa, abortar_gdt);
+		log_error(logger, "Aborta pid %d porque no tiene el archivo abierto", dtb->gdtPID);
+
 		return 1;
 		//mandar mensaje a SAFA
 		//abortar GDT
 		//Error 30001: El archivo no se encuentra abierto
 	}
 
-	Paquete *flush_a_dam = malloc(sizeof(Paquete));
-	flush_a_dam->header.emisor = CPU;
-	flush_a_dam->header.tipoMensaje = FLUSH;
+	free(archivo_encontrado); //No se usan para nada estos datos
+
 	//mensaje al DAM
 
 	int len = 0;
 	void *path_serializado = string_serializar(path, &len);
-	flush_a_dam->header.tamPayload = len;
+	Paquete *flush_a_dam = malloc(sizeof(Paquete));
+	flush_a_dam->header.emisor = CPU;
+	flush_a_dam->header.tipoMensaje = FLUSH;
+	flush_a_dam->header.tamPayload = INTSIZE + len;
 	flush_a_dam->Payload = malloc(flush_a_dam->header.tamPayload);
-	memcpy(flush_a_dam->Payload, path_serializado, len);
+
+	memcpy(flush_a_dam->Payload, &dtb->gdtPID, INTSIZE);
+	memcpy(flush_a_dam->Payload + INTSIZE, path_serializado, len);
 	EnviarPaquete(socket_dam, flush_a_dam);
+	log_error(logger, "Enviar flush a dam de pid %d", dtb->gdtPID);
 
 	//mensaje a SAFA
 	dtb->entrada_salidas++;
 	bloqueate_safa(dtb);
+
+	free(path_serializado);
+	free(flush_a_dam->Payload);
+	free(flush_a_dam);
 	return 1;
 }
 
@@ -752,17 +763,25 @@ int ejecutar_crear(char **parametros, DTB *dtb)
 	char *path = parametros[1];
 	int lineas = atoi(parametros[2]);
 
-	Paquete *crear_archivo = malloc(sizeof(Paquete));
 	int len = 0;
-	void *path_serializado = string_serializar(path, &len);
-	crear_archivo->header.tamPayload = len + sizeof(u_int32_t);
+    void *path_serializado = string_serializar(path, &len);
+
+	Paquete *crear_archivo = malloc(sizeof(Paquete));
+	crear_archivo->header.tamPayload = len + INTSIZE * 2;
 	crear_archivo->Payload = malloc(crear_archivo->header.tamPayload);
-	memcpy(crear_archivo->Payload, path_serializado, len);
-	memcpy(crear_archivo->Payload + len, &lineas, sizeof(u_int32_t));
-	cargar_header(crear_archivo->header.tamPayload, CREAR_ARCHIVO, CPU);
-	log_debug(logger, "Pude cargar el paquete para Dam: %s", path);
+
+	int desplazamiento = 0;
+
+	memcpy(crear_archivo->Payload, &dtb->gdtPID, INTSIZE);
+	desplazamiento += INTSIZE;
+	memcpy(crear_archivo->Payload + desplazamiento, path_serializado, len);
+	desplazamiento += len;
+	memcpy(crear_archivo->Payload + desplazamiento, &lineas, INTSIZE);
+
+	crear_archivo->header = cargar_header(crear_archivo->header.tamPayload, CREAR_ARCHIVO, CPU);
 	//mensaje a DAM
 	EnviarPaquete(socket_dam, crear_archivo);
+	log_debug(logger, "El pid %d quiere crear %s con %d lineas", dtb->gdtPID, path, lineas);
 
 	//mensaje a SAFA
 	dtb->entrada_salidas++;
@@ -781,14 +800,17 @@ int ejecutar_borrar(char **parametros, DTB *dtb)
 	printf("BORRAR\n");
 	char *path = parametros[1];
 
+	int len = 0;
+	void *path_serializado = string_serializar(path, &len);
+
 	Paquete *borrar_archivo = malloc(sizeof(Paquete));
 	borrar_archivo->header.emisor = CPU;
 	borrar_archivo->header.tipoMensaje = BORRAR_ARCHIVO;
-	int len = 0;
-	void *path_serializado = string_serializar(path, &len);
-	borrar_archivo->header.tamPayload = len;
+	borrar_archivo->header.tamPayload = INTSIZE + len;
 	borrar_archivo->Payload = malloc(borrar_archivo->header.tamPayload);
-	memcpy(borrar_archivo->Payload, path_serializado, borrar_archivo->header.tamPayload);
+
+	memcpy(borrar_archivo->Payload, &dtb->gdtPID, INTSIZE);
+	memcpy(borrar_archivo->Payload + INTSIZE, path_serializado, len);
 	//mensaje a DAM
 	EnviarPaquete(socket_dam, borrar_archivo);
 
@@ -820,6 +842,8 @@ void bloqueate_safa(DTB *dtb)
 	memcpy(bloqueate_safa->Payload, pid_pc_serializados, tam_pid_y_pc);
 	memcpy(bloqueate_safa->Payload + tam_pid_y_pc, &dtb->entrada_salidas, sizeof(u_int32_t));
 	EnviarPaquete(socket_safa, bloqueate_safa);
+	log_debug(logger, "Le pido a safa que bloque el pid %d", dtb->gdtPID);
+
 	free(pid_pc_serializados);
 	free(bloqueate_safa->Payload);
 	free(bloqueate_safa);

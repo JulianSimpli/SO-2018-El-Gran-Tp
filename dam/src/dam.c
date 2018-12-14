@@ -575,6 +575,7 @@ void flush(Paquete *paquete)
 void crear_archivo(Paquete *paquete)
 {
 	int desplazamiento = 0, pid = 0;
+	int lineas = 0;
 	memcpy(&pid, paquete->Payload + desplazamiento, INTSIZE);
 	desplazamiento += INTSIZE;
 
@@ -589,19 +590,23 @@ void crear_archivo(Paquete *paquete)
 		return;
 	}
 
+	//Para no terminar deserializar y volver a serializar
 	//Reenvio el pedido de crear archivo a mdj
-	int size = paquete->header.tamPayload - INTSIZE;
+	paquete->header.tamPayload -= INTSIZE; //No necesito enviarle el pid
 	Paquete pedido;
-	pedido.header = cargar_header(size, CREAR_ARCHIVO, ELDIEGO);
-	pedido.Payload = malloc(size);
-	memmove(pedido.Payload, paquete->Payload + INTSIZE, size);
+	pedido.header = cargar_header(paquete->header.tamPayload, CREAR_ARCHIVO, ELDIEGO);
+	pedido.Payload = malloc(paquete->header.tamPayload);
+	int len = paquete->header.tamPayload - INTSIZE; //Lo que hay en el payload menos la cant_lineas
+	//Reutilizo el paquete payload pero con el offset del pid
+	memcpy(pedido.Payload, paquete->Payload + INTSIZE, len);
+	memcpy(pedido.Payload + len, paquete->Payload + INTSIZE + len, INTSIZE);
 
-	sem_wait(&sem_mdj);
-	enviar_paquete(socket_mdj, paquete);
-	sem_post(&sem_mdj);
+	enviar_paquete(socket_mdj, &pedido);
 
 	Paquete respuesta_mdj;
+	sem_wait(&sem_mdj);
 	recibir_paquete(socket_mdj, &respuesta_mdj);
+	sem_post(&sem_mdj);
 
 	if (respuesta_mdj.header.tipoMensaje == ESPACIO_INSUFICIENTE_CREAR)
 	{
@@ -610,6 +615,7 @@ void crear_archivo(Paquete *paquete)
 	}
 
 	enviar_success(DTB_SUCCESS, pid);
+	free(path);
 	free(pedido.Payload);
 }
 
@@ -629,9 +635,7 @@ void borrar_archivo(Paquete *paquete)
 	pedido.Payload = malloc(size);
 	memmove(pedido.Payload, paquete->Payload + INTSIZE, size);
 
-	sem_wait(&sem_mdj);
 	enviar_paquete(socket_mdj, paquete);
-	sem_post(&sem_mdj);
 
 	Paquete respuesta_mdj;
 	sem_wait(&sem_mdj);

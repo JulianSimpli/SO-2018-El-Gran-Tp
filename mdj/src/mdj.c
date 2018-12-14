@@ -371,8 +371,8 @@ void crear_archivo(Paquete *paquete)
 	nuevo_archivo.bloques = bloques_libres;
 	nuevo_archivo.tamanio = bytes_a_crear;
 
-	//Crea el archivo metadata con la informacion de donde estan los bloques
 	//TODO: Agregar en una lista que este archivo esta siendo leido
+	//Crea el archivo metadata con la informacion de donde estan los bloques
 	//TODO: Si esta abierto hace un wait en ese semaforo y queda bloqueado
 	//Caso de carrera en el que un escriptorio crea un archivo que otro proceso va a leer
 	int resultado = guardar_metadata(&nuevo_archivo);
