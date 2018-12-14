@@ -58,7 +58,7 @@ void *hilo_safa()
 
 int ejecutar(char *linea, DTB *dtb)
 {
-	int i = 0, existe = 0, flag = 0;
+	int i = 0, existe = 0, flag = 1;
 	//Calcula la cantidad de primitivas que hay en el array
 	size_t cantidad_primitivas = sizeof(primitivas) / sizeof(primitivas[0]) - 1;
 
@@ -66,12 +66,12 @@ int ejecutar(char *linea, DTB *dtb)
 	//Por ej: linea = abrir /home/utnso/
 	char **parameters = string_split(linea, " ");
 
-	for (i; i < cantidad_primitivas && flag != 1; i++)
+	for (i; i < cantidad_primitivas; i++)
 	{
 		if (!strcmp(primitivas[i].name, parameters[0]))
 		{
 			log_debug(logger, "Interprete %s", primitivas[i].name);
-			existe = 1;
+			existe = 11;
 			log_info(logger, primitivas[i].doc);
 			//llama a la funcion que tiene guardado esa primitiva en la estructura
 			flag = primitivas[i].func(parameters, dtb);
@@ -91,56 +91,68 @@ int ejecutar_algoritmo(Paquete *paquete)
 	DTB *dtb = DTB_deserializar(paquete->Payload);
 	log_debug(logger, "Deserialice el dtb");
 	log_debug(logger, "pid %d", dtb->gdtPID);
+	Paquete *nuevo_paquete = malloc(sizeof(Paquete));
+	int flag;
 	if (!strcmp(algoritmo, "FIFO"))
 	{
 		while (1)
 		{
 			char *primitiva = pedir_primitiva(dtb);
 			log_debug(logger, "Primitiva %s", primitiva);
-			int flag = ejecutar(primitiva, dtb);
+			flag = ejecutar(primitiva, dtb);
 			dtb->PC++;
-			if (!flag || finalizar)
+			if (flag || finalizar)
+			{
+				finalizar = false;
 				break;
+			}
 		}
 	}
-	int quantum_local = quantum;
-	if (paquete->header.tipoMensaje == ESDTBQUANTUM)
-		memcpy(&quantum_local, paquete->Payload + paquete->header.tamPayload - INTSIZE, INTSIZE);
-	int i;
-	// cambios = 1;
-	for (i = 0; i < quantum_local; i++)
+	else
 	{
-		// sem_wait(cambios);
-		log_debug(logger, "Quantum %d", i);
-		char *primitiva = pedir_primitiva(dtb);
-		//char *primitiva = "wait bloqueo";
-		log_debug(logger, "Primitiva %s", primitiva);
-		int flag = ejecutar(primitiva, dtb); //avanzar el PC dentro del paquete
-		log_debug(logger, "Flag %d", flag);
-		dtb->PC++;
-		if (!flag || finalizar)
-			break;
-		// sem_post(cambios);
+		int quantum_local = quantum;
+		if (paquete->header.tipoMensaje == ESDTBQUANTUM)
+			memcpy(&quantum_local, paquete->Payload + paquete->header.tamPayload - INTSIZE, INTSIZE);
+		int i;
+		// cambios = 1;
+		for (i = 0; i < quantum_local; i++)
+		{
+			// sem_wait(cambios);
+			log_debug(logger, "Quantum %d", i);
+			char *primitiva = pedir_primitiva(dtb);
+			//char *primitiva = "wait bloqueo";
+			log_debug(logger, "Primitiva %s", primitiva);
+			flag = ejecutar(primitiva, dtb); //avanzar el PC dentro del paquete
+			log_debug(logger, "Flag %d", flag);
+			dtb->PC++;
+			if (flag || finalizar)
+			{
+				finalizar = false;
+				break;
+			} // sem_post(cambios);
+		}
+		//armar el paquete para mandar a safa, que dependiendo de si es RR o VRR, envía quantum restante
+		//si es RR, manda DTB_EJECUTO
+		//si es VRR, manda QUANTUM_FALTANTE
+		if (!strcmp(algoritmo, "VRR"))
+		{
+			nuevo_paquete->header.tipoMensaje = QUANTUM_FALTANTE;
+			nuevo_paquete->Payload = realloc(nuevo_paquete->Payload, nuevo_paquete->header.tamPayload + sizeof(u_int32_t));
+			int restante = quantum_local - i;
+			memcpy(nuevo_paquete->Payload + nuevo_paquete->header.tamPayload, &restante, sizeof(u_int32_t));
+			nuevo_paquete->header.tamPayload += sizeof(u_int32_t);
+			EnviarPaquete(socket_safa,nuevo_paquete);
+			return;
+		}
 	}
-
-	//armar el paquete para mandar a safa, que dependiendo de si es RR o VRR, envía quantum restante
-	//si es RR, manda DTB_EJECUTO
-	//si es VRR, manda QUANTUM_FALTANTE
-	Paquete *nuevo_paquete = malloc(sizeof(Paquete));
-	nuevo_paquete->header.tipoMensaje = DTB_EJECUTO;
-	void *DTB_serializado = DTB_serializar(dtb, &nuevo_paquete->header.tamPayload);
-	nuevo_paquete->header.emisor = CPU;
-	nuevo_paquete->Payload = DTB_serializado;
-
-	if (!strcmp(algoritmo, "VRR"))
+	if (!flag)
 	{
-		nuevo_paquete->header.tipoMensaje = QUANTUM_FALTANTE;
-		nuevo_paquete->Payload = realloc(nuevo_paquete->Payload, nuevo_paquete->header.tamPayload + sizeof(u_int32_t));
-		int restante = quantum_local - i;
-		memcpy(nuevo_paquete->Payload + nuevo_paquete->header.tamPayload, &restante, sizeof(u_int32_t));
-		nuevo_paquete->header.tamPayload += sizeof(u_int32_t);
+		nuevo_paquete->header.tipoMensaje = DTB_EJECUTO;
+		void *DTB_serializado = DTB_serializar(dtb, &nuevo_paquete->header.tamPayload);
+		nuevo_paquete->header.emisor = CPU;
+		nuevo_paquete->Payload = DTB_serializado;
+		EnviarPaquete(socket_safa, nuevo_paquete);
 	}
-	EnviarPaquete(socket_safa, nuevo_paquete);
 }
 
 char *pedir_primitiva(DTB *dtb)
@@ -322,7 +334,7 @@ int connect_to_server(char *ip, char *port)
 	struct addrinfo *server_info;
 
 	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC;     // Permite que la maquina se encargue de verificar si usamos IPv4 o IPv6
+	hints.ai_family = AF_UNSPEC;	 // Permite que la maquina se encargue de verificar si usamos IPv4 o IPv6
 	hints.ai_socktype = SOCK_STREAM; // Indica que usaremos el protocolo TCP
 
 	getaddrinfo(ip, port, &hints, &server_info); // Carga en server_info los datos de la conexion
@@ -454,6 +466,7 @@ int ejecutar_asignar(char **parametros, DTB *dtb)
 	if (archivo_encontrado == NULL)
 	{
 		Paquete *abortar_gdt = malloc(sizeof(Paquete));
+		dtb->PC++;
 		abortar_gdt->header.tamPayload = 0;
 		abortar_gdt->header.emisor = CPU;
 		abortar_gdt->header.tipoMensaje = ABORTAR;
@@ -494,7 +507,7 @@ int ejecutar_asignar(char **parametros, DTB *dtb)
 	EnviarPaquete(socket_fm9, datos_a_fm9);
 	free(arch_serializado);
 	free(path);
-	free(dato_serializado);	
+	free(dato_serializado);
 	free(dato);
 	free(datos_a_fm9->Payload);
 	free(datos_a_fm9);
@@ -502,7 +515,7 @@ int ejecutar_asignar(char **parametros, DTB *dtb)
 	Paquete asigno_fm9;
 	RecibirPaqueteCliente(socket_fm9, &asigno_fm9);
 
-	if(asigno_fm9.header.tipoMensaje != ASIGNAR)
+	if (asigno_fm9.header.tipoMensaje != ASIGNAR)
 	{
 		log_debug(logger, "Fallo asignar, Error %d", asigno_fm9.header.tipoMensaje);
 		dtb->PC++;
@@ -540,7 +553,7 @@ int ejecutar_wait(char **parametros, DTB *dtb)
 	sem_wait(&sem_senial);
 
 	//si no se pudo asignar, mando mensaje de bloqueo
-	if (paquete_recibido->header.tipoMensaje == ROJADIRECTA)
+	if (senial_safa == ROJADIRECTA)
 	{
 		bloqueate_safa(dtb);
 		return 1; //agarrar este false en el ejecutar
@@ -566,9 +579,7 @@ int ejecutar_signal(char **parametros, DTB *dtb)
 	EnviarPaquete(socket_safa, liberar_recurso);
 
 	log_debug(logger, "Queda bloqueado esperando que lo habilite el otro hilo");
-	sem_wait(&sem_senial);
-
-	return senial_safa == SIGASIGA;
+	return 0;
 }
 
 int ejecutar_flush(char **parametros, DTB *dtb)
@@ -582,6 +593,7 @@ int ejecutar_flush(char **parametros, DTB *dtb)
 	if (archivo_encontrado == NULL)
 	{
 		Paquete *abortar_gdt = malloc(sizeof(Paquete));
+		dtb->PC++;
 		abortar_gdt->header.tamPayload = 0;
 		abortar_gdt->header.emisor = CPU;
 		abortar_gdt->header.tipoMensaje = ABORTARF;
@@ -590,6 +602,7 @@ int ejecutar_flush(char **parametros, DTB *dtb)
 		abortar_gdt->header.tamPayload = tam_pid_y_pc;
 
 		EnviarPaquete(socket_safa, abortar_gdt);
+		return 1;
 		//mandar mensaje a SAFA
 		//abortar GDT
 		//Error 30001: El archivo no se encuentra abierto
@@ -612,7 +625,7 @@ int ejecutar_flush(char **parametros, DTB *dtb)
 		dtb->entrada_salidas++;
 		bloqueate_safa(dtb);
 	}
-	return 1;
+	return 0;
 	/*
 	Verificará que el archivo solicitado esté abierto por el G.DT.
 	En caso que no se encuentre, se abortará el G.DT.
@@ -635,6 +648,7 @@ int ejecutar_close(char **parametros, DTB *dtb)
 	if (archivo_encontrado == NULL)
 	{
 		Paquete *abortar_gdt = malloc(sizeof(Paquete));
+		dtb->PC++;
 		abortar_gdt->header.tamPayload = 0;
 		abortar_gdt->header.emisor = CPU;
 		abortar_gdt->header.tipoMensaje = ABORTARC;
@@ -666,11 +680,11 @@ int ejecutar_close(char **parametros, DTB *dtb)
 	liberar_memoria->header = cargar_header(desplazamiento, CLOSE, CPU);
 
 	EnviarPaquete(socket_fm9, liberar_memoria);
-	
+
 	Paquete archivo_cerrado;
 	RecibirPaqueteCliente(socket_fm9, &archivo_cerrado);
 
-	if(archivo_cerrado.header.tipoMensaje == FALLO_DE_SEGMENTO_CLOSE)
+	if (archivo_cerrado.header.tipoMensaje == FALLO_DE_SEGMENTO_CLOSE)
 	{
 		log_debug(logger, "Fallo de segmento close");
 		dtb->PC++;
@@ -714,8 +728,8 @@ int ejecutar_crear(char **parametros, DTB *dtb)
 	crear_archivo->Payload = malloc(crear_archivo->header.tamPayload);
 	memcpy(crear_archivo->Payload, path_serializado, len);
 	memcpy(crear_archivo->Payload + len, &lineas, sizeof(u_int32_t));
-	cargar_header(crear_archivo->header.tamPayload,CREAR_ARCHIVO,CPU);
-	log_debug(logger,"Pude cargar el paquete para Dam: %s",path );
+	cargar_header(crear_archivo->header.tamPayload, CREAR_ARCHIVO, CPU);
+	log_debug(logger, "Pude cargar el paquete para Dam: %s", path);
 	//mensaje a DAM
 	EnviarPaquete(socket_dam, crear_archivo);
 
@@ -762,8 +776,9 @@ void bloqueate_safa(DTB *dtb)
 	Paquete *bloqueate_safa = malloc(sizeof(Paquete));
 	bloqueate_safa->header.tipoMensaje = DTB_BLOQUEAR;
 	bloqueate_safa->header.emisor = CPU;
+	dtb->PC++;
 	int tam_pid_y_pc = 0;
-	void* pid_pc_serializados;
+	void *pid_pc_serializados;
 	pid_pc_serializados = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
 	bloqueate_safa->header.tamPayload = tam_pid_y_pc + sizeof(u_int32_t);
 	bloqueate_safa->Payload = malloc(bloqueate_safa->header.tamPayload);
