@@ -393,9 +393,7 @@ void enviar_obtener_datos(char *path, int size)
 
 	pedido_escriptorio.header = cargar_header(desplazamiento, OBTENER_DATOS, ELDIEGO);
 
-	sem_wait(&sem_mdj);
 	enviar_paquete(socket_mdj, &pedido_escriptorio);
-	sem_post(&sem_mdj);
 	free(serializado);
 	free(pedido_escriptorio.Payload);
 }
@@ -417,11 +415,9 @@ void enviar_guardar_datos(char *path, Paquete *paquete)
 	memcpy(guardar.Payload + desplazamiento, paquete->Payload, size);
 	desplazamiento += size;
 
-	guardar.header = cargar_header(desplazamiento, OBTENER_DATOS, ELDIEGO);
+	guardar.header = cargar_header(desplazamiento, GUARDAR_DATOS, ELDIEGO);
 
-	sem_wait(&sem_mdj);
 	enviar_paquete(socket_mdj, &guardar);
-	sem_post(&sem_mdj);
 	free(guardar.Payload);
 }
 

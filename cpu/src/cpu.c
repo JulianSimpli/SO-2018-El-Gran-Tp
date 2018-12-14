@@ -92,6 +92,8 @@ int ejecutar_algoritmo(Paquete *paquete)
 	log_debug(logger, "Deserialice el dtb");
 	log_debug(logger, "pid %d", dtb->gdtPID);
 	Paquete *nuevo_paquete = malloc(sizeof(Paquete));
+	ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
+	int cantidad_lineas = escriptorio->cantLineas;
 	int flag;
 	if (!strcmp(algoritmo, "FIFO"))
 	{
@@ -105,6 +107,16 @@ int ejecutar_algoritmo(Paquete *paquete)
 			{
 				finalizar = false;
 				break;
+			}
+			if (cantidad_lineas == dtb->PC)
+			{
+				nuevo_paquete->header = cargar_header(INTSIZE, DTB_FINALIZAR, CPU);
+				nuevo_paquete->Payload = malloc(nuevo_paquete->header.tamPayload);
+				memcpy(nuevo_paquete->Payload, &dtb->gdtPID, INTSIZE);
+				EnviarPaquete(socket_safa, nuevo_paquete);
+				free(nuevo_paquete->Payload);
+				free(nuevo_paquete);
+				return;
 			}
 		}
 	}
@@ -129,7 +141,8 @@ int ejecutar_algoritmo(Paquete *paquete)
 			{
 				finalizar = false;
 				break;
-			} // sem_post(cambios);
+			}
+			// sem_post(cambios);
 		}
 		//armar el paquete para mandar a safa, que dependiendo de si es RR o VRR, envía quantum restante
 		//si es RR, manda DTB_EJECUTO
@@ -141,7 +154,7 @@ int ejecutar_algoritmo(Paquete *paquete)
 			int restante = quantum_local - i;
 			memcpy(nuevo_paquete->Payload + nuevo_paquete->header.tamPayload, &restante, sizeof(u_int32_t));
 			nuevo_paquete->header.tamPayload += sizeof(u_int32_t);
-			EnviarPaquete(socket_safa,nuevo_paquete);
+			EnviarPaquete(socket_safa, nuevo_paquete);
 			return;
 		}
 	}
@@ -624,6 +637,7 @@ int ejecutar_flush(char **parametros, DTB *dtb)
 		//mensaje a SAFA
 		dtb->entrada_salidas++;
 		bloqueate_safa(dtb);
+		return 1;
 	}
 	return 0;
 	/*
@@ -773,10 +787,14 @@ int ejecutar_borrar(char **parametros, DTB *dtb)
 
 void bloqueate_safa(DTB *dtb)
 {
+	dtb->PC++;
+	if (!strcmp(algoritmo, "VRR"))
+	{
+		return;
+	}
 	Paquete *bloqueate_safa = malloc(sizeof(Paquete));
 	bloqueate_safa->header.tipoMensaje = DTB_BLOQUEAR;
 	bloqueate_safa->header.emisor = CPU;
-	dtb->PC++;
 	int tam_pid_y_pc = 0;
 	void *pid_pc_serializados;
 	pid_pc_serializados = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
