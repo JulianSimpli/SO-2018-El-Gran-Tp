@@ -112,8 +112,8 @@ int ejecutar_algoritmo(Paquete *paquete)
 	{
 		// sem_wait(cambios);
 		log_debug(logger, "Quantum %d", i);
-		//char *primitiva = pedir_primitiva(dtb);
-		char *primitiva = "wait bloqueo";
+		char *primitiva = pedir_primitiva(dtb);
+		//char *primitiva = "wait bloqueo";
 		log_debug(logger, "Primitiva %s", primitiva);
 		int flag = ejecutar(primitiva, dtb); //avanzar el PC dentro del paquete
 		log_debug(logger, "Flag %d", flag);
@@ -121,18 +121,6 @@ int ejecutar_algoritmo(Paquete *paquete)
 		if (!flag || finalizar)
 			break;
 		// sem_post(cambios);
-	}
-
-	if (finalizar)
-	{
-		Paquete *paquete_a_diego = malloc(sizeof(Paquete));
-		paquete_a_diego->header.tipoMensaje = FINALIZAR;
-		paquete_a_diego->header.tamPayload = 0;
-		paquete_a_diego->header.emisor = CPU;
-		//empezar a mandar mensajes de finalizacion al DAM
-		//un paquete con el tipoDeMensaje = FINALIZAR
-		//emisor:CPU
-		//tamPayload: 0
 	}
 
 	//armar el paquete para mandar a safa, que dependiendo de si es RR o VRR, envía quantum restante
@@ -182,9 +170,10 @@ char *pedir_primitiva(DTB *dtb)
 	{
 		Paquete *primitiva_recibida = malloc(sizeof(Paquete));
 		RecibirPaqueteCliente(socket_fm9, primitiva_recibida);
-		char *primitiva = malloc(primitiva_recibida->header.tamPayload + 1);
+		char *primitiva = malloc(primitiva_recibida->header.tamPayload);
 		memcpy(primitiva, primitiva_recibida->Payload, primitiva_recibida->header.tamPayload);
-		primitiva[primitiva_recibida->header.tamPayload] = '\0';
+		free(primitiva_recibida->Payload);
+		free(primitiva_recibida);
 		return primitiva;
 	}
 }
@@ -473,63 +462,60 @@ int ejecutar_asignar(char **parametros, DTB *dtb)
 		abortar_gdt->header.tamPayload = tam_pid_y_pc;
 
 		EnviarPaquete(socket_safa, abortar_gdt);
-		return 0;
+		return 1;
 		//mandar mensaje a SAFA
 		//abortar GDT
 		//Error 20001: El archivo no se encuentra abierto
 	}
-	else
+	Paquete *datos_a_fm9 = malloc(sizeof(Paquete));
+
+	int desplazamiento = 0;
+	int len_int = INTSIZE * 2; //pid y linea
+	int size_archivo = 0;
+	int size_dato = 0;
+	void *arch_serializado = DTB_serializar_archivo(archivo_encontrado, &size_archivo);
+	void *dato_serializado = string_serializar(dato, &size_dato);
+
+	datos_a_fm9->Payload = malloc(len_int + size_archivo + size_dato);
+
+	memcpy(datos_a_fm9->Payload, &dtb->gdtPID, INTSIZE);
+	desplazamiento += INTSIZE;
+	memcpy(datos_a_fm9->Payload + desplazamiento, &linea, INTSIZE);
+	desplazamiento += INTSIZE;
+	memcpy(datos_a_fm9->Payload + desplazamiento, arch_serializado, size_archivo);
+	desplazamiento += size_archivo;
+	memcpy(datos_a_fm9->Payload + desplazamiento, dato_serializado, size_dato);
+	desplazamiento += size_dato;
+
+	//mando a FM9 el pid, la linea (offset), la estructura archivo abierto y el dato
+
+	cargar_header(desplazamiento, ASIGNAR, CPU);
+
+	EnviarPaquete(socket_fm9, datos_a_fm9);
+	free(arch_serializado);
+	free(path);
+	free(dato_serializado);	
+	free(dato);
+	free(datos_a_fm9->Payload);
+	free(datos_a_fm9);
+
+	Paquete asigno_fm9;
+	RecibirPaqueteCliente(socket_fm9, &asigno_fm9);
+
+	if(asigno_fm9.header.tipoMensaje != ASIGNAR)
 	{
-		Paquete *datos_a_fm9 = malloc(sizeof(Paquete));
+		log_debug(logger, "Fallo asignar, Error %d", asigno_fm9.header.tipoMensaje);
+		dtb->PC++;
 
-		int desplazamiento = 0;
-		int len_int = INTSIZE * 2; //pid y linea
-		int size_archivo = 0;
-		int size_dato = 0;
-		void *arch_serializado = DTB_serializar_archivo(archivo_encontrado, &size_archivo);
-		void *dato_serializado = string_serializar(dato, &size_dato);
-
-		datos_a_fm9->Payload = malloc(len_int + size_archivo + size_dato);
-
-		memcpy(datos_a_fm9->Payload, &dtb->gdtPID, INTSIZE);
-		desplazamiento += INTSIZE;
-		memcpy(datos_a_fm9->Payload + desplazamiento, &linea, INTSIZE);
-		desplazamiento += INTSIZE;
-		memcpy(datos_a_fm9->Payload + desplazamiento, arch_serializado, size_archivo);
-		desplazamiento += size_archivo;
-		memcpy(datos_a_fm9->Payload + desplazamiento, dato_serializado, size_dato);
-		desplazamiento += size_dato;
-
-		//mando a FM9 el pid, la linea (offset), la estructura archivo abierto y el dato
-
-		cargar_header(desplazamiento, ASIGNAR, CPU);
-
-		EnviarPaquete(socket_fm9, datos_a_fm9);
-		free(arch_serializado);
-		free(path);
-		free(dato_serializado);	
-		free(dato);
-		free(datos_a_fm9->Payload);
-		free(datos_a_fm9);
-
-		Paquete asigno_fm9;
-		RecibirPaqueteCliente(socket_fm9, &asigno_fm9);
-
-		if(asigno_fm9.header.tipoMensaje != ASIGNAR)
-		{
-			log_debug(logger, "Fallo asignar");
-			dtb->PC++;
-
-			Paquete error_asignar;
-			int tam_pid_y_pc = 0;
-			error_asignar.Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
-			error_asignar.header = cargar_header(tam_pid_y_pc, asigno_fm9.header.tipoMensaje, CPU);
-			EnviarPaquete(socket_safa, &error_asignar);
-			free(error_asignar.Payload);
-			return 0;
-		}
+		Paquete error_asignar;
+		int tam_pid_y_pc = 0;
+		error_asignar.Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
+		error_asignar.header = cargar_header(tam_pid_y_pc, asigno_fm9.header.tipoMensaje, CPU);
+		EnviarPaquete(socket_safa, &error_asignar);
+		free(error_asignar.Payload);
+		return 1;
 	}
-	return 1;
+	return 0;
 }
 
 int ejecutar_wait(char **parametros, DTB *dtb)
@@ -557,9 +543,9 @@ int ejecutar_wait(char **parametros, DTB *dtb)
 	if (paquete_recibido->header.tipoMensaje == ROJADIRECTA)
 	{
 		bloqueate_safa(dtb);
-		return 0; //agarrar este false en el ejecutar
+		return 1; //agarrar este false en el ejecutar
 	}
-	return 1;
+	return 0;
 }
 
 int ejecutar_signal(char **parametros, DTB *dtb)
@@ -704,7 +690,6 @@ int ejecutar_close(char **parametros, DTB *dtb)
 	EnviarPaquete(socket_safa, liberar_memoria);
 	free(liberar_memoria->Payload);
 	free(liberar_memoria);
-	}
 	return 0;
 	/*
 	Verificará que el archivo solicitado esté abierto por el G.DT. 

@@ -713,6 +713,7 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 			paquete->Payload += sizeof(pc);
 			int d = 0;
 			ArchivoAbierto* archivo = DTB_leer_struct_archivo(paquete->Payload, &d);
+			paquete->Payload += d;
 			char* linea = malloc(MAX_LINEA);
 			if(!strcmp(MODO, "SEG")) {
 				if(lineaDeUnaPosicionSEG(pid, pc) != NULL) {
@@ -736,6 +737,8 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 					EnviarDatosTipo(socketFD, CPU, NULL, 0, ERROR);
 			}
 			free(linea);
+			paquete->Payload -= paquete->header.tamPayload;
+			free(paquete->Payload);
 			break;
 		}
 
@@ -767,11 +770,12 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 
 		case CLOSE: {
 			//el payload debe ser int+char\0
-			int pid;
-			memcpy(&pid, paquete->Payload, sizeof(pid));
-			paquete->Payload += sizeof(pid);
-			char* path = malloc(paquete->header.tamPayload-sizeof(pid));
-			strcpy(path, paquete->Payload);
+			u_int32_t pid = 0;
+			int desplazamiento = 0;
+			memcpy(&pid, paquete->Payload, INTSIZE);
+			desplazamiento += INTSIZE;
+			ArchivoAbierto *archivo = DTB_leer_struct_archivo(paquete->Payload, &desplazamiento)
+			char* path = archivo->path;
 			if(!strcmp(MODO, "SEG")) {
 				liberarArchivoSEG(pid, path, socketFD);
 			} else if(!strcmp(MODO, "TPI")) {

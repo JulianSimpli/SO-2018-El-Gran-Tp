@@ -523,12 +523,8 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 			t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc, WAIT);
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 			metricas_actualizar(dtb, pc);
-			if(verificar_si_murio(dtb, lista_ejecutando, pid, pc))
-			{
-				avisar_desalojo_a_cpu(socketFD);
-				break;
-			}
 			recurso_wait(recurso, dtb->gdtPID, pc, socketFD);
+			verificar_si_murio(dtb, lista_ejecutando, pid, pc);
 			break;
 		}
 		case SIGNAL:
@@ -536,12 +532,8 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 			t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc, SIGNAL);
 			DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 			metricas_actualizar(dtb, pc);
-			if(verificar_si_murio(dtb, lista_ejecutando, pid, pc))
-			{
-				avisar_desalojo_a_cpu(socketFD);
-				break;
-			}
 			recurso_signal(recurso, dtb->gdtPID, pc, socketFD);
+			verificar_si_murio(dtb, lista_ejecutando, pid, pc));
 			break;
 		}
 		case ABORTAR:
