@@ -39,6 +39,7 @@ void consola();
 void parseo_consola(char* operacion, char* primerParametro);
 void accion(void* socket);
 void manejar_paquetes_diego(Paquete *paquete, int socketFD);
+void manejar_errores_diego(Paquete *paquete);
 void manejar_paquetes_CPU(Paquete *paquete, int socketFD);
 void *config_cpu_serializar(int *tamanio_payload);
 void enviar_handshake_cpu(int socketFD);

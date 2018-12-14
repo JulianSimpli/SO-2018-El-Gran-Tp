@@ -173,6 +173,7 @@ void ejecutar_primer_dtb_prioridad()
 	EnviarPaquete(cpu_libre->socket, paquete);
 	free(paquete->Payload);
 	free(paquete);
+	info_dtb->quantum_faltante = 0;
 
 	dtb_actualizar(dtb, lista_prioridad, lista_ejecutando, dtb->PC, DTB_EJECUTANDO, cpu_libre->socket);
 }
@@ -674,19 +675,6 @@ void dtb_finalizar(DTB *dtb, t_list *lista_actual, u_int32_t pid, u_int32_t pc)
 	limpiar_recursos(info_dtb);
 	dtb_actualizar(dtb, actual, lista_finalizados, pc, DTB_FINALIZADO, info_dtb->socket_cpu);
 	enviar_finalizar_dam(dtb->gdtPID);
-
-	void dtb_abortar(u_int32_t pid)
-{
-	t_list *actual = lista_bloqueados;
-	DTB_info *info_dtb = info_asociada_a_pid(pid);
-	DTB *dtb = dtb_encuentra(actual, pid, GDT);
-	if(dtb == NULL)
-	{
-		log_debug(logger, "No se encontro en lista_bloqueados a GDT %d", pid);
-		dtb = dtb_buscar_en_todos_lados(pid, &info_dtb, &actual);
-	}
-	dtb_actualizar(dtb, actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
-}
 }
 
 void loggear_finalizacion(DTB *dtb, DTB_info *info_dtb)

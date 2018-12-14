@@ -94,13 +94,18 @@ int ejecutar_algoritmo(Paquete *paquete)
 	Paquete *nuevo_paquete = malloc(sizeof(Paquete));
 	ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
 	int cantidad_lineas = escriptorio->cantLineas;
-	int flag;
+	int flag = 1;
 	if (!strcmp(algoritmo, "FIFO"))
 	{
 		while (1)
 		{
 			char *primitiva = pedir_primitiva(dtb);
 			log_debug(logger, "Primitiva %s", primitiva);
+			if(!strcmp(primitiva, "Fallo"))
+			{
+				log_debug(logger, "Fallo el pedido de primitiva");
+				break;
+			}
 			flag = ejecutar(primitiva, dtb);
 			dtb->PC++;
 			if (flag || finalizar)
@@ -132,6 +137,11 @@ int ejecutar_algoritmo(Paquete *paquete)
 			// sem_wait(cambios);
 			log_debug(logger, "Quantum %d", i);
 			char *primitiva = pedir_primitiva(dtb);
+			if(!strcmp(primitiva, "Fallo"))
+			{
+				log_debug(logger, "Fallo el pedido de primitiva");
+				break;
+			}
 			//char *primitiva = "wait bloqueo";
 			log_debug(logger, "Primitiva %s", primitiva);
 			flag = ejecutar(primitiva, dtb); //avanzar el PC dentro del paquete
@@ -141,6 +151,16 @@ int ejecutar_algoritmo(Paquete *paquete)
 			{
 				finalizar = false;
 				break;
+			}
+			if (cantidad_lineas == dtb->PC)
+			{
+				nuevo_paquete->header = cargar_header(INTSIZE, DTB_FINALIZAR, CPU);
+				nuevo_paquete->Payload = malloc(nuevo_paquete->header.tamPayload);
+				memcpy(nuevo_paquete->Payload, &dtb->gdtPID, INTSIZE);
+				EnviarPaquete(socket_safa, nuevo_paquete);
+				free(nuevo_paquete->Payload);
+				free(nuevo_paquete);
+				return;
 			}
 			// sem_post(cambios);
 		}
@@ -195,6 +215,8 @@ char *pedir_primitiva(DTB *dtb)
 	{
 		Paquete *primitiva_recibida = malloc(sizeof(Paquete));
 		RecibirPaqueteCliente(socket_fm9, primitiva_recibida);
+		if(primitiva_recibida->header.tipoMensaje == ERROR)
+			return "Fallo";
 		char *primitiva = malloc(primitiva_recibida->header.tamPayload);
 		memcpy(primitiva, primitiva_recibida->Payload, primitiva_recibida->header.tamPayload);
 		free(primitiva_recibida->Payload);
