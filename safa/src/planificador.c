@@ -2,9 +2,10 @@
 #include <commons/collections/list.h>
 
 u_int32_t numero_pid = 0,
-		  procesos_finalizados = 0,
+		  procesos_finalizados = 0, cantidad_procesos_ejecutados = 0,
 		  sentencias_globales_del_diego = 0, sentencias_totales = 0;
 int procesos_a_esperar = 0;
+float average_rt=0; //average response time
 
 char *Estados[5] = {"Nuevo", "Listo", "Ejecutando", "Bloqueado", "Finalizado"};
 
@@ -50,8 +51,6 @@ void notificar_al_plp(u_int32_t pid)
 	dtb_actualizar(dtb, lista_nuevos, lista_listos, dtb->PC, DTB_LISTO, 0);
 	DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
 	info_dtb->tiempo_ini = medir_tiempo();
-
-
 }
 
 bool dummy_creado(DTB *dtb)
@@ -179,6 +178,7 @@ void ejecutar_primer_dtb_prioridad()
 	info_dtb->tiempo_respuesta = calcular_RT(info_dtb->tiempo_ini, info_dtb->tiempo_fin);
 	free(paquete->Payload);
 	free(paquete);
+	info_dtb->quantum_faltante = 0;
 
 	dtb_actualizar(dtb, lista_prioridad, lista_ejecutando, dtb->PC, DTB_EJECUTANDO, cpu_libre->socket);
 }
@@ -681,6 +681,8 @@ void dtb_finalizar(DTB *dtb, t_list *lista_actual, u_int32_t pid, u_int32_t pc)
 	limpiar_recursos(info_dtb);
 	dtb_actualizar(dtb, actual, lista_finalizados, pc, DTB_FINALIZADO, info_dtb->socket_cpu);
 	enviar_finalizar_dam(dtb->gdtPID);
+}
+
 void loggear_finalizacion(DTB *dtb, DTB_info *info_dtb)
 {
 	log_info(logger_fin,
@@ -847,19 +849,15 @@ void recurso_asignar_a_pid(t_recurso *recurso, u_int32_t pid)
 	rec_asignado->instancias++;
 }
 
-
-//-------------------
-float average_rt=0; //average response time
-
-double cantidad_procesos_ejecutados=0;
-
-clock_t* medir_tiempo (){
+clock_t* medir_tiempo ()
+{
 	clock_t *t_inst;
 	*t_inst = clock();
 	return t_inst;
 }
 
-float calcular_RT(clock_t* t_ini_rcv, clock_t* t_fin_rcv){
+float calcular_RT(clock_t* t_ini_rcv, clock_t* t_fin_rcv)
+{
 	cantidad_procesos_ejecutados++;
 	float rt; //response time
 	clock_t *t_ini;
@@ -879,9 +877,6 @@ float calcular_RT(clock_t* t_ini_rcv, clock_t* t_fin_rcv){
 	info_dtb->tiempo_fin = medir_tiempo();
 	info_dtb->tiempo_respuesta = calcular_RT(info_dtb->tiempo_ini, info_dtb->tiempo_fin);
 */
-
-
-
 
 void gdt_metricas(u_int32_t pid)
 {
