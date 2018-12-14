@@ -163,7 +163,9 @@ void metricas();
 float calcular_sentencias_promedio_diego();
 float calcular_sentencias_promedio_hasta_finalizar();
 bool ya_finalizo(void *_info_dtb);
-float medir_tiempo(int signal, clock_t* tin_rcv, clock_t* tfin_rcv);
+clock_t* medir_tiempo ();
+float calcular_RT(clock_t* t_ini_rcv, clock_t* t_fin_rcv);
+
 
 //Liberar memoria
 void dtb_liberar(void *dtb);

@@ -368,8 +368,6 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
 		log_info(logger, "GDT %d realizo la operacion bloqueante correctamente");
 
-		//info_dtb->tiempo_respuesta = medir_tiempo(0, (info_dtb->tiempo_ini), (info_dtb->tiempo_fin));
-
 		if(dtb->PC == escriptorio->cantLineas)
 		{
 			dtb_finalizar(dtb, lista_bloqueados, pid, dtb->PC);
@@ -397,7 +395,6 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		ArchivoAbierto *archivo = DTB_leer_struct_archivo(paquete->Payload, &tam_pid);
 		list_add(dtb->archivosAbiertos, archivo);
 		log_info(logger, "GDT %d abrio %s", dtb->gdtPID, archivo->path);
-		info_dtb->tiempo_respuesta = medir_tiempo(0, (info_dtb->tiempo_ini), (info_dtb->tiempo_fin));
 
 		if(dtb->PC == escriptorio->cantLineas)
 		{
@@ -507,7 +504,6 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		metricas_actualizar(dtb, pc);
 		DTB_info* info_dtb = info_asociada_a_pid(dtb->gdtPID);			
 		dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, pc, DTB_BLOQUEADO, socketFD);
-		//medir_tiempo(1,(info_dtb->tiempo_ini), (info_dtb->tiempo_fin)); Arreglar
 		break;
 	}
 	case QUANTUM_FALTANTE:
@@ -913,11 +909,6 @@ int main(void)
 	int a = 0;
 	sem_getvalue(&sem_multiprogramacion, &a);
 	printf("sem_multiprogramacion es %d\n", a);
-	
-	// Esto creo lo usa @nicoPosty para 1 metrica
-	clock_t t = clock();
-	clock_t t2 = clock();
-	char* estado_1 = "EJECUTANDO";
 
 	pthread_create(&hilo_consola, NULL, (void *)consola, NULL);
 

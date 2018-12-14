@@ -48,6 +48,10 @@ void notificar_al_plp(u_int32_t pid)
 {
 	DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
 	dtb_actualizar(dtb, lista_nuevos, lista_listos, dtb->PC, DTB_LISTO, 0);
+	DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
+	info_dtb->tiempo_ini = medir_tiempo();
+
+
 }
 
 bool dummy_creado(DTB *dtb)
@@ -171,9 +175,10 @@ void ejecutar_primer_dtb_prioridad()
 	memcpy(paquete->Payload + tamanio_dtb, &info_dtb->quantum_faltante, sizeof(u_int32_t));
 	paquete->header = cargar_header(tamanio_dtb + sizeof(u_int32_t), ESDTBQUANTUM, SAFA);
 	EnviarPaquete(cpu_libre->socket, paquete);
+	info_dtb->tiempo_fin = medir_tiempo();
+	info_dtb->tiempo_respuesta = calcular_RT(info_dtb->tiempo_ini, info_dtb->tiempo_fin);
 	free(paquete->Payload);
 	free(paquete);
-	info_dtb->quantum_faltante = 0;
 
 	dtb_actualizar(dtb, lista_prioridad, lista_ejecutando, dtb->PC, DTB_EJECUTANDO, cpu_libre->socket);
 }
@@ -243,6 +248,7 @@ DTB *dtb_actualizar(DTB *dtb, t_list *source, t_list *dest, u_int32_t pc, Estado
 	dtb->PC = pc;
 
 	DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
+
 	if (dtb->flagInicializacion)
 	{
 		switch (estado)
@@ -675,8 +681,6 @@ void dtb_finalizar(DTB *dtb, t_list *lista_actual, u_int32_t pid, u_int32_t pc)
 	limpiar_recursos(info_dtb);
 	dtb_actualizar(dtb, actual, lista_finalizados, pc, DTB_FINALIZADO, info_dtb->socket_cpu);
 	enviar_finalizar_dam(dtb->gdtPID);
-}
-
 void loggear_finalizacion(DTB *dtb, DTB_info *info_dtb)
 {
 	log_info(logger_fin,
@@ -842,43 +846,42 @@ void recurso_asignar_a_pid(t_recurso *recurso, u_int32_t pid)
 
 	rec_asignado->instancias++;
 }
-//
-clock_t *t_ini;
-clock_t *t_fin;
-float secs;
-double contador_procesos_bloqueados = 0, t_total = 0;
-float t_rta;
 
-float medir_tiempo(int signal, clock_t *tin_rcv, clock_t *tfin_rcv)
-{
 
-	switch (signal)
-	{
+//-------------------
+float average_rt=0; //average response time
 
-	case 1:
-	{
-		t_ini = tin_rcv;
-		*t_ini = clock();
-		break; //tiempo al inicio
-	}
+double cantidad_procesos_ejecutados=0;
 
-	case 0:
-	{
-		t_ini = tin_rcv;
-		t_fin = tfin_rcv;
-		*t_fin = clock(); //tiempo al final
-		secs = ((double)((*t_fin) - (*t_ini)) / CLOCKS_PER_SEC) * 1000;
-		contador_procesos_bloqueados++;
-		t_total += secs;
-		break;
-	}
-	default:
-	{
-	}
-	}
-	return secs;
-	t_rta = t_total / contador_procesos_bloqueados;
+clock_t* medir_tiempo (){
+	clock_t *t_inst;
+	*t_inst = clock();
+	return t_inst;
 }
+
+float calcular_RT(clock_t* t_ini_rcv, clock_t* t_fin_rcv){
+	cantidad_procesos_ejecutados++;
+	float rt; //response time
+	clock_t *t_ini;
+	clock_t *t_fin;
+	double trt = 0; //total response time
+
+	t_ini = t_ini_rcv;
+	t_fin = t_fin_rcv;
+	rt = ((double)((*t_fin) - (*t_ini)) / CLOCKS_PER_SEC) * 1000;
+	trt += rt;
+	average_rt = trt/cantidad_procesos_ejecutados;
+	return rt;
+}
+
+//COMO SE USAN: EN LISTOS se toma el inicio de tiempo y en la primera ejecucion se toma el final
+/*	info_dtb->tiempo_ini = medir_tiempo();
+	info_dtb->tiempo_fin = medir_tiempo();
+	info_dtb->tiempo_respuesta = calcular_RT(info_dtb->tiempo_ini, info_dtb->tiempo_fin);
+*/
+
+
+
 
 void gdt_metricas(u_int32_t pid)
 {
@@ -914,7 +917,7 @@ void metricas()
 	}
 	else
 		printf("Ninguna sentencia fue ejecutada hasta el momento");
-	printf("Tiempo de respuesta promedio del sistema: %f milisegundos\n", t_rta);
+	printf("Tiempo de respuesta promedio del sistema: %f milisegundos\n", average_rt);
 }
 
 float calcular_sentencias_promedio_diego()
