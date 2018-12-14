@@ -46,6 +46,22 @@
       "options": {
         "automatic-rename": "off"
       },
+      "window_name": "FM9",
+      "layout": "c920,201x19,0,0,3",
+      "panes": [
+        {
+          "shell_command": [
+            "make",
+            "./fm9"
+          ]
+        }
+      ],
+      "start_directory": "/home/utnso/workspace/tp-2018-2c-Nene-Malloc/fm9/src"
+    },
+    {
+      "options": {
+        "automatic-rename": "off"
+      },
       "window_name": "SAFA",
       "layout": "c920,201x19,0,0,3",
       "panes": [
@@ -68,14 +84,14 @@
         {
           "shell_command": [
             "make",
-            "sleep 11",
+            "sleep 15",
             "./cpu"
           ]
         },
         {
           "shell_command": [
             "make",
-            "sleep 11",
+            "sleep 15",
             "./cpu"
           ]
         }

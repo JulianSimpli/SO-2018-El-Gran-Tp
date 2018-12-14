@@ -8,12 +8,13 @@
 #ifndef FM9_H_
 #define FM9_H_
 
-#include "sockets.h"
-#include "dtb.h"
-// #include <commons/collections/list.h>
-// #include "../../Bibliotecas/sockets.h"
-// #include "../../Bibliotecas/helper.h"
-// #include "../../Bibliotecas/dtb.h"
+//#include "sockets.h"
+//#include "dtb.h"
+#include <commons/collections/list.h>
+#include <commons/string.h>
+#include "../../Bibliotecas/sockets.h"
+#include "../../Bibliotecas/helper.h"
+#include "../../Bibliotecas/dtb.h"
 
 typedef struct {
 	char* idArchivo; //path del archivo

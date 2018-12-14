@@ -366,7 +366,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		DTB *dtb = dtb_encuentra(lista_bloqueados, pid, GDT);
 		DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
 		ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
-		log_info(logger, "GDT %d realizo la operacion bloqueante correctamente");
+		log_info(logger, "GDT %d realizo la operacion bloqueante correctamente", dtb->gdtPID);
 
 		if(dtb->PC == escriptorio->cantLineas)
 		{
@@ -416,7 +416,6 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		t_list *lista_actual;
 		DTB *dtb = dtb_buscar_en_todos_lados(pid, &info_dtb, &lista_actual);
 		log_info(logger, "GDT %d removido de memoria", dtb->gdtPID);
-		dtb_actualizar(dtb, lista_actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
 		break;
 	}
 	default:
@@ -496,6 +495,8 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		log_debug(logger, "DTB_BLOQUEAR");
 		liberar_cpu(socketFD);
 		deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
+
+		log_debug(logger, "PID %d", pid);
 
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 		memcpy(&dtb->entrada_salidas, paquete->Payload + desplazamiento, INTSIZE);

@@ -12,7 +12,7 @@ int main(int argc, char **argv)
 	log_info(logger, "Se concreto handshake SAFA");
 	handshake_mdj();
 	log_info(logger, "Se concreto handshake MDJ");
-	//handshake_fm9();
+	handshake_fm9();
 	log_info(logger, "Se concreto handshake FM9");
 
 	//inicializamos el semaforo en maximas_conexiones - 3 que son fijas
@@ -166,17 +166,16 @@ void handshake_safa()
 void *interpretar_mensajes_de_safa(void *args)
 {
 	Paquete paquete;
-	//Paquete respuesta;
+	Paquete respuesta;
 	while (1)
 	{
 		recibir_paquete(socket_safa, &paquete);
 
-		if (paquete.header.tipoMensaje != FIN_BLOQUEADO)
+		if (paquete.header.tipoMensaje != FINALIZAR)
 			_exit_with_error(socket_safa, "No pude interpretar el mensaje", paquete.Payload);
 
 		paquete.header.emisor = ELDIEGO;
-		/*
-		paquete.header.tipoMensaje = FINALIZAR;
+
 		enviar_paquete(socket_fm9, &paquete);
 
 		recibir_paquete(socket_fm9, &respuesta);
@@ -184,12 +183,11 @@ void *interpretar_mensajes_de_safa(void *args)
 		if (respuesta.header.tipoMensaje != SUCCESS)
 			_exit_with_error(socket_fm9, "No pudo liberar la memoria de un proceso", respuesta.Payload);
 
-		*/
 		paquete.header.tipoMensaje = DTB_FINALIZAR;
 		enviar_paquete(socket_safa, &paquete);
 
 		free(paquete.Payload);
-		//free(respuesta.Payload);
+		free(respuesta.Payload);
 	}
 }
 
@@ -469,7 +467,6 @@ void es_dtb_dummy(Paquete *paquete)
 	log_debug(logger, "Le envio el pedido a fm9");
 
 	Paquete respuesta;
-	/*
 	int cargado = cargar_a_memoria(dummy->gdtPID, escriptorio->path, script, &respuesta);
 
 	if (!cargado)
@@ -477,21 +474,6 @@ void es_dtb_dummy(Paquete *paquete)
 		enviar_error(DUMMY_FAIL_CARGA, dummy->gdtPID);
 		return;
 	}
-    */
-
-	int desplazamiento_archivo = 0;
-	int desplazamiento = 0;
-	ArchivoAbierto archivo;
-	archivo.path = malloc(strlen(escriptorio->path) + 1);
-	strcpy(archivo.path, escriptorio->path);
-	archivo.cantLineas = 2;
-	void *archivo_serializado = DTB_serializar_archivo(&archivo, &desplazamiento_archivo);
-	respuesta.Payload = malloc(INTSIZE + desplazamiento_archivo);
-	memcpy(respuesta.Payload, &dummy->gdtPID, INTSIZE);
-	desplazamiento += INTSIZE;
-	memcpy(respuesta.Payload + INTSIZE, archivo_serializado, desplazamiento_archivo);
-	desplazamiento += desplazamiento_archivo;
-	respuesta.header.tamPayload = INTSIZE + desplazamiento_archivo;
 
 	respuesta.header = cargar_header(respuesta.header.tamPayload, DUMMY_SUCCESS, ELDIEGO);
 	enviar_paquete(socket_safa, &respuesta);

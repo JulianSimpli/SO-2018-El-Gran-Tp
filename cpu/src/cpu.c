@@ -28,7 +28,7 @@ int main(int argc, char **argv)
 	log_debug(logger, "Concrete handshake con safa");
 	handshake_dam();
 	log_debug(logger, "Concrete handshake con dam");
-	// handshake_fm9();
+	handshake_fm9();
 	sem_init(&sem_recibir_paquete, 0, 1);
 	sem_init(&sem_senial, 0, 1);
 	pthread_t p_thread_one;
@@ -122,7 +122,7 @@ int ejecutar_algoritmo(Paquete *paquete)
 				EnviarPaquete(socket_safa, nuevo_paquete);
 				free(nuevo_paquete->Payload);
 				free(nuevo_paquete);
-				return;
+				return 1;
 			}
 		}
 	}
@@ -136,8 +136,7 @@ int ejecutar_algoritmo(Paquete *paquete)
 		for (i = 0; i < quantum_local; i++)
 		{
 			log_debug(logger, "Quantum %d", i);
-			//char *primitiva = pedir_primitiva(dtb);
-			char *primitiva = "borrar /scripts/cpu_bound.escriptorio";
+			char *primitiva = pedir_primitiva(dtb);
 			if (!strcmp(primitiva, "Fallo"))
 			{
 				log_debug(logger, "Fallo el pedido de primitiva");
@@ -159,7 +158,7 @@ int ejecutar_algoritmo(Paquete *paquete)
 				EnviarPaquete(socket_safa, nuevo_paquete);
 				free(nuevo_paquete->Payload);
 				free(nuevo_paquete);
-				return;
+				return 1;
 			}
 			dtb->PC++;
 		}
@@ -174,7 +173,7 @@ int ejecutar_algoritmo(Paquete *paquete)
 			memcpy(nuevo_paquete->Payload + nuevo_paquete->header.tamPayload, &restante, sizeof(u_int32_t));
 			nuevo_paquete->header.tamPayload += sizeof(u_int32_t);
 			EnviarPaquete(socket_safa, nuevo_paquete);
-			return;
+			return 1;
 		}
 	}
 
