@@ -368,7 +368,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
 		log_info(logger, "GDT %d realizo la operacion bloqueante correctamente");
 
-		info_dtb->tiempo_respuesta = medir_tiempo(0, (info_dtb->tiempo_ini), (info_dtb->tiempo_fin));
+		//info_dtb->tiempo_respuesta = medir_tiempo(0, (info_dtb->tiempo_ini), (info_dtb->tiempo_fin));
 
 		if(dtb->PC == escriptorio->cantLineas)
 		{

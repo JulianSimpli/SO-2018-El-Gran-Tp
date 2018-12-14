@@ -335,17 +335,18 @@ char *get_block_full_path(int bloque)
     return block_path;
 }
 
-int crear_bloques(t_list *lista_bloques, int *cantidad_bytes)
+int crear_bloques(t_list *lista_bloques, int cantidad_bytes)
 {
     for (int i = 0; i < list_size(lista_bloques); i++)
     {
-        create_block((__intptr_t)list_get(lista_bloques, i), *cantidad_bytes);
-        *cantidad_bytes -= tamanio_bloques;
+        create_block((__intptr_t)list_get(lista_bloques, i), cantidad_bytes);
+        cantidad_bytes -= tamanio_bloques;
     }
 }
 
 int create_block_file(char *path, int cantidad_bytes)
 {
+    log_debug(logger, "Voy a escribir el file %s", path);
     FILE *f = fopen(path, "w+");
 
     if (f == NULL)

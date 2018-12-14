@@ -46,8 +46,8 @@ void *hilo_safa()
 	while (1)
 	{
 		Paquete *paquete = malloc(sizeof(Paquete));
-		log_info(logger, "Soy el hilo %d, espero paquete de safa", process_get_thread_id());
 		sem_wait(&sem_recibir_paquete);
+		log_info(logger, "Soy el hilo %d, espero paquete de safa", process_get_thread_id());
 		int r = RecibirPaqueteCliente(socket_safa, paquete);
 		if (r <= 0)
 			_exit_with_error(socket_safa, "Se desconecto safa", paquete);
@@ -136,7 +136,7 @@ int ejecutar_algoritmo(Paquete *paquete)
 		{
 			log_debug(logger, "Quantum %d", i);
 			//char *primitiva = pedir_primitiva(dtb);
-			char *primitiva = "crear /equipos/Rafaela 5";
+			char *primitiva = "crear /resultados/River 5";
 			if (!strcmp(primitiva, "Fallo"))
 			{
 				log_debug(logger, "Fallo el pedido de primitiva");
@@ -176,6 +176,7 @@ int ejecutar_algoritmo(Paquete *paquete)
 			return;
 		}
 	}
+
 	if (!flag)
 	{
 		log_debug(logger, "Envio DTB EJECUTO");
@@ -394,6 +395,7 @@ int connect_to_server(char *ip, char *port)
 	log_info(logger, "Conectado!");
 
 	return server_socket;
+
 }
 
 void enviar_mensaje(Mensaje mensaje)

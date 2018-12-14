@@ -169,7 +169,7 @@ void interpretar_paquete(Paquete *paquete)
 
 		int tamanio = obtener_size_escriptorio(prueba);
 
-		log_debug(logger, "%s pesa %d bytes", ruta_absoluta, tamanio);
+		log_debug(logger, "%s pesa %d bytes", search_file, tamanio);
 
 		Paquete respuesta;
 		respuesta.header = cargar_header(INTSIZE, SUCCESS, MDJ);
@@ -317,9 +317,10 @@ int contar_ocurrencias(char *cadena, char caracter)
 	int count = 0;
 	for (int i = 0; cadena[i] != '\0'; i++)
 	{
-		if (cadena[i] = caracter)
+		if (cadena[i] == caracter)
 			count++;
 	}
+	return count;
 }
 
 void crear_archivo(Paquete *paquete)
@@ -339,18 +340,21 @@ void crear_archivo(Paquete *paquete)
 	char **directorios = string_split(ruta, "/");
 
 	int accesos = contar_ocurrencias(ruta, '/');
+	log_debug(logger, "accesso %d", accesos);
 
 	for (int i = 0; i < accesos - 1; i++)
 	{
 		char *directorio_a_buscar = directorios[i];
+		log_debug(logger, "Quiero buscar %s", directorio_a_buscar);
 		directorio_actual = realloc(directorio_actual, strlen(directorio_actual) + strlen(directorio_a_buscar) + 1);
 		strcat(directorio_actual, "/");
 		strcat(directorio_actual, directorio_a_buscar);
+		log_debug(logger, "Voy a abrir el directorio %s", directorio_actual);
 		dir = opendir(directorio_actual);
 		if (dir == NULL)
 		{
-			log_info(logger, "Procedo a crear este directorio: %s", current_path);
-			mkdir(directorio_a_buscar, 0777);
+			log_info(logger, "Procedo a crear este directorio: %s", directorio_actual);
+			mkdir(directorio_actual, 0777);
 		}
 		closedir(dir);
 	}
@@ -364,17 +368,15 @@ void crear_archivo(Paquete *paquete)
 
 	//for que recorrra la lista de bloques libres, llame a la funcion create_block y marque el bitarray
 	//Va decrementando la cantidad de lineas que le resten escribir con \n necesarios en c/u
-	int retorno = crear_bloques(bloques_libres, &bytes_a_crear);
+	int retorno = crear_bloques(bloques_libres, bytes_a_crear);
 
 	Archivo_metadata nuevo_archivo;
 	nuevo_archivo.nombre = ruta_absoluta(ruta);
 	nuevo_archivo.bloques = bloques_libres;
 	nuevo_archivo.tamanio = bytes_a_crear;
 
-	//TODO: Agregar en una lista que este archivo esta siendo leido
 	//Crea el archivo metadata con la informacion de donde estan los bloques
-	//TODO: Si esta abierto hace un wait en ese semaforo y queda bloqueado
-	//Caso de carrera en el que un escriptorio crea un archivo que otro proceso va a leer
+	log_debug(logger, "Va guardar la metadata del archivo %s", nuevo_archivo.nombre);
 	int resultado = guardar_metadata(&nuevo_archivo);
 
 	if (resultado != 0)
@@ -388,6 +390,7 @@ void crear_archivo(Paquete *paquete)
 
 char *ruta_absoluta(char *ruta)
 {
+	int len_int = INTSIZE * 2;
 	char *path = malloc(strlen(file_path) + strlen(ruta) + 1);
 	strcpy(path, file_path);
 	strcat(path, ruta);
