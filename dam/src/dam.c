@@ -12,7 +12,7 @@ int main(int argc, char **argv)
 	log_info(logger, "Se concreto handshake SAFA");
 	handshake_mdj();
 	log_info(logger, "Se concreto handshake MDJ");
-	handshake_fm9();
+	//handshake_fm9();
 	log_info(logger, "Se concreto handshake FM9");
 
 	//inicializamos el semaforo en maximas_conexiones - 3 que son fijas
@@ -166,30 +166,30 @@ void handshake_safa()
 void *interpretar_mensajes_de_safa(void *args)
 {
 	Paquete paquete;
-	RecibirPaqueteCliente(socket_safa, &paquete);
-	switch (paquete.header.tipoMensaje)
+	//Paquete respuesta;
+	while (1)
 	{
-	case DTB_FINALIZAR:
-		break;
-	default:
-		log_error(logger, "No pude interpretar el mensaje");
-		break;
-	}
-}
+		recibir_paquete(socket_safa, &paquete);
 
-void *interpretar_mensajes_de_fm9(void *args)
-{
-	int socket = (intptr_t)args;
-	//For para recibir mensaje de cpu, interpretarlo y enviar la respuesta
-	log_info(logger, "Soy el hilo %d, recibi una conexion en el socket: %d", process_get_thread_id(), socket);
-	log_info(logger, "Interpreto mensaje");
-	Paquete paquete;
-	RecibirPaqueteCliente(socket, &paquete);
-	switch (paquete.header.tipoMensaje)
-	{
-	case CARGADO:
-		log_info(logger, "FM9 alerto que ya cargo el archivo");
-		break;
+		if (paquete.header.tipoMensaje != FIN_BLOQUEADO)
+			_exit_with_error(socket_safa, "No pude interpretar el mensaje", paquete.Payload);
+
+		paquete.header.emisor = ELDIEGO;
+		/*
+		paquete.header.tipoMensaje = FINALIZAR;
+		enviar_paquete(socket_fm9, &paquete);
+
+		recibir_paquete(socket_fm9, &respuesta);
+
+		if (respuesta.header.tipoMensaje != SUCCESS)
+			_exit_with_error(socket_fm9, "No pudo liberar la memoria de un proceso", respuesta.Payload);
+
+		*/
+		paquete.header.tipoMensaje = DTB_FINALIZAR;
+		enviar_paquete(socket_safa, &paquete);
+
+		free(paquete.Payload);
+		//free(respuesta.Payload);
 	}
 }
 
@@ -227,10 +227,7 @@ int escuchar_conexiones(int server_socket)
 	int conexion_aceptada = accept(server_socket, NULL, NULL);
 
 	if (conexion_aceptada < 0)
-	{
 		_exit_with_error(server_socket, "Fallo el accept", NULL);
-		exit_gracefully(1);
-	}
 
 	log_info(logger, "Conexion aceptada nuevo socket: %d", conexion_aceptada);
 
@@ -263,10 +260,19 @@ int pedir_validar(char *path)
 	free(serializado);
 
 	Paquete respuesta;
+	sem_wait(&sem_mdj);
 	recibir_paquete(socket_mdj, &respuesta);
-	int size = 0;
-	memcpy(&size, respuesta.Payload, INTSIZE);
-	return respuesta.header.tipoMensaje == PATH_INEXISTENTE ? 0 : size;
+	log_debug(logger, "Recibi el tipo de mensaje %d", respuesta.header.tipoMensaje);
+	sem_post(&sem_mdj);
+
+	//Da lo mismo preguntar por si viene vacio el payload o si es el error PATH_INEXISTENTE
+	if (respuesta.header.tamPayload > 0) {
+		int size = 0;
+		memcpy(&size, respuesta.Payload, INTSIZE);
+		return size;
+	}
+
+	return 0;
 }
 
 int cargar_a_memoria(u_int32_t pid, char *path, char *file, Paquete *respuesta)
@@ -298,7 +304,7 @@ int cargar_a_memoria(u_int32_t pid, char *path, char *file, Paquete *respuesta)
 	log_debug(logger, "Pedido de carga a memoria a FM9 enviado");
 	free(serial_path);
 	free(serial_file);
-	// free(cargar.Payload);
+	free(cargar.Payload);
 
 	recibir_paquete(socket_fm9, respuesta); // Ahora se queda en este recv. Hay que armar el paquete fm9->dam
 	//EnviarDatosTipo(te envia un paquete con el payload en 0 y tiene que enviar la respuesta con el archivo abierto)
@@ -314,7 +320,7 @@ void enviar_error(Tipo tipo, int pid)
 	error.header = cargar_header(INTSIZE, tipo, ELDIEGO);
 	enviar_paquete(socket_safa, &error);
 	log_error(logger, "El proceso %d fallo por %d", pid, tipo);
-	free(error.Payload);
+	//free(error.Payload);
 }
 
 void enviar_success(Tipo tipo, int pid)
@@ -340,9 +346,10 @@ void *interpretar_mensajes_de_cpu(void *arg)
 	log_debug(logger, "Soy el hilo %d, recibi una conexion en el socket: %d", process_get_thread_id(), socket);
 	log_info(logger, "Interpreto nuevo mensaje");
 
+	Paquete paquete;
+
 	while (1)
 	{
-		Paquete paquete;
 		recibir_paquete(socket, &paquete);
 
 		switch (paquete.header.tipoMensaje)
@@ -450,7 +457,7 @@ void es_dtb_dummy(Paquete *paquete)
 	log_debug(logger, "Le envio el pedido a fm9");
 
 	Paquete respuesta;
-
+	/*
 	int cargado = cargar_a_memoria(dummy->gdtPID, escriptorio->path, script, &respuesta);
 
 	if (!cargado)
@@ -458,6 +465,21 @@ void es_dtb_dummy(Paquete *paquete)
 		enviar_error(DUMMY_FAIL_CARGA, dummy->gdtPID);
 		return;
 	}
+    */
+
+	int desplazamiento_archivo = 0;
+	int desplazamiento = 0;
+	ArchivoAbierto archivo;
+	archivo.path = malloc(strlen(escriptorio->path) + 1);
+	strcpy(archivo.path, escriptorio->path);
+	archivo.cantLineas = 1;
+	void *archivo_serializado = DTB_serializar_archivo(&archivo, &desplazamiento_archivo);
+	respuesta.Payload = malloc(INTSIZE + desplazamiento_archivo);
+	memcpy(respuesta.Payload, &dummy->gdtPID, INTSIZE);
+	desplazamiento += INTSIZE;
+	memcpy(respuesta.Payload + INTSIZE, archivo_serializado, desplazamiento_archivo);
+	desplazamiento += desplazamiento_archivo;
+	respuesta.header.tamPayload = INTSIZE + desplazamiento_archivo;
 
 	respuesta.header = cargar_header(respuesta.header.tamPayload, DUMMY_SUCCESS, ELDIEGO);
 	enviar_paquete(socket_safa, &respuesta);

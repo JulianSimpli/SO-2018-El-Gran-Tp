@@ -145,12 +145,9 @@ int obtener_size_escriptorio(char *path)
 
 void interpretar_paquete(Paquete *paquete)
 {
-	Paquete *respuesta = malloc(sizeof(Paquete));
-	respuesta->header = cargar_header(0, SUCCESS, MDJ);
-
 	int accion = paquete->header.tipoMensaje;
-	sleep(retardo);
 	sem_wait(&sem_io);
+	sleep(retardo);
 
 	switch (accion)
 	{
@@ -167,7 +164,7 @@ void interpretar_paquete(Paquete *paquete)
 		if (existe == 0)
 		{
 			enviar_error(PATH_INEXISTENTE);
-			return;
+			break;
 		}
 
 		int tamanio = obtener_size_escriptorio(prueba);

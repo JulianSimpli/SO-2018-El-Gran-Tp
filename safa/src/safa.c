@@ -560,6 +560,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 	case SIGNAL:
 	{
 		t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc, SIGNAL);
+		log_debug(logger, "El pid %d pide signal a %s", pid, recurso->id);
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 		metricas_actualizar(dtb, pc);
 		recurso_signal(recurso, dtb->gdtPID, pc, socketFD);
@@ -747,7 +748,7 @@ void recurso_wait(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket)
 	{
 		list_add(recurso->pid_bloqueados, &pid);
 		avisar_desalojo_a_cpu(socket);
-		log_debug(logger, "El recurso queda bloqueado");
+		log_debug(logger, "El pid %d quedo bloqueado esperando el recurso %s", pid, recurso->id);
 		return;
 	}
 	
@@ -759,25 +760,26 @@ void recurso_signal(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket)
 {
 	recurso->semaforo++;
 	if (recurso->semaforo <= 0)
-	{
 		dtb_signal(recurso);
-		seguir_ejecutando(socket);
-	}
-	else
-		seguir_ejecutando(socket);
+
+	seguir_ejecutando(socket);
 }
 
 t_recurso *recurso_recibir(void *payload, int *pid, int *pc, Tipo senial)
 {
 	int desplazamiento = 0;
+	log_debug(logger, "deserializo string");
 	char *id_recurso = string_deserializar(payload, &desplazamiento);
 
+	log_debug(logger, "deserializo pid y pc");
 	deserializar_pid_y_pc(payload, pid, pc, &desplazamiento);
 
+	log_debug(logger, "Busco el recurso %s para el pid %d", id_recurso, *pid);
 	t_recurso *recurso = recurso_encontrar(id_recurso);
 	if (recurso == NULL)
 	{
-		int flag = senial != SIGNAL;
+		log_debug(logger, "El recurso no existe");
+		int flag = senial == SIGNAL;
 		recurso = recurso_crear(id_recurso, flag);
 	}
 

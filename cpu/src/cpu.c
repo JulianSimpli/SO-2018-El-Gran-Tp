@@ -29,8 +29,8 @@ int main(int argc, char **argv)
 	handshake_dam();
 	log_debug(logger, "Concrete handshake con dam");
 	//handshake_fm9();
-	sem_init(&sem_recibir_paquete, 0, 0);
-	sem_init(&sem_senial, 0, 0);
+	sem_init(&sem_recibir_paquete, 0, 1);
+	sem_init(&sem_senial, 0, 1);
 	pthread_t p_thread_one;
 	pthread_create(&p_thread_one, NULL, hilo_safa, NULL);
 	pthread_t p_thread_two;
@@ -101,7 +101,7 @@ int ejecutar_algoritmo(Paquete *paquete)
 		{
 			char *primitiva = pedir_primitiva(dtb);
 			log_debug(logger, "Primitiva %s", primitiva);
-			if(!strcmp(primitiva, "Fallo"))
+			if (!strcmp(primitiva, "Fallo"))
 			{
 				log_debug(logger, "Fallo el pedido de primitiva");
 				break;
@@ -131,22 +131,20 @@ int ejecutar_algoritmo(Paquete *paquete)
 		if (paquete->header.tipoMensaje == ESDTBQUANTUM)
 			memcpy(&quantum_local, paquete->Payload + paquete->header.tamPayload - INTSIZE, INTSIZE);
 		int i;
-		// cambios = 1;
+
 		for (i = 0; i < quantum_local; i++)
 		{
-			// sem_wait(cambios);
 			log_debug(logger, "Quantum %d", i);
-			char *primitiva = pedir_primitiva(dtb);
-			if(!strcmp(primitiva, "Fallo"))
+			//char *primitiva = pedir_primitiva(dtb);
+			char *primitiva = "flush /equipos/Rafaela";
+			if (!strcmp(primitiva, "Fallo"))
 			{
 				log_debug(logger, "Fallo el pedido de primitiva");
 				break;
 			}
-			//char *primitiva = "wait bloqueo";
 			log_debug(logger, "Primitiva %s", primitiva);
 			flag = ejecutar(primitiva, dtb); //avanzar el PC dentro del paquete
 			log_debug(logger, "Flag %d", flag);
-			dtb->PC++;
 			if (flag || finalizar)
 			{
 				finalizar = false;
@@ -162,7 +160,7 @@ int ejecutar_algoritmo(Paquete *paquete)
 				free(nuevo_paquete);
 				return;
 			}
-			// sem_post(cambios);
+			dtb->PC++;
 		}
 		//armar el paquete para mandar a safa, que dependiendo de si es RR o VRR, envía quantum restante
 		//si es RR, manda DTB_EJECUTO
@@ -180,6 +178,7 @@ int ejecutar_algoritmo(Paquete *paquete)
 	}
 	if (!flag)
 	{
+		log_debug(logger, "Envio DTB EJECUTO");
 		nuevo_paquete->header.tipoMensaje = DTB_EJECUTO;
 		void *DTB_serializado = DTB_serializar(dtb, &nuevo_paquete->header.tamPayload);
 		nuevo_paquete->header.emisor = CPU;
@@ -215,7 +214,7 @@ char *pedir_primitiva(DTB *dtb)
 	{
 		Paquete *primitiva_recibida = malloc(sizeof(Paquete));
 		RecibirPaqueteCliente(socket_fm9, primitiva_recibida);
-		if(primitiva_recibida->header.tipoMensaje == ERROR)
+		if (primitiva_recibida->header.tipoMensaje == ERROR)
 			return "Fallo";
 		char *primitiva = malloc(primitiva_recibida->header.tamPayload);
 		memcpy(primitiva, primitiva_recibida->Payload, primitiva_recibida->header.tamPayload);
@@ -566,23 +565,32 @@ int ejecutar_asignar(char **parametros, DTB *dtb)
 	return 0;
 }
 
+void enviar_pedido_recurso(char *recurso, int pid, int pc, Tipo senial)
+{
+	int len_recurso = 0;
+	void *recurso_serializado = string_serializar(recurso, &len_recurso);
+
+	Paquete pedido_recurso;
+	pedido_recurso.Payload = malloc(len_recurso + INTSIZE * 2);
+	memcpy(pedido_recurso.Payload, recurso_serializado, len_recurso);
+	memcpy(pedido_recurso.Payload + len_recurso, &pid, INTSIZE);
+	memcpy(pedido_recurso.Payload + len_recurso + INTSIZE, &pc, INTSIZE);
+
+	pedido_recurso.header = cargar_header(len_recurso + INTSIZE * 2, senial, CPU);
+
+	EnviarPaquete(socket_safa, &pedido_recurso);
+	log_debug(logger, "El pid %d pidio %d para el recurso %s", pid, senial, recurso);
+	free(recurso_serializado);
+	free(pedido_recurso.Payload);
+}
+
 int ejecutar_wait(char **parametros, DTB *dtb)
 {
 	printf("WAIT\n");
 
-	int len_recurso = 0;
-	void *recurso_serializado = string_serializar(parametros[1], &len_recurso);
+	char *recurso = parametros[1];
 
-	Paquete *pedido_recurso = malloc(sizeof(Paquete));
-	pedido_recurso->Payload = malloc(len_recurso + INTSIZE * 2);
-	memcpy(pedido_recurso->Payload, recurso_serializado, len_recurso);
-	memcpy(pedido_recurso->Payload + len_recurso, &dtb->gdtPID, INTSIZE);
-	memcpy(pedido_recurso->Payload + len_recurso + INTSIZE, &dtb->PC, INTSIZE);
-
-	pedido_recurso->header = cargar_header(len_recurso + INTSIZE * 2, WAIT, CPU);
-
-	log_debug(logger, "Envio a safa");
-	EnviarPaquete(socket_safa, pedido_recurso);
+	enviar_pedido_recurso(recurso, dtb->gdtPID, dtb->PC, WAIT);
 
 	log_debug(logger, "Queda bloqueado esperando que lo habilite el otro hilo");
 	sem_wait(&sem_senial);
@@ -591,7 +599,7 @@ int ejecutar_wait(char **parametros, DTB *dtb)
 	if (senial_safa == ROJADIRECTA)
 	{
 		bloqueate_safa(dtb);
-		return 1; //agarrar este false en el ejecutar
+		return 1;
 	}
 	return 0;
 }
@@ -601,22 +609,21 @@ int ejecutar_signal(char **parametros, DTB *dtb)
 	printf("SIGNAL\n");
 	char *recurso = parametros[1];
 
-	Paquete *liberar_recurso = malloc(sizeof(Paquete));
-	liberar_recurso->header.emisor = CPU;
-	liberar_recurso->header.tipoMensaje = SIGNAL;
-
-	int len_recurso = 0;
-	void *recurso_serializado = string_serializar(recurso, &len_recurso);
-	liberar_recurso->header.tamPayload = len_recurso;
-	liberar_recurso->Payload = malloc(len_recurso);
-	memcpy(liberar_recurso->Payload, recurso, len_recurso);
-
-	EnviarPaquete(socket_safa, liberar_recurso);
+	enviar_pedido_recurso(recurso, dtb->gdtPID, dtb->PC, SIGNAL);
 
 	log_debug(logger, "Queda bloqueado esperando que lo habilite el otro hilo");
 	return 0;
 }
 
+/**
+ * Verificará que el archivo solicitado esté abierto por el G.DT.
+ * En caso que no se encuentre, se abortará el G.DT.
+ * Se enviará una solicitud a El Diego indicando que se requiere hacer
+ * un Flush del archivo, enviando los parámetros necesarios para que 
+ * pueda obtenerlo desde FM9 y guardarlo en MDJ.
+ * TODO: Se comunicará al proceso S-AFA que el G.DT se encuentra a la espera
+ * de una respuesta por parte de El Diego y S-AFA lo bloqueará.
+ */
 int ejecutar_flush(char **parametros, DTB *dtb)
 {
 	printf("FLUSH\n");
@@ -642,35 +649,23 @@ int ejecutar_flush(char **parametros, DTB *dtb)
 		//abortar GDT
 		//Error 30001: El archivo no se encuentra abierto
 	}
-	else
-	{
-		Paquete *flush_a_dam = malloc(sizeof(Paquete));
-		flush_a_dam->header.emisor = CPU;
-		flush_a_dam->header.tipoMensaje = FLUSH;
-		//mensaje al DAM
 
-		int len = 0;
-		void *path_serializado = string_serializar(path, &len);
-		flush_a_dam->header.tamPayload = len;
-		flush_a_dam->Payload = malloc(flush_a_dam->header.tamPayload);
-		memcpy(flush_a_dam->Payload, path_serializado, len);
-		EnviarPaquete(socket_dam, flush_a_dam);
+	Paquete *flush_a_dam = malloc(sizeof(Paquete));
+	flush_a_dam->header.emisor = CPU;
+	flush_a_dam->header.tipoMensaje = FLUSH;
+	//mensaje al DAM
 
-		//mensaje a SAFA
-		dtb->entrada_salidas++;
-		bloqueate_safa(dtb);
-		return 1;
-	}
-	return 0;
-	/*
-	Verificará que el archivo solicitado esté abierto por el G.DT.
-	En caso que no se encuentre, se abortará el G.DT.
-	Se enviará una solicitud a El Diego indicando que se requiere hacer
- 	un Flush del archivo, enviando los parámetros necesarios para que 
- 	pueda obtenerlo desde FM9 y guardarlo en MDJ.
-	TODO: Se comunicará al proceso S-AFA que el G.DT se encuentra a la espera
- 	de una respuesta por parte de El Diego y S-AFA lo bloqueará.
-	*/
+	int len = 0;
+	void *path_serializado = string_serializar(path, &len);
+	flush_a_dam->header.tamPayload = len;
+	flush_a_dam->Payload = malloc(flush_a_dam->header.tamPayload);
+	memcpy(flush_a_dam->Payload, path_serializado, len);
+	EnviarPaquete(socket_dam, flush_a_dam);
+
+	//mensaje a SAFA
+	dtb->entrada_salidas++;
+	bloqueate_safa(dtb);
+	return 1;
 }
 
 int ejecutar_close(char **parametros, DTB *dtb)
