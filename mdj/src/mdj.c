@@ -86,6 +86,7 @@ void inicializar_log(char *program)
 void inicializar_semaforos()
 {
 	sem_init(&sem_io, 0, 1);
+	sem_init(&sem_bitmap, 0, 1);
 }
 
 void inicializar(char **argv)
@@ -546,7 +547,7 @@ void guardar_datos(Paquete *paquete)
 		config_set_value(metadata, "BLOQUES", convertir_bloques_a_string(archivo));
 		config_save(metadata);
 
-		crear_bloques(nuevos_bloques, &buffer_size); //marco el bitarray
+		crear_bloques(nuevos_bloques, buffer_size); //marco el bitarray
 
 		for (int i = 0; buffer_size > 0; i++)
 		{

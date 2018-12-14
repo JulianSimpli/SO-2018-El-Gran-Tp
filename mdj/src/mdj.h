@@ -70,6 +70,7 @@ char *current_path;
 int retardo;
 int transfer_size;
 sem_t sem_io;
+sem_t sem_bitmap;
 
 int validar_archivo(char *, char *);
 void crear_archivo(Paquete *paquete);
@@ -328,6 +329,22 @@ Mensaje *recibir_mensaje(int conexion)
     return buffer;
 }
 
+void update_bit_array()
+{
+    int size_bitmap = cantidad_bloques / 8;
+    log_debug(logger,"Tamaño bitmap: %d",size_bitmap);
+    char *bitmap = "/Bitmap.bin";
+    char *bitmap_path = malloc(strlen(metadata_path)+strlen(bitmap)+1);
+    strcpy(bitmap_path,metadata_path);
+    strcat(bitmap_path,bitmap);
+    FILE *abrir_bitmap = fopen(bitmap_path, "wb");
+
+    sem_wait(&sem_bitmap);
+    fwrite(bitarray,size_bitmap,1,abrir_bitmap);
+    fclose(abrir_bitmap);
+    sem_post(&sem_bitmap);
+}
+
 char *get_block_full_path(int bloque)
 {
     char *block_path = malloc(strlen(blocks_path) + strlen("/") + strlen(".bin") + 1 + 10);
@@ -475,7 +492,7 @@ void borrar_archivo(Paquete *paquete)
         enviar_error(ARCHIVO_NO_EXISTE);
 
     //TODO: Lee metadata del archivo y devuelve los bloques
-    t_config *metadata = config_create(ruta);
+    t_config *metadata = config_create(ruta_absoluta(ruta));
     char **bloques_ocupados = config_get_array_value(metadata, "BLOQUES");
 
     int cantidad_bloques_del_path = config_get_int_value(metadata, "TAMANIO") / tamanio_bloques;
@@ -485,10 +502,11 @@ void borrar_archivo(Paquete *paquete)
         destroy_block(atoi(bloques_ocupados[i]));
         // Modifica el bitarray
     }
+    update_bit_array();
     //liberar();
     config_destroy(metadata);
     //Borra los metadata
-    remove(ruta);
+    remove(ruta_absoluta(ruta));
     //Crea paquete OK
     Paquete respuesta;
     respuesta.header = cargar_header(0, SUCCESS, MDJ);

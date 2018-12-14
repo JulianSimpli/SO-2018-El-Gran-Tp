@@ -28,7 +28,7 @@ int main(int argc, char **argv)
 	log_debug(logger, "Concrete handshake con safa");
 	handshake_dam();
 	log_debug(logger, "Concrete handshake con dam");
-	//handshake_fm9();
+	// handshake_fm9();
 	sem_init(&sem_recibir_paquete, 0, 1);
 	sem_init(&sem_senial, 0, 1);
 	pthread_t p_thread_one;
@@ -60,7 +60,7 @@ int ejecutar(char *linea, DTB *dtb)
 {
 	int i = 0, existe = 0, flag = 1;
 	//Calcula la cantidad de primitivas que hay en el array
-	size_t cantidad_primitivas = sizeof(primitivas) / sizeof(primitivas[0]) - 1;
+	size_t cantidad_primitivas = sizeof(primitivas) / sizeof(primitivas[0]);
 
 	//Para poder identificar el comando y que el resto son parametros necesarios para que ejecute
 	//Por ej: linea = abrir /home/utnso/
@@ -71,7 +71,7 @@ int ejecutar(char *linea, DTB *dtb)
 		if (!strcmp(primitivas[i].name, parameters[0]))
 		{
 			log_debug(logger, "Interprete %s", primitivas[i].name);
-			existe = 11;
+			existe = 1;
 			log_info(logger, primitivas[i].doc);
 			//llama a la funcion que tiene guardado esa primitiva en la estructura
 			flag = primitivas[i].func(parameters, dtb);
@@ -93,7 +93,8 @@ int ejecutar_algoritmo(Paquete *paquete)
 	log_debug(logger, "pid %d", dtb->gdtPID);
 	Paquete *nuevo_paquete = malloc(sizeof(Paquete));
 	ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
-	int cantidad_lineas = escriptorio->cantLineas;
+	// int cantidad_lineas = escriptorio->cantLineas;
+	int cantidad_lineas = 1;
 	int flag = 1;
 	if (!strcmp(algoritmo, "FIFO"))
 	{
@@ -136,7 +137,7 @@ int ejecutar_algoritmo(Paquete *paquete)
 		{
 			log_debug(logger, "Quantum %d", i);
 			//char *primitiva = pedir_primitiva(dtb);
-			char *primitiva = "crear /resultados/River 5";
+			char *primitiva = "borrar /scripts/cpu_bound.escriptorio";
 			if (!strcmp(primitiva, "Fallo"))
 			{
 				log_debug(logger, "Fallo el pedido de primitiva");
@@ -207,6 +208,7 @@ char *pedir_primitiva(DTB *dtb)
 	desplazamiento += size_archivo;
 
 	cargar_header(desplazamiento, NUEVA_PRIMITIVA, CPU);
+
 
 	log_debug(logger, "Pido a fm9 siguiente primitiva");
 

@@ -266,7 +266,8 @@ int pedir_validar(char *path)
 	sem_post(&sem_mdj);
 
 	//Da lo mismo preguntar por si viene vacio el payload o si es el error PATH_INEXISTENTE
-	if (respuesta.header.tamPayload > 0) {
+	if (respuesta.header.tamPayload > 0)
+	{
 		int size = 0;
 		memcpy(&size, respuesta.Payload, INTSIZE);
 		return size;
@@ -472,7 +473,7 @@ void es_dtb_dummy(Paquete *paquete)
 	ArchivoAbierto archivo;
 	archivo.path = malloc(strlen(escriptorio->path) + 1);
 	strcpy(archivo.path, escriptorio->path);
-	archivo.cantLineas = 1;
+	archivo.cantLineas = 2;
 	void *archivo_serializado = DTB_serializar_archivo(&archivo, &desplazamiento_archivo);
 	respuesta.Payload = malloc(INTSIZE + desplazamiento_archivo);
 	memcpy(respuesta.Payload, &dummy->gdtPID, INTSIZE);
@@ -628,14 +629,17 @@ void borrar_archivo(Paquete *paquete)
 	char *path = string_deserializar(paquete->Payload, &desplazamiento);
 
 	log_debug(logger, "Envio a MDJ");
-	//Reenvio el pedido de crear archivo a mdj
-	int size = paquete->header.tamPayload - INTSIZE;
+	//Para no terminar deserializar y volver a serializar
+	//Reenvio el pedido de borrar archivo a mdj
+	//no necesito mandarle el PID
 	Paquete pedido;
-	pedido.header = cargar_header(size, BORRAR_ARCHIVO, ELDIEGO);
-	pedido.Payload = malloc(size);
-	memmove(pedido.Payload, paquete->Payload + INTSIZE, size);
+	int len = paquete->header.tamPayload - INTSIZE; //Lo que hay en el payload menos el pid
+	pedido.header = cargar_header(paquete->header.tamPayload, BORRAR_ARCHIVO, ELDIEGO);
+	pedido.Payload = malloc(paquete->header.tamPayload);
+	//Reutilizo el paquete payload pero con el offset del pid
+	memcpy(pedido.Payload, paquete->Payload + INTSIZE, len);
 
-	enviar_paquete(socket_mdj, paquete);
+	enviar_paquete(socket_mdj, &pedido);
 
 	Paquete respuesta_mdj;
 	sem_wait(&sem_mdj);
