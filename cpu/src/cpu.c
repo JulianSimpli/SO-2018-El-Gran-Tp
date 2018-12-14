@@ -660,24 +660,23 @@ int ejecutar_flush(char **parametros, DTB *dtb)
 
 	//mensaje al DAM
 
-	int len = 0;
-	void *path_serializado = string_serializar(path, &len);
+	int desplazamiento = 0;
+	void *archivo_serializado = DTB_serializar_archivo(archivo_encontrado, desplazamiento);
 	Paquete *flush_a_dam = malloc(sizeof(Paquete));
 	flush_a_dam->header.emisor = CPU;
 	flush_a_dam->header.tipoMensaje = FLUSH;
-	flush_a_dam->header.tamPayload = INTSIZE + len;
+	flush_a_dam->header.tamPayload = INTSIZE + desplazamiento;
 	flush_a_dam->Payload = malloc(flush_a_dam->header.tamPayload);
 
 	memcpy(flush_a_dam->Payload, &dtb->gdtPID, INTSIZE);
-	memcpy(flush_a_dam->Payload + INTSIZE, path_serializado, len);
+	memcpy(flush_a_dam->Payload + INTSIZE, archivo_serializado, desplazamiento);
 	EnviarPaquete(socket_dam, flush_a_dam);
-	log_error(logger, "Enviar flush a dam de pid %d", dtb->gdtPID);
+	log_debug(logger, "Enviar flush a dam de pid %d", dtb->gdtPID);
 
 	//mensaje a SAFA
 	dtb->entrada_salidas++;
 	bloqueate_safa(dtb);
 
-	free(path_serializado);
 	free(flush_a_dam->Payload);
 	free(flush_a_dam);
 	return 1;
