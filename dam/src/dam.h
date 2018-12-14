@@ -57,7 +57,7 @@ void *interpretar_mensajes_de_fm9(void *);
 void aceptar_cpus();
 
 void enviar_obtener_datos(char *path, int size);
-void enviar_guardar_datos(char *path, Paquete *paquete);
+void enviar_guardar_datos(Paquete *paquete);
 
 //Interpreta cpu
 void abrir(Paquete *paquete);

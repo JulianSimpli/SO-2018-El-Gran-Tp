@@ -406,27 +406,38 @@ void enviar_obtener_datos(char *path, int size)
 	free(pedido_escriptorio.Payload);
 }
 
-void enviar_guardar_datos(char *path, Paquete *paquete)
+void enviar_guardar_datos(Paquete *paquete)
 {
-	Paquete guardar;
-	int desplazamiento = 0;
-	char *serializado = string_serializar(path, &desplazamiento);
-	int size = paquete->header.tamPayload;
+	int desplazamiento = 0, tam_path = 0, tam_file = 0;
+	char *path = string_deserializar(paquete->Payload, &desplazamiento);
+	char *file = string_deserializar(paquete->Payload, &desplazamiento);
+	void *serial_path = string_serializar(path, &tam_path);
+	void *serial_file = string_serializar(file, &tam_file);
 
-	guardar.Payload = malloc(desplazamiento + INTSIZE + paquete->header.tamPayload);
-
-	memcpy(guardar.Payload + desplazamiento, serializado, desplazamiento);
-	int offset = 0;
-	memcpy(guardar.Payload + desplazamiento, &offset, INTSIZE);
+	Paquete guardar_mdj;
+	u_int32_t offset = 0;
+	u_int32_t len = strlen(file);
+	guardar_mdj.header = cargar_header(INTSIZE*2 + tam_path + tam_file, GUARDAR_DATOS, ELDIEGO);
+	guardar_mdj.Payload = malloc(guardar_mdj.header.tamPayload);
+	memcpy(guardar_mdj.Payload + desplazamiento, serial_path, tam_path);
+	desplazamiento += tam_path;
+	memcpy(guardar_mdj.Payload + desplazamiento, &offset, INTSIZE);
+	desplazamiento += INTSIZE; 
+	memcpy(guardar_mdj.Payload + desplazamiento, &len, INTSIZE);
 	desplazamiento += INTSIZE;
-	//copia el len como tercer parametro para mdj porque lo tiene del paquete que mando fm9
-	memcpy(guardar.Payload + desplazamiento, paquete->Payload, size);
-	desplazamiento += size;
+	memcpy(guardar_mdj.Payload + desplazamiento, serial_file, tam_file);
+	desplazamiento += tam_file;
 
-	guardar.header = cargar_header(desplazamiento, GUARDAR_DATOS, ELDIEGO);
+	enviar_paquete(socket_mdj, &guardar_mdj);
+	log_debug(logger, "Envie guardar_datos a mdj con un payload de %d", guardar_mdj.header.tamPayload);
+	log_debug(logger, "Payload:\nPath: %s\nbytes_offset: %d\nbuffer_size: %d\nFile:\n%s",
+	path, offset, len, file);
 
-	enviar_paquete(socket_mdj, &guardar);
-	free(guardar.Payload);
+	free(path);
+	free(file);
+	free(serial_path);
+	free(serial_file);
+	free(guardar_mdj.Payload);
 }
 
 void es_dtb_dummy(Paquete *paquete)
@@ -543,6 +554,7 @@ void flush(Paquete *paquete)
 
 	Paquete respuesta_fm9;
 	recibir_paquete(socket_fm9, &respuesta_fm9);
+	log_debug(logger, "Recibi el path y el archivo entero y pesa %d", respuesta_fm9.header.tamPayload);
 
 	if (respuesta_fm9.header.tipoMensaje == FALLO_DE_SEGMENTO_FLUSH)
 	{
@@ -550,8 +562,7 @@ void flush(Paquete *paquete)
 		return;
 	}
 
-	log_debug(logger, "Recibi el archivo entero y pesa %d", respuesta_fm9.header.tamPayload);
-	enviar_guardar_datos(path, &respuesta_fm9);
+	enviar_guardar_datos(&respuesta_fm9);
 
 	Paquete respuesta_mdj;
 	sem_wait(&sem_mdj);

@@ -695,38 +695,38 @@ void loggear_finalizacion(DTB *dtb, DTB_info *info_dtb)
 			 (info_dtb->kill) ? "Si" : "No",
 			 Estados[info_dtb->estado]);
 
-	FILE *logger_fin = fopen("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src/logs/DTB_finalizados.log", "a");
+	FILE *logger_file = fopen("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src/logs/DTB_finalizados.log", "a");
 
 	if (dtb->PC > 1)
 	{
 		if (info_dtb->socket_cpu)
-			fprintf(logger_fin, "Ultima cpu usada: %d", info_dtb->socket_cpu);
+			fprintf(logger_file, "Ultima cpu usada: %d", info_dtb->socket_cpu);
 
-		fprintf(logger_fin, "Ejecuto %d operaciones de entrada/salida", dtb->entrada_salidas);
+		fprintf(logger_file, "Ejecuto %d operaciones de entrada/salida", dtb->entrada_salidas);
 	}
 	else if (dtb->PC == 1 && !info_dtb->kill)
-		fprintf(logger_fin, "El proceso nunca pudo ser cargado en memoria");
+		fprintf(logger_file, "El proceso nunca pudo ser cargado en memoria");
 
-	fprintf(logger_fin, "Archivos abiertos: %d\n", list_size(dtb->archivosAbiertos));
+	fprintf(logger_file, "Archivos abiertos: %d\n", list_size(dtb->archivosAbiertos));
 	for (int i = 0; i < list_size(dtb->archivosAbiertos); i++)
 	{
 		ArchivoAbierto *archivo;
 		archivo = list_get(dtb->archivosAbiertos, i);
 		if (i == 0)
-			fprintf(logger_fin, "Path Escriptorio: %s\n", archivo->path);
+			fprintf(logger_file, "Path Escriptorio: %s\n", archivo->path);
 		else
-			fprintf(logger_fin, "Archivo n° %i: %s\n", i, archivo->path);
+			fprintf(logger_file, "Archivo n° %i: %s\n", i, archivo->path);
 	}
 
-	fprintf(logger_fin, "Recursos retenidos: %d\n", list_size(info_dtb->recursos_asignados));
+	fprintf(logger_file, "Recursos retenidos: %d\n", list_size(info_dtb->recursos_asignados));
 	for (int i = 0; i < list_size(info_dtb->recursos_asignados); i++)
 	{
 		t_recurso *recurso;
 		recurso = list_get(info_dtb->recursos_asignados, i);
-		fprintf(logger_fin, "Recurso retenido n° %i: %s\n", i, recurso->id);
+		fprintf(logger_file, "Recurso retenido n° %i: %s\n", i, recurso->id);
 	}
 
-	fclose(logger_fin);
+	fclose(logger_file);
 }
 
 void enviar_finalizar_dam(u_int32_t pid)
