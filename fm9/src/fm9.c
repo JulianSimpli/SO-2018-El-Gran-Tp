@@ -1,4 +1,5 @@
 #include "fm9.h"
+#include <commons/string.h>
 
 char *MODO, *IP_FM9;
 int PUERTO_FM9, TAMANIO, MAX_LINEA, TAM_PAGINA, socketElDiego, lineasTotales, framesTotales, lineasPorFrame, transfer_size;
@@ -9,8 +10,7 @@ t_list* framesMemoria;
 t_list* procesos;
 t_list* archivosPorProceso; //tabla global de pid-pathArchivo
 
-sem_t escrituraMemoria;
-sem_t primitiva;
+sem_t abrir;
 
 bool end;
 
@@ -36,8 +36,7 @@ void obtenerValoresArchivoConfiguracion() {
 
 void inicializarMemoriaLineas() {
 	transfer_size = 0;
-	sem_init(&escrituraMemoria, 0, 1);
-	sem_init(&primitiva, 0, 1);
+	sem_init(&abrir, 0, 1);
 	procesos = list_create();
 	archivosPorProceso = list_create();
 	lineasTotales = TAMANIO/MAX_LINEA;
@@ -168,6 +167,34 @@ void cargarArchivoAMemoriaTPI(int idProceso, char* path, char* archivo, int sock
 
 }
 
+char** cargarArray(char* archivo, int* contadorArray) {
+	char **array = (char**)malloc(contar_lineas(archivo)*sizeof(char*));
+	for(int x = 0; x < contar_lineas(archivo); x++) {
+		array[x] = (char*) malloc(MAX_LINEA);
+	}
+	int flag = 0;
+	int i = 0;
+	int linea = 0;
+	while(archivo[i] != '\0') {
+		if (archivo[i] == '\n' && flag == 0) { //por si empieza con un \0
+			strcpy(array[(*contadorArray)], "lineaVacia");
+			flag = 1;
+			(*contadorArray)++;
+		} else if (archivo[i] == '\n' && archivo[i-1] == '\n') {
+			strcpy(array[(*contadorArray)], "lineaVacia");
+			(*contadorArray)++;
+		} else if (archivo[i] != '\n' && archivo[i] != '\0') {
+			linea++;
+		} else if (archivo[i] == '\n') {
+			strcpy(array[(*contadorArray)], string_substring(archivo, i-linea, linea));
+			linea = 0;
+			(*contadorArray)++;
+		}
+		i++;
+	}
+	return array;
+}
+
 void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo, int socketFD) {
 	if(elPidTieneElPath(idProceso, path)) {
 		log_info(logger, "el pid: %d ya tiene el archivo: %s\n", idProceso, path);
@@ -216,8 +243,10 @@ void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo, int sock
 		log_info(logger, "El archivo ya cargado fue agregado a los archivos abiertos del proceso: %d\n", idProceso);
 		enviar_abrio_a_dam(socketFD, idProceso, path, archivo);
 	} else {
-		char** arrayLineas = (char**) string_split(archivo, "\n"); //deja un elemento con NULL al final
-		int cantidadDeLineas = contarElementosArray(arrayLineas);
+//		char** arrayLineas = (char**) string_split(archivo, "\n"); //deja un elemento con NULL al final
+		int cantidadDeLineas = 0;
+		char** arrayLineas = cargarArray(archivo, &cantidadDeLineas);
+//		int cantidadDeLineas = contarElementosArray(arrayLineas);
 		log_info(logger, "El archivo a cargar es: %s\n", path);
 		int inicioDeLinea = lineasLibresConsecutivasMemoria(cantidadDeLineas);
 		if (inicioDeLinea >= 0) {
@@ -261,7 +290,6 @@ void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo, int sock
 			}
 			log_info(logger, "Archivo: %s cargado correctamente en el pid: %d\n", path, idProceso);
 			agregarArchivoYProcesoALista(idProceso, path);
-			free(arrayLineas);
 			log_info(logger, "---------------------------El archivo a cargar es: %s\n", path);
 			enviar_abrio_a_dam(socketFD, idProceso, path, archivo);
 		} else {
@@ -270,6 +298,7 @@ void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo, int sock
 			paquete.header = cargar_header(0, ESPACIO_INSUFICIENTE_ABRIR, FM9);
 			EnviarPaquete(socketFD, &paquete);
 		}
+		free(arrayLineas);
 	}
 }
 
@@ -333,8 +362,10 @@ void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo, int socketFD) 
 		log_info(logger, "Archivo: %s de pid: %d, cargado con éxito\n", path, pid);
 	} else {
 		//el archivo no existe? lo cargo
-		char** arrayLineas = (char**) string_split(archivo, "\n"); //deja un elemento con NULL al final
-		int cantidadDeLineas = contarElementosArray(arrayLineas);
+//		char** arrayLineas = (char**) string_split(archivo, "\n"); //deja un elemento con NULL al final
+//		int cantidadDeLineas = contarElementosArray(arrayLineas);
+		int cantidadDeLineas = 0;
+		char** arrayLineas = cargarArray(archivo, &cantidadDeLineas);
 		//el proceso existe?
 		if(obtenerProcesoId(pid)) {
 			//el proceso existe, cargo el archivo y se lo asigno
@@ -421,12 +452,12 @@ void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo, int socketFD) 
 ////////////////////////////// ↓↓↓  PRIMITIVA CLOSE ↓↓↓  //////////////////////////////////////////////
 void liberarArchivoSPA(int pid, char* path, int socket) {
 	//le pertenece el path al pid?
+	Paquete paquete;
 	if (elPidTieneElPath(pid, path)) {
 		//traigo el segmento y las paginas que ocupa
 		ProcesoArchivo* proceso = obtenerProcesoId(pid);
 		SegmentoArchivoSPA* segmento = obtenerSegmentoSPA(proceso->segmentos, path);
 		//hay mas de un proceso con el mismo archivo?
-		printf("cantidadDeProcesosConElArchivoSPA: %d\n", cantidadDeProcesosConElArchivoSPA(path));
 		if (cantidadDeProcesosConElArchivoSPA(path) < 2) {
 			//es el único -> lo borro de memoria
 			//obtengo las paginas que posee el segmento del archivo a liberar
@@ -444,13 +475,18 @@ void liberarArchivoSPA(int pid, char* path, int socket) {
 				LAMBDA(void _(SegmentoArchivoSPA* ss) {free(ss->idArchivo); list_destroy(ss->paginas); free(ss);}));
 		quitarArchivoYProcesoDeTabla(pid, path);
 		log_info(logger, "Archivo %s liberado correctamente\n", path);
+		paquete.header = cargar_header(0, CLOSE, FM9);
+		EnviarPaquete(socket, &paquete);
 	} else {
 		log_info(logger, "el archivo %s no se encuentra abierto por el pid %d\n", path, pid);
+		paquete.header = cargar_header(0, FALLO_DE_SEGMENTO_CLOSE, FM9);
+		EnviarPaquete(socket, &paquete);
 	}
 }
 
 void liberarArchivoSEG(int pid, char* path, int socket) {
 	//le pertenece el path al pid?
+	Paquete paquete;
 	if (elPidTieneElPath(pid, path)) {
 		ProcesoArchivo* proceso = obtenerProcesoId(pid);
 		SegmentoArchivoSEG* segmento = obtenerSegmentoSEG(proceso->segmentos, path);
@@ -464,9 +500,13 @@ void liberarArchivoSEG(int pid, char* path, int socket) {
 			list_destroy_and_destroy_elements(ss->lineas, LAMBDA(void _(char* linea) {free(linea);}));
 			free(ss);}));
 		log_info(logger, "Archivo %s liberado correctamente\n", path);
+		paquete.header = cargar_header(0, CLOSE, FM9);
+		EnviarPaquete(socket, &paquete);
 		quitarArchivoYProcesoDeTabla(pid, path);
 	} else {
 		log_info(logger, "el archivo %s no se encuentra abierto por el pid %d\n", path, pid);
+		paquete.header = cargar_header(0, FALLO_DE_SEGMENTO_CLOSE, FM9);
+		EnviarPaquete(socket, &paquete);
 	}
 }
 //////////////////////////////// ↑↑↑  PRIMITIVA CLOSE ↑↑↑  //////////////////////////////////////////
@@ -476,6 +516,7 @@ void asignarSPA(int pid, char* path, int pos, char* dato, int socketFD) {
 	int posReal = pos - 1; //dado que la linea 1 de un archivo, se persiste la posicion 0
 	//posee el archivo?
 	if(elPidTieneElPath(pid, path)) {
+		Paquete paquete;
 		ProcesoArchivo* proceso = obtenerProcesoId(pid);
 		SegmentoArchivoSPA* segmento = obtenerSegmentoSPA(proceso->segmentos, path);
 		//esta dentro de su rango de memoria?
@@ -489,11 +530,12 @@ void asignarSPA(int pid, char* path, int pos, char* dato, int socketFD) {
 			list_replace(frame->lineas, calculoDeLinea, dato);
 			strcpy(memoria[frame->inicio + calculoDeLinea], dato);
 			log_info(logger, "Asignar de pid: %d del dato: %s en la posicion: %d realizado con exito", pid, dato, pos);
-			EnviarDatosTipo(socketFD, FM9, NULL, 0, SUCCESS);
+			paquete.header = cargar_header(0, ASIGNAR, FM9);
 		} else {
 			log_info(logger, "la posicion: %d no pertenece al rango de memoria del pid: %d\n", pos, pid);
-			EnviarDatosTipo(socketFD, FM9, NULL, 0, ABORTAR);
+			paquete.header = cargar_header(0, FALLO_DE_SEGMENTO_ASIGNAR, FM9);
 		}
+		EnviarPaquete(socketFD, &paquete);
 	} else {
 		log_info(logger, "el pid: %d no posee el archivo: %s\n", pid, path);
 		EnviarDatosTipo(socketFD, FM9, NULL, 0, SUCCESS);
@@ -504,6 +546,7 @@ void asignarSEG(int pid, char* path, int pos, char* dato, int socketFD) {
 	int posReal = pos - 1; //dado que la linea 1 de un archivo, se persiste la posicion 0
 	//posee el archivo?
 	if(elPidTieneElPath(pid, path)) {
+		Paquete paquete;
 		//la posicion solicitada le pertenece?
 		ProcesoArchivo* proceso = obtenerProcesoId(pid);
 		SegmentoArchivoSEG* segmento = obtenerSegmentoSEG(proceso->segmentos, path);
@@ -511,11 +554,12 @@ void asignarSEG(int pid, char* path, int pos, char* dato, int socketFD) {
 			list_replace(segmento->lineas, posReal, dato);
 			strcpy(memoria[segmento->inicio + posReal], dato);
 			log_info(logger, "Asignar de pid: %d del dato: %s en la posicion: %d realizado con exito", pid, dato, pos);
-			EnviarDatosTipo(socketFD, FM9, NULL, 0, SUCCESS);
+			paquete.header = cargar_header(0, ASIGNAR, FM9);
 		} else {
 			log_info(logger, "la posicion: %d no pertenece al rango de memoria del pid: %d\n", pos, pid);
-			EnviarDatosTipo(socketFD, FM9, NULL, 0, ABORTAR);
+			paquete.header = cargar_header(0, FALLO_DE_SEGMENTO_ASIGNAR, FM9);
 		}
+		EnviarPaquete(socketFD, &paquete);
 	} else {
 		log_info(logger, "el pid: %d no posee el archivo: %s\n", pid, path);
 		EnviarDatosTipo(socketFD, FM9, NULL, 0, SUCCESS);
@@ -653,7 +697,7 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 		}
 
 		case ABRIR: {
-			sem_wait(&primitiva);
+			sem_wait(&abrir);
 			memcpy(&pid, paquete->Payload, tam_pid);
 			int tam_desplazado = tam_pid;
 			log_debug(logger, "pid: %d", pid);
@@ -670,16 +714,16 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 			} else if(!strcmp(MODO, "SPA")) {
 				cargarArchivoAMemoriaSPA(pid, path, archivo, socketFD);
 			}
-			sem_post(&primitiva);
+			sem_post(&abrir);
 			break;
 		}
 
 		case FLUSH: {
 			//el payload viene con el path
-			sem_wait(&primitiva);
 			char* path = malloc(strlen(paquete->Payload)+ 1);
 			strcpy(path, paquete->Payload);
 			free(paquete);
+			lockearArchivo(path);
 			if(!strcmp(MODO, "SEG")) {
 				flushSEG(path, socketFD);
 			} else if(!strcmp(MODO, "TPI")) {
@@ -687,7 +731,7 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 			} else if(!strcmp(MODO, "SPA")) {
 				flushSPA(path, socketFD);
 			}
-			sem_post(&primitiva);
+			deslockearArchivo(path);
 			break;
 		}
 	}
@@ -723,6 +767,7 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 					EnviarDatosTipo(socketFD, CPU, linea, strlen(linea)+1, LINEA_PEDIDA);
 				} else
 					//segmentation fault
+					log_info(logger, "segmentation fault (?? no deberia llegar");
 					EnviarDatosTipo(socketFD, CPU, NULL, 0, ERROR);
 			} else if(!strcmp(MODO, "TPI")) {
 				//
@@ -734,6 +779,7 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 					EnviarDatosTipo(socketFD, CPU, linea, strlen(linea)+1, LINEA_PEDIDA);
 				} else
 					//segmentation fault
+					log_info(logger, "segmentation fault (?? no deberia llegar");
 					EnviarDatosTipo(socketFD, CPU, NULL, 0, ERROR);
 			}
 			free(linea);
@@ -744,27 +790,30 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 
 		case ASIGNAR: {
 			//el payload debe ser int+char\0+int+char\0
-			sem_wait(&primitiva);
-			int pid, pos;
-			memcpy(&pid, paquete->Payload, sizeof(pid));
-			paquete->Payload += sizeof(pid);
-			char* path = malloc(strlen(paquete->Payload)+1);
-			strcpy(path, paquete->Payload);
-			paquete->Payload += strlen(path)+1;
-			memcpy(&pos, paquete->Payload, sizeof(pos));
-			paquete->Payload += sizeof(pos);
-			char* dato = malloc(strlen(paquete->Payload)+1);
-			strcpy(dato, paquete->Payload);
+			u_int32_t pid, pos, d = 0;
+			memcpy(&pid, paquete->Payload, INTSIZE);
+			paquete->Payload += INTSIZE;
+			memcpy(&pos, paquete->Payload, INTSIZE);
+			paquete->Payload += INTSIZE;
+			ArchivoAbierto* archivo = DTB_leer_struct_archivo(paquete->Payload, &d);
+			char* dato = string_deserializar(paquete->Payload, &d);
+			paquete->Payload += d;
+			lockearArchivo(archivo->path);
 			if(!strcmp(MODO, "SEG")) {
-				asignarSEG(pid, path, pos, dato, socketFD);
+				asignarSEG(pid, archivo->path, pos, dato, socketFD);
+				log_info(logger, "Llegada de DL: segmento %d + offset %d", archivo->segmento, pos);
 			} else if(!strcmp(MODO, "TPI")) {
 
 			} else if(!strcmp(MODO, "SPA")) {
-				asignarSEG(pid, path, pos, dato, socketFD);
+				asignarSPA(pid, archivo->path, pos, dato, socketFD);
+				log_info(logger, "Llegada de DL: segmento %d + pagina %d + offset %d", archivo->segmento, archivo->pagina, pos);
 			}
-			free(path);
+			deslockearArchivo(archivo->path);
+			paquete->Payload -= paquete->header.tamPayload;
+			free(paquete->Payload);
+			free(paquete);
+			liberar_archivo_abierto(archivo);
 			free(dato);
-			sem_post(&primitiva);
 			break;
 		}
 
@@ -774,19 +823,29 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 			int desplazamiento = 0;
 			memcpy(&pid, paquete->Payload, INTSIZE);
 			desplazamiento += INTSIZE;
-			ArchivoAbierto *archivo = DTB_leer_struct_archivo(paquete->Payload, &desplazamiento)
-			char* path = archivo->path;
+			ArchivoAbierto *archivo = DTB_leer_struct_archivo(paquete->Payload, &desplazamiento);
+			lockearArchivo(archivo->path);
 			if(!strcmp(MODO, "SEG")) {
-				liberarArchivoSEG(pid, path, socketFD);
+				liberarArchivoSEG(pid, archivo->path, socketFD);
 			} else if(!strcmp(MODO, "TPI")) {
 
 			} else if(!strcmp(MODO, "SPA")) {
-				liberarArchivoSPA(pid, path, socketFD);
+				liberarArchivoSPA(pid, archivo->path, socketFD);
 			}
-			free(path);
-			break;
+			deslockearArchivo(archivo->path);
+			liberar_archivo_abierto(archivo);
+			free(paquete->Payload);
+			free(paquete);
 		}
 	}
+}
+
+void lockearArchivo(char* path) {
+	list_iterate(archivosPorProceso, LAMBDA(void _(PidPath* pp) { if(!strcmp(pp->pathArchivo, path)) sem_wait(&pp->sem);}));
+}
+
+void deslockearArchivo(char* path) {
+	list_iterate(archivosPorProceso, LAMBDA(void _(PidPath* pp) { if(!strcmp(pp->pathArchivo, path)) sem_post(&pp->sem);}));
 }
 
 int contar_lineas (char *file) {
@@ -794,7 +853,7 @@ int contar_lineas (char *file) {
 	for (i = 0; i < strlen(file); i++) 	{
 		if(file[i] == '\n') lineas++;
 	}
-	return lineas-1;
+	return lineas;
 }
 
 int numeroDeSegmento(int pid, char* path) {
@@ -917,11 +976,13 @@ void agregarArchivoYProcesoALista(int pid, char* path) {
 	pp->pathArchivo = malloc(strlen(path)+1);
 	strcpy(pp->pathArchivo, path);
 	pp->idProceso = pid;
+	sem_init(&pp->sem, 0, 1);
 	list_add(archivosPorProceso, pp);
 }
 
 void quitarArchivoYProcesoDeTabla(int pid, char* path) {
 	list_remove_by_condition(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return pp->idProceso == pid && !strcmp(pp->pathArchivo, path);}));
+	//list_remove_and_destroy_by_condition
 }
 
 int cantidadLineasLibresMemoria() {

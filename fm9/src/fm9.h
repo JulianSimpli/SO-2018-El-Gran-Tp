@@ -49,6 +49,7 @@ typedef struct {
 typedef struct {
 	int idProceso;
 	char* pathArchivo;
+	sem_t sem;
 } PidPath;
 
 void consola();
@@ -80,5 +81,9 @@ int numeroDePagina(int pid, char* path);
 int primerFrameLibre();
 int contarElementosArray(char** array);
 int framesSuficientes(int lineasAGuardar);
+void lockearArchivo(char* path);
+void deslockearArchivo(char* path);
+char** cargarArray(char* archivo, int* cantidadLineas);
+int contar_lineas (char *file);
 
 #endif /* FM9_H_ */
