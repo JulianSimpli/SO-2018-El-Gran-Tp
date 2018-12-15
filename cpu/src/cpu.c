@@ -93,8 +93,7 @@ int ejecutar_algoritmo(Paquete *paquete)
 	log_debug(logger, "pid %d", dtb->gdtPID);
 	Paquete *nuevo_paquete = malloc(sizeof(Paquete));
 	ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
-	// int cantidad_lineas = escriptorio->cantLineas;
-	int cantidad_lineas = 1;
+	int cantidad_lineas = escriptorio->cantLineas;
 	int flag = 1;
 	if (!strcmp(algoritmo, "FIFO"))
 	{
@@ -114,6 +113,7 @@ int ejecutar_algoritmo(Paquete *paquete)
 				finalizar = false;
 				break;
 			}
+			log_debug(logger, "Voy por %d y tengo %d cantidad de lineas", dtb->PC, cantidad_lineas);
 			if (cantidad_lineas == dtb->PC)
 			{
 				nuevo_paquete->header = cargar_header(INTSIZE, DTB_FINALIZAR, CPU);
@@ -145,11 +145,14 @@ int ejecutar_algoritmo(Paquete *paquete)
 			log_debug(logger, "Primitiva %s", primitiva);
 			flag = ejecutar(primitiva, dtb); //avanzar el PC dentro del paquete
 			log_debug(logger, "Flag %d", flag);
+			dtb->PC++;
 			if (flag || finalizar)
 			{
 				finalizar = false;
 				break;
 			}
+
+			log_debug(logger, "Voy por %d y tengo %d lineas", dtb->PC, cantidad_lineas);
 			if (cantidad_lineas == dtb->PC)
 			{
 				nuevo_paquete->header = cargar_header(INTSIZE, DTB_FINALIZAR, CPU);
@@ -160,7 +163,6 @@ int ejecutar_algoritmo(Paquete *paquete)
 				free(nuevo_paquete);
 				return 1;
 			}
-			dtb->PC++;
 		}
 		//armar el paquete para mandar a safa, que dependiendo de si es RR o VRR, envía quantum restante
 		//si es RR, manda DTB_EJECUTO
@@ -206,16 +208,19 @@ char *pedir_primitiva(DTB *dtb)
 	memcpy(paquete->Payload + desplazamiento, serializado, size_archivo);
 	desplazamiento += size_archivo;
 
-	cargar_header(desplazamiento, NUEVA_PRIMITIVA, CPU);
+	paquete->header = cargar_header(desplazamiento, NUEVA_PRIMITIVA, CPU);
 
 
 	log_debug(logger, "Pido a fm9 siguiente primitiva");
 
 	int ret = EnviarPaquete(socket_fm9, paquete);
-	if (ret != 1)
+	if (ret != -1)
 	{
+		log_debug(logger, "Le pedi primitiva");
 		Paquete *primitiva_recibida = malloc(sizeof(Paquete));
 		RecibirPaqueteCliente(socket_fm9, primitiva_recibida);
+		log_debug(logger, "%d", primitiva_recibida->header.tipoMensaje);
+		log_debug(logger, "%d", primitiva_recibida->header.tamPayload);
 		if (primitiva_recibida->header.tipoMensaje == ERROR)
 			return "Fallo";
 		char *primitiva = malloc(primitiva_recibida->header.tamPayload);
@@ -539,7 +544,7 @@ int ejecutar_asignar(char **parametros, DTB *dtb)
 
 	//mando a FM9 el pid, la linea (offset), la estructura archivo abierto y el dato
 
-	cargar_header(desplazamiento, ASIGNAR, CPU);
+	datos_a_fm9->header = cargar_header(desplazamiento, ASIGNAR, CPU);
 
 	EnviarPaquete(socket_fm9, datos_a_fm9);
 	free(arch_serializado);
@@ -660,7 +665,7 @@ int ejecutar_flush(char **parametros, DTB *dtb)
 	//mensaje al DAM
 
 	int desplazamiento = 0;
-	void *archivo_serializado = DTB_serializar_archivo(archivo_encontrado, desplazamiento);
+	void *archivo_serializado = DTB_serializar_archivo(archivo_encontrado, &desplazamiento);
 	Paquete *flush_a_dam = malloc(sizeof(Paquete));
 	flush_a_dam->header.emisor = CPU;
 	flush_a_dam->header.tipoMensaje = FLUSH;

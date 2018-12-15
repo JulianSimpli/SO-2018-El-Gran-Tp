@@ -50,7 +50,7 @@ void notificar_al_plp(u_int32_t pid)
 	DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
 	dtb_actualizar(dtb, lista_nuevos, lista_listos, dtb->PC, DTB_LISTO, 0);
 	DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
-	info_dtb->tiempo_ini = medir_tiempo();
+	//info_dtb->tiempo_ini = medir_tiempo();
 }
 
 bool dummy_creado(DTB *dtb)

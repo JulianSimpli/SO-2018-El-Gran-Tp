@@ -155,6 +155,8 @@ char* lineaDeUnaPosicionSEG(int pid, int pc) {
 	int pcReal = pc-1; //porque la linea 1 del archivo esta guardada en la posicion 0
 	ProcesoArchivo* unProceso = obtenerProcesoId(pid);
 	SegmentoArchivoSEG* unSegmento = list_get(unProceso->segmentos, 0);
+	log_debug(logger, "El pid %d con el path asociado %s", pid, unSegmento->idArchivo);
+	list_iterate(unSegmento->lineas, LAMBDA(void _(void* linea) {log_debug(logger, "%s", (char*)linea);}));
 	if(pcReal < unSegmento->fin) {
 		return ((char*) list_get(unSegmento->lineas, pcReal));
 	} else
@@ -736,7 +738,6 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 		}
 
 		case ABRIR: {
-			sem_wait(&abrir);
 			memcpy(&pid, paquete->Payload, tam_pid);
 			int tam_desplazado = tam_pid;
 			log_debug(logger, "pid: %d", pid);
@@ -753,7 +754,6 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 			} else if(!strcmp(MODO, "SPA")) {
 				cargarArchivoAMemoriaSPA(pid, path, archivo, socketFD);
 			}
-			sem_post(&abrir);
 			break;
 		}
 
@@ -765,7 +765,7 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 			paquete->Payload += INTSIZE;
 			ArchivoAbierto* abierto = DTB_leer_struct_archivo(paquete->Payload, &d);
 			paquete->Payload -= INTSIZE;
-			free(paquete);
+			free(paquete->Payload);
 			lockearArchivo(abierto->path);
 			if(!strcmp(MODO, "SEG")) {
 				flushSEG(abierto->path, socketFD);
@@ -807,31 +807,32 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 			int d = 0;
 			ArchivoAbierto* archivo = DTB_leer_struct_archivo(paquete->Payload, &d);
 			paquete->Payload += d;
-			char* linea = malloc(MAX_LINEA);
+			char *linea;
 			if(!strcmp(MODO, "SEG")) {
 				if(lineaDeUnaPosicionSEG(pid, pc) != NULL) {
 					linea = lineaDeUnaPosicionSEG(pid, pc);
-					linea = realloc(linea, strlen(linea)+1);
 					log_info(logger, "La direccion logica recibida por pid: %d es,\n segmento: %d + offset: %d\n", pid, archivo->segmento, pc);
+					log_info(logger, "Devuelvo la linea %s\n", linea);
 					EnviarDatosTipo(socketFD, CPU, linea, strlen(linea)+1, LINEA_PEDIDA);
-				} else
+					log_debug(logger, "Envio");
+				} else {
 					//segmentation fault
 					log_info(logger, "segmentation fault (?? no deberia llegar");
 					EnviarDatosTipo(socketFD, CPU, NULL, 0, ERROR);
+				}
 			} else if(!strcmp(MODO, "TPI")) {
 				//
 			} else if(!strcmp(MODO, "SPA")) {
 				if(lineaDeUnaPosicionSPA(pid, pc) != NULL) {
 					linea = lineaDeUnaPosicionSPA(pid, pc);
-					linea = realloc(linea, strlen(linea)+1);
 					log_info(logger, "La direccion logica recibida por pid: %d es,\n segmento: %d + pagina: %d + offset: %d\n", pid, archivo->segmento, archivo->pagina, pc);
 					EnviarDatosTipo(socketFD, CPU, linea, strlen(linea)+1, LINEA_PEDIDA);
-				} else
+				} else {
 					//segmentation fault
 					log_info(logger, "segmentation fault (?? no deberia llegar");
 					EnviarDatosTipo(socketFD, CPU, NULL, 0, ERROR);
+				}
 			}
-			free(linea);
 			paquete->Payload -= paquete->header.tamPayload;
 			free(paquete->Payload);
 			break;
@@ -846,7 +847,7 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 			paquete->Payload += INTSIZE;
 			ArchivoAbierto* archivo = DTB_leer_struct_archivo(paquete->Payload, &d);
 			char* dato = string_deserializar(paquete->Payload, &d);
-			paquete->Payload += d;
+			paquete->Payload -= 2 * INTSIZE;
 			lockearArchivo(archivo->path);
 			if(!strcmp(MODO, "SEG")) {
 				asignarSEG(pid, archivo->path, pos, dato, socketFD);
@@ -858,10 +859,10 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 				log_info(logger, "Llegada de DL: segmento %d + pagina %d + offset %d", archivo->segmento, archivo->pagina, pos);
 			}
 			deslockearArchivo(archivo->path);
-			paquete->Payload -= paquete->header.tamPayload;
 			free(paquete->Payload);
-			free(paquete);
+			log_debug(logger, "Free payload");
 			liberar_archivo_abierto(archivo);
+			log_debug(logger, "Free archivo");
 			free(dato);
 			break;
 		}
@@ -884,7 +885,6 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 			deslockearArchivo(archivo->path);
 			liberar_archivo_abierto(archivo);
 			free(paquete->Payload);
-			free(paquete);
 		}
 	}
 }
