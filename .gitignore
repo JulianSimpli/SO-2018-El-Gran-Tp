@@ -29,6 +29,13 @@ dam/src/dam
 fm9/src/fm9
 cpu/src/cpu
 
+#Valgrind
+safa/src/valgrind*
+mdj/src/valgrind*
+dam/src/valgrind*
+fm9/src/valgrind*
+cpu/src/valgrind*
+
 # Tests
 tests/dtb
 tests/serializar

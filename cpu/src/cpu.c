@@ -135,7 +135,7 @@ int ejecutar_algoritmo(Paquete *paquete)
 
 		for (i = 0; i < quantum_local; i++)
 		{
-			log_debug(logger, "Quantum %d", i);
+			log_debug(logger, "Quantum %d/%d", i, quantum_local);
 			char *primitiva = pedir_primitiva(dtb);
 			if (!strcmp(primitiva, "Fallo"))
 			{
@@ -146,19 +146,20 @@ int ejecutar_algoritmo(Paquete *paquete)
 			flag = ejecutar(primitiva, dtb); //avanzar el PC dentro del paquete
 			log_debug(logger, "Flag %d", flag);
 			dtb->PC++;
+			log_debug(logger, "Voy por %d y tengo %d lineas", dtb->PC, cantidad_lineas);
 			if (flag || finalizar)
 			{
 				finalizar = false;
 				break;
 			}
 
-			log_debug(logger, "Voy por %d y tengo %d lineas", dtb->PC, cantidad_lineas);
 			if (cantidad_lineas == dtb->PC)
 			{
 				nuevo_paquete->header = cargar_header(INTSIZE, DTB_FINALIZAR, CPU);
 				nuevo_paquete->Payload = malloc(nuevo_paquete->header.tamPayload);
 				memcpy(nuevo_paquete->Payload, &dtb->gdtPID, INTSIZE);
 				EnviarPaquete(socket_safa, nuevo_paquete);
+				log_debug(logger, "Envie dtb finalizar");
 				free(nuevo_paquete->Payload);
 				free(nuevo_paquete);
 				return 1;

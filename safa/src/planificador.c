@@ -223,8 +223,8 @@ DTB_info *info_dtb_crear(u_int32_t pid)
 	info_dtb->gdtPID = pid;
 	info_dtb->estado = DTB_NUEVO;
 	info_dtb->socket_cpu = 0;
-	info_dtb->tiempo_ini;
-	info_dtb->tiempo_fin;
+	info_dtb->tiempo_ini = 0;
+	info_dtb->tiempo_fin = 0;
 	info_dtb->tiempo_respuesta = 0;
 	info_dtb->kill = false;
 	info_dtb->recursos_asignados = list_create();
@@ -732,12 +732,21 @@ void loggear_finalizacion(DTB *dtb, DTB_info *info_dtb)
 void enviar_finalizar_dam(u_int32_t pid)
 {
 	Paquete *paquete = malloc(sizeof(Paquete));
-	paquete->Payload = malloc(sizeof(u_int32_t));
-	memcpy(paquete->Payload, &pid, sizeof(u_int32_t));
-	paquete->header = cargar_header(sizeof(u_int32_t), FIN_BLOQUEADO, SAFA);
+	DTB_info *info_dtb;
+	t_list *actual;
+	int d = 0;
+	DTB *dtb = dtb_buscar_en_todos_lados(pid, &info_dtb, &actual);
+	ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
+	void *serializado = DTB_serializar_archivo(escriptorio, &d);
+	paquete->header = cargar_header(INTSIZE + d, FINALIZAR, SAFA);
+	paquete->Payload = malloc(paquete->header.tamPayload);
+	memcpy(paquete->Payload, &pid, INTSIZE);
+	memcpy(paquete->Payload + INTSIZE, serializado, d);
 	EnviarPaquete(socket_diego, paquete);
 	free(paquete->Payload);
 	free(paquete);
+	free(serializado);
+
 	printf("Le mande a dam que finalice GDT %d\n", pid);
 }
 

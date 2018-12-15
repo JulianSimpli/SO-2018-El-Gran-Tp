@@ -183,8 +183,8 @@ void *interpretar_mensajes_de_safa(void *args)
 		if (respuesta.header.tipoMensaje != SUCCESS)
 			_exit_with_error(socket_fm9, "No pudo liberar la memoria de un proceso", respuesta.Payload);
 
-		paquete.header.tipoMensaje = DTB_FINALIZAR;
-		enviar_paquete(socket_safa, &paquete);
+		respuesta.header.tipoMensaje = DTB_FINALIZAR;
+		enviar_paquete(socket_safa, &respuesta);
 
 		free(paquete.Payload);
 		free(respuesta.Payload);

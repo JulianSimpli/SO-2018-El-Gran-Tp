@@ -11,8 +11,9 @@
         {
           "shell_command": [
             "cd /home/utnso/workspace/tp-2018-2c-Nene-Malloc/mdj/src",
+            "rm mdj",
             "make",
-            "./mdj"
+            "valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind-out-mdj ./mdj"
           ],
           "focus": "true"
         },
@@ -34,9 +35,10 @@
       "panes": [
         {
           "shell_command": [
+            "rm dam",
             "make",
             "sleep 7",
-            "./dam"
+            "valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind-out-dam ./dam"
           ]
         }
       ],
@@ -51,8 +53,9 @@
       "panes": [
         {
           "shell_command": [
+            "rm fm9",
             "make",
-            "./fm9"
+            "valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind-out-fm9 ./fm9"
           ]
         }
       ],
@@ -67,8 +70,9 @@
       "panes": [
         {
           "shell_command": [
+            "rm safa",
             "make",
-            "./safa"
+            "valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind-out-safa ./safa"
           ]
         }
       ],
@@ -83,16 +87,18 @@
       "panes": [
         {
           "shell_command": [
+            "rm cpu",
             "make",
             "sleep 15",
-            "./cpu"
+            "valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind-out-cpu ./cpu"
           ]
         },
         {
           "shell_command": [
+            "rm cpu",
             "make",
             "sleep 15",
-            "./cpu"
+            "valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind-out-cpu ./cpu"
           ]
         }
       ],

@@ -577,7 +577,7 @@ void asignarSEG(int pid, char* path, int pos, char* dato, int socketFD) {
 //////////////////////// ↓↓↓ PRIMITIVA FLUSH ↓↓↓ ////////////////////////////////////////////
 void flushSEG(char* path, int socketFD) {
 	//archivo abierto?
-	Paquete* paquete;
+	Paquete *paquete = malloc(sizeof(Paquete));
 	if(existePath(path)) {
 		PidPath* pp = list_find(archivosPorProceso, LAMBDA(bool _(PidPath* pp) {return !strcmp(pp->pathArchivo, path);}));
 		ProcesoArchivo* proceso = obtenerProcesoId(pp->idProceso);
@@ -717,8 +717,9 @@ void accion(void *socket) {
 	// Si sale del while hubo error o desconexion
 	if (paquete.Payload != NULL)
 		free(paquete.Payload);
-	close(socketFD);
+
 	log_debug(logger, "Hilo para conexion en socket %d terminado", socketFD);
+	close(socketFD);
 }
 
 void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
@@ -806,7 +807,7 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 			paquete->Payload += sizeof(pc);
 			int d = 0;
 			ArchivoAbierto* archivo = DTB_leer_struct_archivo(paquete->Payload, &d);
-			paquete->Payload += d;
+			paquete->Payload -=  2 * INTSIZE;
 			char *linea;
 			if(!strcmp(MODO, "SEG")) {
 				if(lineaDeUnaPosicionSEG(pid, pc) != NULL) {
@@ -833,7 +834,6 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 					EnviarDatosTipo(socketFD, CPU, NULL, 0, ERROR);
 				}
 			}
-			paquete->Payload -= paquete->header.tamPayload;
 			free(paquete->Payload);
 			break;
 		}
