@@ -32,6 +32,7 @@ void *interpretar_consola(void *args)
 			add_history(linea);
 		interpretar(linea);
 		free(linea);
+		free(PS1);
 	}
 }
 

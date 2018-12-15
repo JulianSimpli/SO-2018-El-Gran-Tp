@@ -35,6 +35,8 @@
       "panes": [
         {
           "shell_command": [
+            "rm /home/utnso/fifa-examples/fifa-entrega/Archivos/equipos/Rafaela",
+            "rmdir /home/utnso/fifa-examples/fifa-entrega/Archivos/equipos",
             "rm dam",
             "make",
             "sleep 7",
@@ -97,7 +99,7 @@
           "shell_command": [
             "rm cpu",
             "make",
-            "sleep 15",
+            "sleep 17",
             "valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind-out-cpu ./cpu"
           ]
         }

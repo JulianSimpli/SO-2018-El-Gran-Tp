@@ -64,7 +64,7 @@ int ejecutar(char *linea, DTB *dtb)
 
 	//Para poder identificar el comando y que el resto son parametros necesarios para que ejecute
 	//Por ej: linea = abrir /home/utnso/
-	char **parameters = string_split(linea, " ");
+	char **parameters = string_n_split(linea, 4, " ");
 
 	for (i; i < cantidad_primitivas; i++)
 	{
@@ -210,7 +210,6 @@ char *pedir_primitiva(DTB *dtb)
 	desplazamiento += size_archivo;
 
 	paquete->header = cargar_header(desplazamiento, NUEVA_PRIMITIVA, CPU);
-
 
 	log_debug(logger, "Pido a fm9 siguiente primitiva");
 
@@ -376,7 +375,7 @@ int connect_to_server(char *ip, char *port)
 	struct addrinfo *server_info;
 
 	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC;	 // Permite que la maquina se encargue de verificar si usamos IPv4 o IPv6
+	hints.ai_family = AF_UNSPEC;     // Permite que la maquina se encargue de verificar si usamos IPv4 o IPv6
 	hints.ai_socktype = SOCK_STREAM; // Indica que usaremos el protocolo TCP
 
 	getaddrinfo(ip, port, &hints, &server_info); // Carga en server_info los datos de la conexion
@@ -402,7 +401,6 @@ int connect_to_server(char *ip, char *port)
 	log_info(logger, "Conectado!");
 
 	return server_socket;
-
 }
 
 void enviar_mensaje(Mensaje mensaje)
@@ -504,6 +502,7 @@ int ejecutar_asignar(char **parametros, DTB *dtb)
 	int linea = atoi(parametros[2]);
 	char *dato = parametros[3];
 
+	log_info(logger, "dato a asignar:%s", dato);
 	ArchivoAbierto *archivo_encontrado = _DTB_encontrar_archivo(dtb, path);
 
 	if (archivo_encontrado == NULL)
@@ -561,11 +560,9 @@ int ejecutar_asignar(char **parametros, DTB *dtb)
 	if (asigno_fm9.header.tipoMensaje != ASIGNAR)
 	{
 		log_debug(logger, "Fallo asignar, Error %d", asigno_fm9.header.tipoMensaje);
-		dtb->PC++;
-
 		Paquete error_asignar;
 		int tam_pid_y_pc = 0;
-		error_asignar.Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
+		error_asignar.Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC + 1, &tam_pid_y_pc);
 		error_asignar.header = cargar_header(tam_pid_y_pc, asigno_fm9.header.tipoMensaje, CPU);
 		EnviarPaquete(socket_safa, &error_asignar);
 		free(error_asignar.Payload);
@@ -644,12 +641,11 @@ int ejecutar_flush(char **parametros, DTB *dtb)
 	if (archivo_encontrado == NULL)
 	{
 		Paquete *abortar_gdt = malloc(sizeof(Paquete));
-		dtb->PC++;
 		abortar_gdt->header.tamPayload = 0;
 		abortar_gdt->header.emisor = CPU;
 		abortar_gdt->header.tipoMensaje = ABORTARF;
 		int tam_pid_y_pc = 0;
-		abortar_gdt->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
+		abortar_gdt->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC + 1, &tam_pid_y_pc);
 		abortar_gdt->header.tamPayload = tam_pid_y_pc;
 
 		EnviarPaquete(socket_safa, abortar_gdt);
@@ -698,12 +694,11 @@ int ejecutar_close(char **parametros, DTB *dtb)
 	if (archivo_encontrado == NULL)
 	{
 		Paquete *abortar_gdt = malloc(sizeof(Paquete));
-		dtb->PC++;
 		abortar_gdt->header.tamPayload = 0;
 		abortar_gdt->header.emisor = CPU;
 		abortar_gdt->header.tipoMensaje = ABORTARC;
 		int tam_pid_y_pc = 0;
-		abortar_gdt->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
+		abortar_gdt->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC + 1, &tam_pid_y_pc);
 		abortar_gdt->header.tamPayload = tam_pid_y_pc;
 		EnviarPaquete(socket_safa, abortar_gdt);
 		free(abortar_gdt->Payload);
@@ -737,11 +732,10 @@ int ejecutar_close(char **parametros, DTB *dtb)
 	if (archivo_cerrado.header.tipoMensaje == FALLO_DE_SEGMENTO_CLOSE)
 	{
 		log_debug(logger, "Fallo de segmento close");
-		dtb->PC++;
 
 		Paquete error_close;
 		int tam_pid_y_pc = 0;
-		error_close.Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
+		error_close.Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC + 1, &tam_pid_y_pc);
 		error_close.header = cargar_header(tam_pid_y_pc, archivo_cerrado.header.tipoMensaje, CPU);
 		EnviarPaquete(socket_safa, &error_close);
 
@@ -772,7 +766,7 @@ int ejecutar_crear(char **parametros, DTB *dtb)
 	int lineas = atoi(parametros[2]);
 
 	int len = 0;
-    void *path_serializado = string_serializar(path, &len);
+	void *path_serializado = string_serializar(path, &len);
 
 	Paquete *crear_archivo = malloc(sizeof(Paquete));
 	crear_archivo->header.tamPayload = len + INTSIZE * 2;
@@ -834,7 +828,6 @@ int ejecutar_borrar(char **parametros, DTB *dtb)
 
 void bloqueate_safa(DTB *dtb)
 {
-	dtb->PC++;
 	if (!strcmp(algoritmo, "VRR"))
 	{
 		return;
@@ -844,7 +837,7 @@ void bloqueate_safa(DTB *dtb)
 	bloqueate_safa->header.emisor = CPU;
 	int tam_pid_y_pc = 0;
 	void *pid_pc_serializados;
-	pid_pc_serializados = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
+	pid_pc_serializados = serializar_pid_y_pc(dtb->gdtPID, dtb->PC + 1, &tam_pid_y_pc);
 	bloqueate_safa->header.tamPayload = tam_pid_y_pc + sizeof(u_int32_t);
 	bloqueate_safa->Payload = malloc(bloqueate_safa->header.tamPayload);
 	memcpy(bloqueate_safa->Payload, pid_pc_serializados, tam_pid_y_pc);

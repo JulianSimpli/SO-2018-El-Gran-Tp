@@ -170,21 +170,27 @@ void *interpretar_mensajes_de_safa(void *args)
 	while (1)
 	{
 		recibir_paquete(socket_safa, &paquete);
+		log_debug(logger, "Me piden finalizar");
 
 		if (paquete.header.tipoMensaje != FINALIZAR)
 			_exit_with_error(socket_safa, "No pude interpretar el mensaje", paquete.Payload);
 
 		paquete.header.emisor = ELDIEGO;
 
+		log_debug(logger, "Envio finalizar a fm9");
 		enviar_paquete(socket_fm9, &paquete);
 
 		recibir_paquete(socket_fm9, &respuesta);
 
+		log_debug(logger, "tipo mensaje %d", respuesta.header.tipoMensaje);
 		if (respuesta.header.tipoMensaje != SUCCESS)
 			_exit_with_error(socket_fm9, "No pudo liberar la memoria de un proceso", respuesta.Payload);
 
+		log_debug(logger, "Se pudo liberar la memoria");
+		respuesta.header.emisor = ELDIEGO;
 		respuesta.header.tipoMensaje = DTB_FINALIZAR;
 		enviar_paquete(socket_safa, &respuesta);
+		log_debug(logger, "Envie finalizar a safa");
 
 		free(paquete.Payload);
 		free(respuesta.Payload);
@@ -532,7 +538,9 @@ void flush(Paquete *paquete)
 	char *path = string_deserializar(paquete->Payload, &desplazamiento);
 
 	log_debug(logger, "Envio a FM9");
-	//enviar_paquete(socket_fm9, &paquete);
+	paquete->header = cargar_header(paquete->header.tamPayload,FLUSH,ELDIEGO);
+	
+	enviar_paquete(socket_fm9, paquete);
 
 	Paquete respuesta_fm9;
 	recibir_paquete(socket_fm9, &respuesta_fm9);

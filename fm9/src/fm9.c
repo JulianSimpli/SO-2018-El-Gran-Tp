@@ -457,9 +457,9 @@ void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo, int socketFD) 
 ////////////////////////////// ↑↑↑ PRIMITIVA ABRIR ↑↑↑ ////////////////////////////////////////////////
 
 ////////////////////////////// ↓↓↓  PRIMITIVA CLOSE ↓↓↓  //////////////////////////////////////////////
-void liberarArchivoSPA(int pid, char* path, int socket) {
+int liberarArchivoSPA(int pid, char* path, int socket) {
 	//le pertenece el path al pid?
-	Paquete paquete;
+	Tipo tipoMensaje = 0;
 	if (elPidTieneElPath(pid, path)) {
 		//traigo el segmento y las paginas que ocupa
 		ProcesoArchivo* proceso = obtenerProcesoId(pid);
@@ -482,18 +482,18 @@ void liberarArchivoSPA(int pid, char* path, int socket) {
 				LAMBDA(void _(SegmentoArchivoSPA* ss) {free(ss->idArchivo); list_destroy(ss->paginas); free(ss);}));
 		quitarArchivoYProcesoDeTabla(pid, path);
 		log_info(logger, "Archivo %s liberado correctamente\n", path);
-		paquete.header = cargar_header(0, CLOSE, FM9);
-		EnviarPaquete(socket, &paquete);
+		tipoMensaje = CLOSE;
 	} else {
 		log_info(logger, "el archivo %s no se encuentra abierto por el pid %d\n", path, pid);
-		paquete.header = cargar_header(0, FALLO_DE_SEGMENTO_CLOSE, FM9);
-		EnviarPaquete(socket, &paquete);
+		tipoMensaje = FALLO_DE_SEGMENTO_CLOSE;
 	}
+
+	return tipoMensaje;
 }
 
-void liberarArchivoSEG(int pid, char* path, int socket) {
+int liberarArchivoSEG(int pid, char* path, int socket) {
 	//le pertenece el path al pid?
-	Paquete paquete;
+	Tipo tipoMensaje = 0;
 	if (elPidTieneElPath(pid, path)) {
 		ProcesoArchivo* proceso = obtenerProcesoId(pid);
 		SegmentoArchivoSEG* segmento = obtenerSegmentoSEG(proceso->segmentos, path);
@@ -507,14 +507,14 @@ void liberarArchivoSEG(int pid, char* path, int socket) {
 			list_destroy_and_destroy_elements(ss->lineas, LAMBDA(void _(char* linea) {free(linea);}));
 			free(ss);}));
 		log_info(logger, "Archivo %s liberado correctamente\n", path);
-		paquete.header = cargar_header(0, CLOSE, FM9);
-		EnviarPaquete(socket, &paquete);
+		tipoMensaje = CLOSE;
 		quitarArchivoYProcesoDeTabla(pid, path);
 	} else {
 		log_info(logger, "el archivo %s no se encuentra abierto por el pid %d\n", path, pid);
-		paquete.header = cargar_header(0, FALLO_DE_SEGMENTO_CLOSE, FM9);
-		EnviarPaquete(socket, &paquete);
+		tipoMensaje = FALLO_DE_SEGMENTO_CLOSE;
 	}
+
+	return tipoMensaje;
 }
 //////////////////////////////// ↑↑↑  PRIMITIVA CLOSE ↑↑↑  //////////////////////////////////////////
 
@@ -605,16 +605,17 @@ void flushSEG(char* path, int socketFD) {
 		texto = realloc(texto, strlen(texto)+1);
 		printf("%s", texto);
 		log_info(logger, "%s", texto);
-		int d = 0;
-		int b = 0;
-		void* path_serial = string_serializar(path, &b);
-		void* texto_serial = string_serializar(texto, &d);
-		paquete->Payload = malloc(b+d);
-		memcpy(paquete->Payload, path_serial, b);
-		memcpy(paquete->Payload + b, texto_serial, d);
-		paquete->header = cargar_header(b+d, GUARDAR_DATOS, FM9);
-		EnviarPaquete(socketFD, &paquete);
+		int text_size = 0;
+		int path_size = 0;
+		void* path_serial = string_serializar(path, &path_size);
+		void* texto_serial = string_serializar(texto, &text_size);
+		paquete->Payload = malloc(text_size+path_size);
+		memcpy(paquete->Payload, path_serial, path_size);
+		memcpy(paquete->Payload + path_size, texto_serial, text_size);
+		paquete->header = cargar_header(path_size+text_size, GUARDAR_DATOS, FM9);
+		EnviarPaquete(socketFD, paquete);
 		log_info(logger, "Flush al archivo %s realizado con exito\n", path);
+		free(paquete->Payload);
 		//la variable texto es la que se debe enviar a DAM,
 		//contiene las linas unidas por \n y \n\n\0 al final
 	} else {
@@ -760,10 +761,9 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 
 		case FLUSH: {
 			//el payload viene con el path
-			u_int32_t pid = 0;
-			int d = 0;
 			memcpy(&pid, paquete->Payload, INTSIZE);
 			paquete->Payload += INTSIZE;
+			int d = 0;
 			ArchivoAbierto* abierto = DTB_leer_struct_archivo(paquete->Payload, &d);
 			paquete->Payload -= INTSIZE;
 			free(paquete->Payload);
@@ -782,7 +782,33 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 		}
 
 		case FINALIZAR: {
+			memcpy(&pid, paquete->Payload, tam_pid);
+			ArchivoAbierto* archivo = DTB_leer_struct_archivo(paquete->Payload, &tam_pid);
+			log_debug(logger, "Me piden finalizar el gdt %d con path %s", pid, archivo->path);
+			Paquete* paqueteNuevo = malloc(sizeof(Paquete));
+			paqueteNuevo->Payload = malloc(INTSIZE);
+			paqueteNuevo->header = cargar_header(INTSIZE, SUCCESS, FM9);
+			memcpy(paqueteNuevo->Payload, &pid, INTSIZE);
+			ProcesoArchivo* proceso = obtenerProcesoId(pid);
+			if(!strcmp(MODO, "SEG")) {
+				log_debug(logger, "Voy a liberar todos los archivos");
+				int size = list_size(proceso->segmentos);
+				log_debug(logger, "Tengo %d archivos", size);
+				list_iterate(proceso->segmentos, LAMBDA(void _(SegmentoArchivoSEG* segmento) {liberarArchivoSEG(pid, segmento->idArchivo, socketFD);}));
+				size = list_size(proceso->segmentos);
+				log_debug(logger, "Me quedaron %d archivos", size);
+				log_info(logger, "Finalizacion pid: %d y archivos asociados\nDL: segmento %d + offset %d", pid, archivo->segmento, 0);
+			} else if(!strcmp(MODO, "TPI")) {
 
+			} else if(!strcmp(MODO, "SPA")) {
+				list_iterate(proceso->segmentos, LAMBDA(void _(SegmentoArchivoSPA* segmento) {liberarArchivoSPA(pid, segmento->idArchivo, socketFD);}));
+				log_info(logger, "Finalizacion pid: %d y archivos asociados\nDL: segmento %d + pagina %d + offset %d", pid, archivo->segmento, archivo->pagina, 0);
+			}
+			EnviarPaquete(socketFD, paqueteNuevo);
+			free(paquete->Payload);
+			free(paqueteNuevo->Payload);
+			free(paqueteNuevo);
+			break;
 		}
 	}
 }
@@ -870,21 +896,27 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 		case CLOSE: {
 			//el payload debe ser int+char\0
 			u_int32_t pid = 0;
+			Tipo tipoMensaje = 0;
 			int desplazamiento = 0;
 			memcpy(&pid, paquete->Payload, INTSIZE);
 			desplazamiento += INTSIZE;
 			ArchivoAbierto *archivo = DTB_leer_struct_archivo(paquete->Payload, &desplazamiento);
 			lockearArchivo(archivo->path);
 			if(!strcmp(MODO, "SEG")) {
-				liberarArchivoSEG(pid, archivo->path, socketFD);
+				tipoMensaje = liberarArchivoSEG(pid, archivo->path, socketFD);
 			} else if(!strcmp(MODO, "TPI")) {
 
 			} else if(!strcmp(MODO, "SPA")) {
-				liberarArchivoSPA(pid, archivo->path, socketFD);
+				tipoMensaje = liberarArchivoSPA(pid, archivo->path, socketFD);
 			}
+
+			Paquete respuesta;
+			respuesta.header = cargar_header(0, tipoMensaje, FM9);
+			EnviarPaquete(socketFD, &respuesta);
 			deslockearArchivo(archivo->path);
 			liberar_archivo_abierto(archivo);
 			free(paquete->Payload);
+			break;
 		}
 	}
 }
