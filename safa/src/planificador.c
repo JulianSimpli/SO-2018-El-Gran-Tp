@@ -83,6 +83,7 @@ void planificador_corto_plazo()
 	{
 		if (hay_cpu_libre() && !list_is_empty(lista_listos))
 		{
+			log_debug(logger, "size cpu:%d\nsize cpu libres: %d", list_size(lista_cpu), list_count_satisfying(lista_cpu, esta_libre_cpu));
 			if (!strcmp(ALGORITMO_PLANIFICACION, "FIFO"))
 				planificar_fifo();
 			else if (!strcmp(ALGORITMO_PLANIFICACION, "RR"))
@@ -730,9 +731,9 @@ void loggear_finalizacion(DTB *dtb, DTB_info *info_dtb)
 	fprintf(logger_file, "Recursos retenidos: %d\n", list_size(info_dtb->recursos_asignados));
 	for (int i = 0; i < list_size(info_dtb->recursos_asignados); i++)
 	{
-		t_recurso *recurso;
+		t_recurso_asignado *recurso;
 		recurso = list_get(info_dtb->recursos_asignados, i);
-		fprintf(logger_file, "Recurso retenido n° %i: %s\n", i, recurso->id);
+		fprintf(logger_file, "Recurso retenido n° %i: %s\n", i, recurso->recurso->id);
 	}
 
 	fclose(logger_file);

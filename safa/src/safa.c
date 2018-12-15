@@ -329,12 +329,13 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		escriptorio->segmento = escriptorio_cargado->segmento;
 		escriptorio->pagina = escriptorio_cargado->pagina;
 
-		liberar_archivo_abierto(escriptorio_cargado);
-
 		if(verificar_si_murio(dtb, lista_nuevos, pid, dtb->PC))
 			break;
-		
+
+		bloquear_dummy(lista_ejecutando, pid);
 		pasaje_a_ready(dtb->gdtPID);
+		liberar_archivo_abierto(escriptorio_cargado);
+
 		break;
 	}
 	case DUMMY_FAIL_CARGA:
@@ -487,7 +488,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		log_debug(logger, "DUMMY_BLOQUEA");
 		memcpy(&pid, paquete->Payload, INTSIZE);
 		log_info(logger, "Se ejecuto el dummy de GDT %d", pid);
-		bloquear_dummy(lista_ejecutando, pid);
+		//bloquear_dummy(lista_ejecutando, pid);
 		break;
 	}
 	case DTB_BLOQUEAR:

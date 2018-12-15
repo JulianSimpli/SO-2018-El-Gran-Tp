@@ -74,6 +74,7 @@ int ejecutar(char *linea, DTB *dtb)
 			existe = 1;
 			log_info(logger, primitivas[i].doc);
 			//llama a la funcion que tiene guardado esa primitiva en la estructura
+			sleep(retardo);
 			flag = primitivas[i].func(parameters, dtb);
 			break;
 		}
