@@ -17,8 +17,8 @@ typedef struct DTB_info {
 	u_int32_t gdtPID;
 	Estado estado;
 	int socket_cpu;
-	clock_t *tiempo_ini;
-	clock_t *tiempo_fin;
+	clock_t tiempo_ini;
+	clock_t tiempo_fin;
 	float tiempo_respuesta;
 	bool kill;
 	t_list *recursos_asignados;
@@ -163,8 +163,8 @@ void metricas();
 float calcular_sentencias_promedio_diego();
 float calcular_sentencias_promedio_hasta_finalizar();
 bool ya_finalizo(void *_info_dtb);
-clock_t* medir_tiempo ();
-float calcular_RT(clock_t* t_ini_rcv, clock_t* t_fin_rcv);
+clock_t medir_tiempo ();
+float calcular_RT(clock_t t_ini_rcv, clock_t t_fin_rcv);
 
 
 //Liberar memoria

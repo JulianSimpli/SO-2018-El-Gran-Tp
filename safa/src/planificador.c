@@ -223,8 +223,8 @@ DTB_info *info_dtb_crear(u_int32_t pid)
 	info_dtb->gdtPID = pid;
 	info_dtb->estado = DTB_NUEVO;
 	info_dtb->socket_cpu = 0;
-	info_dtb->tiempo_ini = NULL;
-	info_dtb->tiempo_fin = NULL;
+	info_dtb->tiempo_ini;
+	info_dtb->tiempo_fin;
 	info_dtb->tiempo_respuesta = 0;
 	info_dtb->kill = false;
 	info_dtb->recursos_asignados = list_create();
@@ -849,24 +849,24 @@ void recurso_asignar_a_pid(t_recurso *recurso, u_int32_t pid)
 	rec_asignado->instancias++;
 }
 
-clock_t* medir_tiempo ()
+clock_t medir_tiempo ()
 {
-	clock_t *t_inst;
-	*t_inst = clock();
+	clock_t t_inst;
+	t_inst = clock();
 	return t_inst;
 }
 
-float calcular_RT(clock_t* t_ini_rcv, clock_t* t_fin_rcv)
+float calcular_RT(clock_t t_ini_rcv, clock_t t_fin_rcv)
 {
 	cantidad_procesos_ejecutados++;
 	float rt; //response time
-	clock_t *t_ini;
-	clock_t *t_fin;
+	clock_t t_ini;
+	clock_t t_fin;
 	double trt = 0; //total response time
 
 	t_ini = t_ini_rcv;
 	t_fin = t_fin_rcv;
-	rt = ((double)((*t_fin) - (*t_ini)) / CLOCKS_PER_SEC) * 1000;
+	rt = ((double)(t_fin - t_ini) / CLOCKS_PER_SEC) * 1000;
 	trt += rt;
 	average_rt = trt/cantidad_procesos_ejecutados;
 	return rt;
@@ -988,8 +988,6 @@ void info_liberar_completo(void *_info_dtb)
 {
 	DTB_info *info_dtb = (DTB_info *)_info_dtb;
 	list_clean_and_destroy_elements(info_dtb->recursos_asignados, free);
-	free(info_dtb->tiempo_ini);
-	free(info_dtb->tiempo_fin);
 	free(info_dtb);
 }
 

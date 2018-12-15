@@ -834,7 +834,7 @@ void event_watcher()
 		if(fd_config < 0)
 			log_error(logger, "Fallo creacion de File Descriptor para SAFA.config (inotify_init)");
 		
-		int watch_descriptor = inotify_add_watch(fd_config, "/home/utnso/tp-2018-2c-Nene-Malloc/safa/src", IN_MODIFY);
+		int watch_descriptor = inotify_add_watch(fd_config, "/home/utnso/TPSO/tp-2018-2c-Nene-Malloc/safa/src/SAFA.config", IN_MODIFY);
 		if(watch_descriptor < 0)
 			log_error(logger, "Fallo creacion de observador de eventos en archivos (inotify_add_watch)");
 		
