@@ -81,9 +81,9 @@ void planificador_corto_plazo()
 {
 	while (true)
 	{
+		ordenar_por_menor_ejecutados();
 		if (hay_cpu_libre() && !list_is_empty(lista_listos))
 		{
-			log_debug(logger, "size cpu:%d\nsize cpu libres: %d", list_size(lista_cpu), list_count_satisfying(lista_cpu, esta_libre_cpu));
 			if (!strcmp(ALGORITMO_PLANIFICACION, "FIFO"))
 				planificar_fifo();
 			else if (!strcmp(ALGORITMO_PLANIFICACION, "RR"))
@@ -118,6 +118,17 @@ void planificar_vrr()
 	else
 		ejecutar_primer_dtb_listo();
 }
+
+void ordenar_por_menor_ejecutados()
+{
+	bool mas_ejecuto(void *_cpu_mayor, void *_cpu_menor)
+	{
+		return ((t_cpu *)_cpu_mayor)->dtb_ejecutados < ((t_cpu *)_cpu_menor)->dtb_ejecutados;
+	}
+	list_sort(lista_cpu, mas_ejecuto);
+}
+
+
 void planificar_iobound()
 {
 	bool io_bound_first(void *_dtb_mayor, void *_dtb_menor)
@@ -332,6 +343,7 @@ void liberar_cpu(int socket)
 {
 	t_cpu *cpu_actual = cpu_con_socket(socket);
 	cpu_actual->estado = CPU_LIBRE;
+	cpu_actual->dtb_ejecutados++;
 	log_info(logger, "Libere la cpu %d", cpu_actual->socket);
 }
 

@@ -476,6 +476,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		t_cpu *cpu_nuevo = malloc(sizeof(t_cpu));
 		cpu_nuevo->socket = socketFD;
 		cpu_nuevo->estado = CPU_LIBRE;
+		cpu_nuevo->dtb_ejecutados = 0;
 		list_add(lista_cpu, cpu_nuevo);
 		log_info(logger, "llegada cpu con id %i", cpu_nuevo->socket);
 		sem_post(&mutex_handshake_cpu);

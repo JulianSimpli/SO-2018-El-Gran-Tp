@@ -31,6 +31,7 @@ typedef struct DTB_info {
 typedef struct {
 	int socket;
     Estado estado;
+    int dtb_ejecutados;
 }__attribute__((packed)) t_cpu;
 
 typedef struct {
@@ -119,6 +120,7 @@ t_cpu* cpu_con_socket(int socket);
 bool cpu_coincide_socket(int socket, void* cpu);
 bool esta_libre_cpu(void* cpu);
 bool hay_cpu_libre();
+void ordenar_por_menor_ejecutados();
 
 
 //Funciones de Consola
