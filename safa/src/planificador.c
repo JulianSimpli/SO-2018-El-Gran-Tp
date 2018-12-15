@@ -50,7 +50,8 @@ void notificar_al_plp(u_int32_t pid)
 	DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
 	dtb_actualizar(dtb, lista_nuevos, lista_listos, dtb->PC, DTB_LISTO, 0);
 	DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
-	//info_dtb->tiempo_ini = medir_tiempo();
+	info_dtb->tiempo_ini = medir_tiempo();
+	log_debug(logger, "Tiempo ini: %f", info_dtb->tiempo_ini);
 }
 
 bool dummy_creado(DTB *dtb)
@@ -96,7 +97,7 @@ void planificador_corto_plazo()
 				sleep(10);
 			}
 		}
-		sleep(1);
+		sleep(RETARDO_PLANIF/1000);
 	}
 }
 
@@ -151,6 +152,11 @@ void ejecutar_primer_dtb_listo()
 	{
 		paquete->header = cargar_header(tamanio_DTB, ESDTB, SAFA);
 		EnviarPaquete(cpu_libre->socket, paquete);
+		DTB_info *info_dtb = info_asociada_a_pid(dtb_exec->gdtPID);
+		info_dtb->tiempo_fin = medir_tiempo();
+		log_debug(logger, "Tiempo fin: %f", info_dtb->tiempo_fin);
+		info_dtb->tiempo_respuesta = calcular_RT(info_dtb->tiempo_ini, info_dtb->tiempo_fin);
+		log_debug(logger, "Tiempo respuesta: %f", info_dtb->tiempo_respuesta);
 		log_info(logger, "GDT %d ejecutando en cpu %d\n", dtb_exec->gdtPID, cpu_libre->socket);
 		break;
 	}
@@ -175,7 +181,10 @@ void ejecutar_primer_dtb_prioridad()
 	paquete->header = cargar_header(tamanio_dtb + sizeof(u_int32_t), ESDTBQUANTUM, SAFA);
 	EnviarPaquete(cpu_libre->socket, paquete);
 	info_dtb->tiempo_fin = medir_tiempo();
+	log_debug(logger, "Tiempo fin: %f", info_dtb->tiempo_fin);
 	info_dtb->tiempo_respuesta = calcular_RT(info_dtb->tiempo_ini, info_dtb->tiempo_fin);
+	log_debug(logger, "Tiempo respuesta: %f", info_dtb->tiempo_respuesta);
+
 	free(paquete->Payload);
 	free(paquete);
 	info_dtb->quantum_faltante = 0;
@@ -1005,9 +1014,9 @@ void advertencia()
 	procesos_a_esperar--;
 	char *c = malloc(10);
 	int procesos_eliminar;
-	if (procesos_finalizados > 1 && procesos_a_esperar <= 0) //Te lo puse en 1 para poder probarlo. Va hardcodeado en 30?
+	if (procesos_finalizados > 20 && procesos_a_esperar <= 0) //Te lo puse en 1 para poder probarlo. Va hardcodeado en 30?
 	{
-		printf("\nHay mas de 1 procesos finalizados, seleccione una opcion:\n"
+		printf("\nHay mas de 20 procesos finalizados, seleccione una opcion:\n"
 			   "1: Eliminar todos los procesos.\n"
 			   "2: Elegir la cantidad de procesos a eliminar\n"
 			   "3: Continuar sin hacer nada\n"

@@ -157,9 +157,10 @@ void interpretar_paquete(Paquete *paquete)
 		log_info(logger, "Validar archivo");
 
 		int desplazamiento = 0;
-		char *prueba = string_deserializar(paquete->Payload, &desplazamiento);
+		char *path = string_deserializar(paquete->Payload, &desplazamiento);
+		char *ruta = path;
 		char *search_file = malloc(paquete->header.tamPayload + 1);
-		strcpy(search_file, prueba);
+		strcpy(search_file, path);
 
 		int existe = validar_archivo(search_file, file_path);
 
@@ -169,7 +170,14 @@ void interpretar_paquete(Paquete *paquete)
 			break;
 		}
 
-		int tamanio = obtener_size_escriptorio(prueba);
+		if (path[0] != '/') {
+			log_debug(logger, "La ruta es relativa y le tengo que agregar /");
+			ruta = malloc(strlen(path) + 2);
+			ruta[0] = '/';
+			strcat(ruta, path);
+		} 
+
+		int tamanio = obtener_size_escriptorio(ruta);
 
 		log_debug(logger, "%s pesa %d bytes", search_file, tamanio);
 
@@ -213,16 +221,18 @@ t_list *conseguir_lista_de_bloques(int bloques)
 {
 	t_list *free_blocks = list_create();
 	int i;
-	for (i = 1; bloques != 0 && i < cantidad_bloques; i++)
+
+	for (i = 0; bloques != 0 && i < cantidad_bloques; i++)
 	{
 		//El bitarray esta desocupado en esa posicion
-		if (bitarray_test_bit(bitarray, i))
+		if (!bitarray_test_bit(bitarray, i))
 		{
 			log_debug(logger, "Bloque libre: %d", i);
 			list_add(free_blocks, (void *)(__intptr_t)i);
 			bloques--;
 		}
 	}
+
 	if (bloques != 0)
 		return list_create(); //Returns empty list
 
@@ -268,8 +278,20 @@ int validar_archivo(char *search_file, char *current_path)
 
 	char **directorios = string_split(search_file, "/");
 	char *route = directorios[0];
+	char *ruta = route;
+
+	if (search_file[0] != '/') {
+		log_debug(logger, "La ruta es relativa y le tengo que agregar /");
+		ruta = malloc(strlen(route) + 2);
+		ruta[0] = '/';
+		strcat(ruta, route);
+	} 
+	
+	log_debug(logger, "%s", ruta);
+
+	
 	log_debug(logger, "estoy parado en: %s", current_path);
-	log_debug(logger, "nuevo acceso a %s", route);
+	log_debug(logger, "nuevo acceso a %s", ruta);
 
 	dir = opendir(current_path);
 	if (dir == NULL)
@@ -295,7 +317,7 @@ int validar_archivo(char *search_file, char *current_path)
 				strcat(current, ent->d_name);
 				if (validar_archivo(ruta_parcial, current) > 0)
 				{
-					// closedir(dir);
+					closedir(dir);
 					return 1;
 				}
 			}
@@ -334,6 +356,7 @@ void crear_archivo(Paquete *paquete)
 	struct dirent *ent;
 	int offset = 0;
 	char *ruta = string_deserializar(paquete->Payload, &offset);
+	char *route = ruta;
 	int bytes_a_crear = 0;
 	memcpy(&bytes_a_crear, paquete->Payload + offset, sizeof(u_int32_t));
 
@@ -341,8 +364,17 @@ void crear_archivo(Paquete *paquete)
 	strcpy(directorio_actual, file_path);
 	char **directorios = string_split(ruta, "/");
 
-	int accesos = contar_ocurrencias(ruta, '/');
-	log_debug(logger, "accesso %d", accesos);
+	int accesos= contar_ocurrencias(ruta, '/');
+	log_debug(logger, "accesos %d", accesos);
+
+	if (accesos == 0) {
+		log_debug(logger, "La ruta es relativa y le tengo que agregar /");
+		route = malloc(strlen(ruta) + 2);
+		route[0] = '/';
+		strcat(route, ruta);
+	} 
+	
+	log_debug(logger, "%s", route);
 
 	for (int i = 0; i < accesos - 1; i++)
 	{
@@ -365,15 +397,22 @@ void crear_archivo(Paquete *paquete)
 	t_list *bloques_libres = get_space(bytes_a_crear);
 
 	//Valida que tenga espacio suficiente
-	if (list_size(bloques_libres) == 0)
+	if (list_size(bloques_libres) == 0) {
 		enviar_error(ESPACIO_INSUFICIENTE_CREAR);
+		return;
+	}
 
 	//for que recorrra la lista de bloques libres, llame a la funcion create_block y marque el bitarray
 	//Va decrementando la cantidad de lineas que le resten escribir con \n necesarios en c/u
 	int retorno = crear_bloques(bloques_libres, bytes_a_crear);
 
+	if (retorno != 0) {
+		enviar_error(ESPACIO_INSUFICIENTE_CREAR);
+		return;
+	}
+
 	Archivo_metadata nuevo_archivo;
-	nuevo_archivo.nombre = ruta_absoluta(ruta);
+	nuevo_archivo.nombre = ruta_absoluta(route);
 	nuevo_archivo.bloques = bloques_libres;
 	nuevo_archivo.tamanio = bytes_a_crear;
 
@@ -381,8 +420,10 @@ void crear_archivo(Paquete *paquete)
 	log_debug(logger, "Va guardar la metadata del archivo %s", nuevo_archivo.nombre);
 	int resultado = guardar_metadata(&nuevo_archivo);
 
-	if (resultado != 0)
+	if (resultado != 0) {
 		enviar_error(ESPACIO_INSUFICIENTE_CREAR);
+		return;
+	}
 
 	Paquete respuesta;
 	respuesta.header = cargar_header(0, SUCCESS, MDJ);
@@ -475,6 +516,19 @@ void obtener_datos(Paquete *paquete)
 	free(buffer);
 }
 
+int create_block_file(char *path, int cantidad_bytes)
+{
+    FILE *f = fopen(path, "wb+");
+
+    if (f == NULL)
+        return 1;
+
+    char *write = string_repeat('\n', cantidad_bytes);
+    fwrite(write, cantidad_bytes, 1, f);
+    fclose(f);
+    return 0;
+}
+
 void guardar_datos(Paquete *paquete)
 {
 	Paquete respuesta;
@@ -491,15 +545,16 @@ void guardar_datos(Paquete *paquete)
 	offset += size;
 	char *datos_a_guardar = string_deserializar(paquete->Payload, &offset);
 
-	int tamanio = validar_archivo(ruta, file_path);
+	log_info(logger, "Bytes offset:%d, buffersize:%d, ruta:%s, datos a guardar:%s", bytes_offset, buffer_size, ruta, datos_a_guardar);
+	int existe = validar_archivo(ruta, file_path);
 
-	if (tamanio == 0)
+	if (existe == 0)
 	{
 		enviar_error(ARCHIVO_NO_EXISTE_FLUSH);
 		return;
 	}
 
-	t_config *metadata = config_create(ruta);
+	t_config *metadata = config_create(ruta_absoluta(ruta));
 	char **bloques_ocupados = config_get_array_value(metadata, "BLOQUES");
 
 	int bloque_inicial = bytes_offset / tamanio_bloques;
@@ -507,35 +562,42 @@ void guardar_datos(Paquete *paquete)
 
 	int cantidad_bloques_del_path = config_get_int_value(metadata, "TAMANIO") / tamanio_bloques;
 
-	for (int i = bloque_inicial; buffer_size > 0 && i < cantidad_bloques_del_path; i++)
+	char *tam = malloc(10);
+	sprintf(tam, "%d", buffer_size);
+	config_set_value(metadata, "TAMANIO", tam);
+
+	for (int i = bloque_inicial; buffer_size > 0 && i <= cantidad_bloques_del_path; i++)
 	{
 		int bloque = atoi(bloques_ocupados[i]);
+		log_debug(logger, "Escribo en el bloque %d", bloque);
 		char *ubicacion = get_block_full_path(bloque);
-		FILE *bloque_abierto = fopen(ubicacion, "r+");
+		FILE *bloque_abierto = fopen(ubicacion, "wb+");
 		fseek(bloque_abierto, offset_interno, SEEK_SET);
 		int escribir = tamanio_bloques - offset_interno;
 		offset_interno = 0;
 
 		if (buffer_size < escribir)
 			escribir = buffer_size;
-		for (int j = 0; j < escribir; j++)
-		{
-			fwrite(datos_a_guardar, 1, escribir, bloque_abierto);
-			datos_a_guardar = string_substring_from(datos_a_guardar, escribir);
-			buffer_size -= escribir;
-		}
+
+		log_debug(logger, "Voy a escribir %d bytes", escribir);
+		fwrite(datos_a_guardar, 1, escribir, bloque_abierto);
+		datos_a_guardar = string_substring_from(datos_a_guardar, escribir);
+		log_debug(logger, "Los datos que me quedan por guardar son:\n%s\n", datos_a_guardar);
+		buffer_size -= escribir;
+		log_debug(logger, "Buffer size: %d", buffer_size);
 		fclose(bloque_abierto);
 	}
 
+	log_debug(logger, "Buffer size: %d", buffer_size);
+
 	if (buffer_size > 0)
 	{
+		log_debug(logger, "Busco mas espacio porque los bloques de datos que tengo no me alcanzan");
 		t_list *nuevos_bloques = get_space(buffer_size);
+
+		//TODO: tiro error si no tiene espacio
 		//por cada bloque nuevo, tengo que actualizar el tamanio de la metadata
 		//actualizar el array de bloques
-		int size = config_get_int_value(metadata, "TAMANIO") + buffer_size;
-		char *tam = malloc(10);
-		sprintf(tam, "%d", size);
-		config_set_value(metadata, "TAMANIO", tam);
 
 		t_list *bloques_viejos = list_create();
 		for (int i = 0; i < cantidad_bloques_del_path; i++)
@@ -544,9 +606,17 @@ void guardar_datos(Paquete *paquete)
 		}
 
 		list_add_all(bloques_viejos, nuevos_bloques);
-		Archivo_metadata *archivo = list_get(bloques_viejos, 1);
-		config_set_value(metadata, "BLOQUES", convertir_bloques_a_string(archivo));
-		config_save(metadata);
+		Archivo_metadata *archivo = malloc(sizeof(Archivo_metadata));
+		archivo->tamanio = buffer_size;
+		archivo->bloques = list_duplicate(bloques_viejos);
+
+		char *bloques_string = convertir_bloques_a_string(archivo);
+
+		log_info(logger,"bloques para metadata %s",bloques_string);
+
+		config_set_value(metadata, "BLOQUES", bloques_string);
+
+		free(bloques_string);
 
 		crear_bloques(nuevos_bloques, buffer_size); //marco el bitarray
 
@@ -572,8 +642,10 @@ void guardar_datos(Paquete *paquete)
 		//escribir hasta terminar
 	}
 	//datos_a_guardar
+	config_save(metadata);
 
 	respuesta.header.tipoMensaje = SUCCESS;
+	respuesta.header = cargar_header(0, SUCCESS, MDJ);
 
 	//TODO: Validar archivo y reponder error si no existe
 	//TODO: Lee metadata del archivo pasado por el path

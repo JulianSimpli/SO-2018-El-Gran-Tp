@@ -291,7 +291,7 @@ int cargar_a_memoria(u_int32_t pid, char *path, char *file, Paquete *respuesta)
 	void *serial_file = string_serializar(file, &tam_serial_file);
 
 	log_debug(logger, "Cargo el paquete con:\npid %d\ntam_serial_path: %d\npath: %s\ntam_serial_file: %d\nfile:\n%s",
-			  pid, tam_serial_path, path, tam_serial_file, file);
+		  pid, tam_serial_path, path, tam_serial_file, file);
 	// payload = pid, len path, path, len archivo, archivo
 	Paquete cargar;
 	cargar.Payload = malloc(tam_pid + tam_serial_path + tam_serial_file);
@@ -421,12 +421,13 @@ void enviar_guardar_datos(Paquete *paquete)
 	Paquete guardar_mdj;
 	u_int32_t offset = 0;
 	u_int32_t len = strlen(file);
-	guardar_mdj.header = cargar_header(INTSIZE*2 + tam_path + tam_file, GUARDAR_DATOS, ELDIEGO);
+	desplazamiento = 0;
+	guardar_mdj.header = cargar_header(INTSIZE * 2 + tam_path + tam_file, GUARDAR_DATOS, ELDIEGO);
 	guardar_mdj.Payload = malloc(guardar_mdj.header.tamPayload);
 	memcpy(guardar_mdj.Payload + desplazamiento, serial_path, tam_path);
 	desplazamiento += tam_path;
 	memcpy(guardar_mdj.Payload + desplazamiento, &offset, INTSIZE);
-	desplazamiento += INTSIZE; 
+	desplazamiento += INTSIZE;
 	memcpy(guardar_mdj.Payload + desplazamiento, &len, INTSIZE);
 	desplazamiento += INTSIZE;
 	memcpy(guardar_mdj.Payload + desplazamiento, serial_file, tam_file);
@@ -435,7 +436,7 @@ void enviar_guardar_datos(Paquete *paquete)
 	enviar_paquete(socket_mdj, &guardar_mdj);
 	log_debug(logger, "Envie guardar_datos a mdj con un payload de %d", guardar_mdj.header.tamPayload);
 	log_debug(logger, "Payload:\nPath: %s\nbytes_offset: %d\nbuffer_size: %d\nFile:\n%s",
-	path, offset, len, file);
+		  path, offset, len, file);
 
 	free(path);
 	free(file);
@@ -538,13 +539,15 @@ void flush(Paquete *paquete)
 	char *path = string_deserializar(paquete->Payload, &desplazamiento);
 
 	log_debug(logger, "Envio a FM9");
-	paquete->header = cargar_header(paquete->header.tamPayload,FLUSH,ELDIEGO);
-	
+	paquete->header = cargar_header(paquete->header.tamPayload, FLUSH, ELDIEGO);
+
 	enviar_paquete(socket_fm9, paquete);
 
 	Paquete respuesta_fm9;
 	recibir_paquete(socket_fm9, &respuesta_fm9);
 	log_debug(logger, "Recibi el path y el archivo entero y pesa %d", respuesta_fm9.header.tamPayload);
+
+	log_debug(logger, "Tipo msje FM9:%d", respuesta_fm9.header.tipoMensaje);
 
 	if (respuesta_fm9.header.tipoMensaje == FALLO_DE_SEGMENTO_FLUSH)
 	{

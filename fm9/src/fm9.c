@@ -598,9 +598,7 @@ void flushSEG(char* path, int socketFD) {
 			lineas++;
 		}
 		size_t longitud = strlen(texto);
-		*(texto + longitud) = '\n';
 		*(texto + longitud + 1) = '\0';
-//		*(texto + longitud + 2) = '\0';
 		texto = texto-posicionPtr;
 		texto = realloc(texto, strlen(texto)+1);
 		printf("%s", texto);
@@ -656,9 +654,7 @@ void flushSPA(char* path, int socketFD) {
 			}
 		}
 		size_t longitud = strlen(texto);
-		*(texto + longitud) = '\n';
 		*(texto + longitud + 1) = '\0';
-//		*(texto + longitud + 2) = '\0';
 		texto = texto-posicionPtr;
 		texto = realloc(texto, strlen(texto)+1);
 		log_info(logger, "%s", texto);

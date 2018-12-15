@@ -77,6 +77,7 @@ void crear_archivo(Paquete *paquete);
 void obtener_datos(Paquete *paquete);
 void guardar_datos(Paquete *paquete);
 void borrar_archivo(Paquete *paquete);
+int create_block_file(char *path, int cantidad_bytes);
 
 //Estas son las funciones que ejecuta cada comando respectivamente
 //Todas tienen que tener la misma firma o se podria ampliar recibiendo void*
@@ -356,25 +357,13 @@ int crear_bloques(t_list *lista_bloques, int cantidad_bytes)
 {
     for (int i = 0; i < list_size(lista_bloques); i++)
     {
-        create_block((__intptr_t)list_get(lista_bloques, i), cantidad_bytes);
-        cantidad_bytes -= tamanio_bloques;
+        int size = tamanio_bloques;
+        if (cantidad_bytes < tamanio_bloques) 
+            size = cantidad_bytes;
+
+        create_block((__intptr_t)list_get(lista_bloques, i), size);
     }
-}
-
-int create_block_file(char *path, int cantidad_bytes)
-{
-    log_debug(logger, "Voy a escribir el file %s", path);
-    FILE *f = fopen(path, "w+");
-
-    if (f == NULL)
-        return 1;
-
-    while (cantidad_bytes)
-    {
-        fputs("\n\0", f);
-        cantidad_bytes--;
-    }
-    fclose(f);
+    return 0;
 }
 
 int create_block(int index, int cantidad_bytes)
@@ -411,7 +400,7 @@ int guardar_metadata(Archivo_metadata *fm)
 
 char *convertir_bloques_a_string(Archivo_metadata *fm)
 {
-    char *bloques = malloc(256);
+    char *bloques = malloc(cantidad_bloques * 3 + cantidad_bloques - 1);
     int i;
     sprintf(bloques, "[%d", (int)(intptr_t)list_get(fm->bloques, 0));
 
@@ -419,8 +408,8 @@ char *convertir_bloques_a_string(Archivo_metadata *fm)
     {
         sprintf(bloques, "%s,%d", bloques, (int)(intptr_t)list_get(fm->bloques, i));
     }
-
-    return strcat(bloques, "]");
+    strcat(bloques,"]");
+    return bloques;
 }
 
 int escuchar_conexiones()
@@ -548,7 +537,10 @@ void cargar_bitarray()
     cargar_metadata();
 
     char *bitmap = leer_bitmap();
-    bitarray = bitarray_create_with_mode(bitmap, cantidad_bloques / 8, LSB_FIRST);
+    bitarray = bitarray_create_with_mode(bitmap, cantidad_bloques / 8, MSB_FIRST);
+    if (bitarray_test_bit(bitarray, 1))
+        log_debug(logger, "El bloque 1 esta ocupado");
+
     size_t n = bitarray_get_max_bit(bitarray);
     log_info(logger, "El bitarray tiene %d bits", n);
 }
