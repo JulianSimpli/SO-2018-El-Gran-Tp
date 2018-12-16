@@ -5,6 +5,7 @@ u_int32_t numero_pid = 0,
 		  procesos_finalizados = 0, cantidad_procesos_ejecutados = 0,
 		  sentencias_globales_del_diego = 0, sentencias_totales = 0;
 int procesos_a_esperar = 0;
+double trt = 0; //total response time
 float average_rt=0; //average response time
 
 char *Estados[5] = {"Nuevo", "Listo", "Ejecutando", "Bloqueado", "Finalizado"};
@@ -890,10 +891,9 @@ clock_t medir_tiempo ()
 float calcular_RT(clock_t t_ini_rcv, clock_t t_fin_rcv)
 {
 	cantidad_procesos_ejecutados++;
-	float rt; //response time
+	double rt; //response time
 	clock_t t_ini;
 	clock_t t_fin;
-	double trt = 0; //total response time
 
 	t_ini = t_ini_rcv;
 	t_fin = t_fin_rcv;
