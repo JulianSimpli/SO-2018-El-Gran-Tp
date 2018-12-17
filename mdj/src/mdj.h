@@ -37,12 +37,10 @@ void inicializar_log(char *program);
 void inicializar(char **argv);
 int interpretar(char *linea);
 int escuchar_conexiones();
-Mensaje *recibir_mensaje(int conexion);
 void *atender_dam();
 void *atender_peticion(void *args);
 void interpretar_paquete(Paquete *paquete);
 void handshake(int, int);
-void enviar_mensaje(Mensaje);
 void marcarBitarray(t_config *metadata);
 int create_block(int index, int cantidad_bytes);
 int destroy_block(int index);
@@ -84,16 +82,6 @@ int create_block_file(char *path, int cantidad_bytes);
 void com_help(char *linea);
 void com_exit(char *linea);
 
-void enviar_mensaje(Mensaje mensaje)
-{
-    void *buffer = malloc(sizeof(Paquete));
-
-    int mensaje_enviado = send(mensaje.socket, buffer, sizeof(Paquete), 0);
-
-    if (mensaje_enviado < 0)
-        log_error(logger, "No pudo enviar el mensaje");
-}
-
 /**
  * Se encarga de crear el socket y mandar el primer mensaje
  * Devuelve el socket 
@@ -134,7 +122,7 @@ void imprimir_directorios(char *path_a_imprimir)
 
 void com_list(char **parametros)
 {
-    printf("The folder has this currents files: \n");
+    printf("La carpeta tiene los siguientes archivos: \n");
 
     char *root = malloc(strlen(current_path) + 1);
     strcpy(root, current_path);
@@ -199,8 +187,8 @@ void com_cat(char **parametros)
     fread(cadena_a_devolver, size, 1, f);
     fclose(f);
     cadena_a_devolver[size] = '\0';
-    printf("%s\n", cadena_a_devolver);
     printf("CAT\n");
+    printf("El contenido del archivos es: \n %s", cadena_a_devolver);
 }
 
 void com_cd(char **parametros)
@@ -210,8 +198,8 @@ void com_cd(char **parametros)
     char *path = parametros[1];
     if (path[0] == '/')
     {
-        current_path = realloc(current_path,strlen(file_path)+ strlen(path) + 1);
-        strcpy(current_path,file_path);
+        current_path = realloc(current_path, strlen(file_path) + strlen(path) + 1);
+        strcpy(current_path, file_path);
         strcat(current_path, path);
     }
     else
@@ -228,12 +216,11 @@ void com_md5(char **parametros)
     char *path = parametros[1];
 
     char *archivo_md5 = ruta_absoluta(path);
-    log_debug(logger, "archivo md5: %s", archivo_md5);
+    log_debug(logger, "Ruta absoluta del archivo md5: %s", archivo_md5);
     t_config *metadata_md5 = config_create(archivo_md5);
     char **bloques_ocupados = config_get_array_value(metadata_md5, "BLOQUES");
-    log_debug(logger, "bloque 0: %s", bloques_ocupados[0]);
     int tamanio = config_get_int_value(metadata_md5, "TAMANIO");
-    log_debug(logger, "tamanio %d", tamanio);
+    log_debug(logger, "Tamanio del archivo: %d", tamanio);
 
     int leido = 0;
 
@@ -244,7 +231,7 @@ void com_md5(char **parametros)
     {
         int bloque = atoi(bloques_ocupados[i]);
         char *ubicacion = get_block_full_path(bloque);
-        log_debug(logger, "Abro el bloque que esta en %s", ubicacion);
+        log_debug(logger, "Abro el bloque %s", ubicacion);
         FILE *bloque_abierto = fopen(ubicacion, "rb");
         fseek(bloque_abierto, 0, SEEK_SET);
         int leer = tamanio_bloques;
@@ -280,7 +267,7 @@ void com_md5(char **parametros)
 
 void com_exit(char *linea)
 {
-    printf("BYE\n");
+    printf("BYE \n");
     free(linea);
     exit_gracefully(0);
 }
@@ -316,32 +303,18 @@ void com_help(char *linea)
     }
 }
 
-Mensaje *recibir_mensaje(int conexion)
-{
-    Mensaje *buffer = (Mensaje *)malloc(sizeof(Mensaje));
-    read(conexion, buffer, sizeof(Mensaje));
-
-    if (buffer == NULL)
-    {
-        log_error(logger, "Error en la lectura del Mensaje");
-        exit_gracefully(2);
-    }
-
-    return buffer;
-}
-
 void update_bit_array()
 {
     int size_bitmap = cantidad_bloques / 8;
-    log_debug(logger,"Tamaño bitmap: %d",size_bitmap);
+    log_debug(logger, "Tamaño bitmap: %d", size_bitmap);
     char *bitmap = "/Bitmap.bin";
-    char *bitmap_path = malloc(strlen(metadata_path)+strlen(bitmap)+1);
-    strcpy(bitmap_path,metadata_path);
-    strcat(bitmap_path,bitmap);
+    char *bitmap_path = malloc(strlen(metadata_path) + strlen(bitmap) + 1);
+    strcpy(bitmap_path, metadata_path);
+    strcat(bitmap_path, bitmap);
     FILE *abrir_bitmap = fopen(bitmap_path, "wb");
 
     sem_wait(&sem_bitmap);
-    fwrite(bitarray,size_bitmap,1,abrir_bitmap);
+    fwrite(bitarray, size_bitmap, 1, abrir_bitmap);
     fclose(abrir_bitmap);
     sem_post(&sem_bitmap);
 }
@@ -358,7 +331,7 @@ int crear_bloques(t_list *lista_bloques, int cantidad_bytes)
     for (int i = 0; i < list_size(lista_bloques); i++)
     {
         int size = tamanio_bloques;
-        if (cantidad_bytes < tamanio_bloques) 
+        if (cantidad_bytes < tamanio_bloques)
             size = cantidad_bytes;
 
         create_block((__intptr_t)list_get(lista_bloques, i), size);
@@ -408,7 +381,7 @@ char *convertir_bloques_a_string(Archivo_metadata *fm)
     {
         sprintf(bloques, "%s,%d", bloques, (int)(intptr_t)list_get(fm->bloques, i));
     }
-    strcat(bloques,"]");
+    strcat(bloques, "]");
     return bloques;
 }
 
@@ -481,7 +454,8 @@ void borrar_archivo(Paquete *paquete)
         enviar_error(ARCHIVO_NO_EXISTE);
 
     //TODO: Lee metadata del archivo y devuelve los bloques
-    t_config *metadata = config_create(ruta_absoluta(ruta));
+    char *ruta_final = ruta_absoluta(ruta);
+    t_config *metadata = config_create(ruta_final);
     char **bloques_ocupados = config_get_array_value(metadata, "BLOQUES");
 
     int cantidad_bloques_del_path = config_get_int_value(metadata, "TAMANIO") / tamanio_bloques;
@@ -489,13 +463,14 @@ void borrar_archivo(Paquete *paquete)
     for (int i = 0; i < cantidad_bloques_del_path; i++)
     {
         destroy_block(atoi(bloques_ocupados[i]));
-        // Modifica el bitarray
+        log_debug(logger, "Limpio el bit: %d", bloques_ocupados[i]); // Modifica el bitarray
     }
-    update_bit_array();
+    // update_bit_array();
     //liberar();
     config_destroy(metadata);
     //Borra los metadata
-    remove(ruta_absoluta(ruta));
+    remove(ruta_final);
+    log_debug(logger, "Destruyo el archivo: %s", ruta_final);
     //Crea paquete OK
     Paquete respuesta;
     respuesta.header = cargar_header(0, SUCCESS, MDJ);

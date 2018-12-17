@@ -170,7 +170,8 @@ void interpretar_paquete(Paquete *paquete)
 			break;
 		}
 
-		if (path[0] != '/') {
+		if (path[0] != '/') 
+		{
 			log_debug(logger, "La ruta es relativa y le tengo que agregar /");
 			ruta = malloc(strlen(path) + 2);
 			ruta[0] = '/';
@@ -243,7 +244,7 @@ t_list *conseguir_lista_de_bloques(int bloques)
 t_list *get_space(int size)
 {
 	int blocks = calcular_bloques(size);
-	log_debug(logger, "Necesita %d bloques", blocks);
+	log_debug(logger, "Se necesita esta cantidad de bloques: %d", blocks);
 	return conseguir_lista_de_bloques(blocks);
 }
 
@@ -274,25 +275,18 @@ int validar_archivo(char *search_file, char *current_path)
 	struct dirent *ent;
 	// char *current = malloc(strlen(current_path) + 1);
 	// strcpy(current, current_path);
-	log_debug(logger, "esta es mi ruta completa a buscar: %s", search_file);
+	log_debug(logger, "Esta es mi ruta a buscar: %s", search_file);
 
 	char **directorios = string_split(search_file, "/");
 	char *route = directorios[0];
 	char *ruta = route;
 
 	if (search_file[0] != '/') {
-		log_debug(logger, "La ruta es relativa y le tengo que agregar /");
 		ruta = malloc(strlen(route) + 2);
 		ruta[0] = '/';
 		strcat(ruta, route);
 	} 
 	
-	log_debug(logger, "%s", ruta);
-
-	
-	log_debug(logger, "estoy parado en: %s", current_path);
-	log_debug(logger, "nuevo acceso a %s", ruta);
-
 	dir = opendir(current_path);
 	if (dir == NULL)
 	{
@@ -301,17 +295,18 @@ int validar_archivo(char *search_file, char *current_path)
 	}
 
 	log_info(logger, "Entre al dir: %s", current_path);
+	log_info(logger, "Busco: %s", route);
+	
 	while ((ent = readdir(dir)) != NULL)
 	{
 		//Verificar con strcmp si ya existe
-		log_info(logger, "Busco: %s", route);
 		if (strcmp(route, ent->d_name) == 0)
 		{
 			if (ent->d_type == DT_DIR)
 			{
 				int position = strlen(route) + 1;
 				char *ruta_parcial = string_substring_from(search_file, position);
-				log_debug(logger, "sub es %s", ruta_parcial);
+				log_debug(logger, "Tengo que seguir buscanto: %s", ruta_parcial);
 				strcpy(current, current_path);
 				strcat(current, "/");
 				strcat(current, ent->d_name);
@@ -455,7 +450,7 @@ void obtener_datos(Paquete *paquete)
 	offset += size;
 	int final = bytes_a_devolver;
 
-	log_debug(logger, "Obtener %s %d %d", ruta, bytes_offset, bytes_a_devolver);
+	log_debug(logger, "Obtener de esta ruta %s, con este offset %d, devolviendo %d bytes", ruta, bytes_offset, bytes_a_devolver);
 
 	//Calcular en que bloque cae segun el offset y cuantos bloques va leer segun el size
 	//Lee metadata del archivo pasado por el path
@@ -475,7 +470,7 @@ void obtener_datos(Paquete *paquete)
 	{
 		int bloque = atoi(bloques_ocupados[i]);
 		char *ubicacion = get_block_full_path(bloque);
-		log_debug(logger, "Abro el bloque que esta en %s", ubicacion);
+		log_debug(logger, "Abro el bloque %s", ubicacion);
 		FILE *bloque_abierto = fopen(ubicacion, "rb");
 		fseek(bloque_abierto, offset_interno, SEEK_SET);
 		int leer = tamanio_bloques - offset_interno;
@@ -486,18 +481,16 @@ void obtener_datos(Paquete *paquete)
 			leer = bytes_a_devolver;
 
 		log_debug(logger, "Leo %d", leer);
-		char *aux = malloc(leer);
-		fread(aux, 1, leer, bloque_abierto);
 		memcpy(buffer + leido, aux, leer);
 		fclose(bloque_abierto);
-		log_debug(logger, "bytes_a_devolver %d", bytes_a_devolver);
 		bytes_a_devolver -= leer;
+		log_debug(logger, "Bytes que me faltan devolver: %d", bytes_a_devolver);
 		leido += leer;
 		free(aux);
 	}
 
 	buffer[final] = '\0';
-	log_debug(logger, "EL contenido es \n%s", buffer);
+	log_debug(logger, "El contenido leido de los bloques es: \n%s", buffer);
 
 	//Es el caso que el archivo no se pudo leer por alguna razon
 	if (buffer == NULL)
@@ -506,7 +499,7 @@ void obtener_datos(Paquete *paquete)
 	Paquete respuesta;
 	int desplazamiento = 0;
 	void *serializado = string_serializar(buffer, &desplazamiento);
-	log_debug(logger, "La respuesta pesa %d", desplazamiento);
+	log_debug(logger, "La respuesta pesa %d bytes", desplazamiento);
 	respuesta.header = cargar_header(desplazamiento, SUCCESS, MDJ);
 	respuesta.Payload = serializado;
 
@@ -545,7 +538,7 @@ void guardar_datos(Paquete *paquete)
 	offset += size;
 	char *datos_a_guardar = string_deserializar(paquete->Payload, &offset);
 
-	log_info(logger, "Bytes offset:%d, buffersize:%d, ruta:%s, datos a guardar:%s", bytes_offset, buffer_size, ruta, datos_a_guardar);
+	log_info(logger, "Bytes offset: %d, buffer size: %d, ruta: %s, datos a guardar: %s", bytes_offset, buffer_size, ruta, datos_a_guardar);
 	int existe = validar_archivo(ruta, file_path);
 
 	if (existe == 0)
@@ -584,11 +577,11 @@ void guardar_datos(Paquete *paquete)
 		datos_a_guardar = string_substring_from(datos_a_guardar, escribir);
 		log_debug(logger, "Los datos que me quedan por guardar son:\n%s\n", datos_a_guardar);
 		buffer_size -= escribir;
-		log_debug(logger, "Buffer size: %d", buffer_size);
+		log_debug(logger, "Me faltan escribir: %d bytes", buffer_size);
 		fclose(bloque_abierto);
 	}
 
-	log_debug(logger, "Buffer size: %d", buffer_size);
+	log_debug(logger, "Me faltan escribir: %d bytes", buffer_size);
 
 	if (buffer_size > 0)
 	{
@@ -612,7 +605,7 @@ void guardar_datos(Paquete *paquete)
 
 		char *bloques_string = convertir_bloques_a_string(archivo);
 
-		log_info(logger,"bloques para metadata %s",bloques_string);
+		log_info(logger,"Bloques para metadata %s",bloques_string);
 
 		config_set_value(metadata, "BLOQUES", bloques_string);
 
