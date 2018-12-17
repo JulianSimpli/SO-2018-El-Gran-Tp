@@ -481,6 +481,8 @@ void obtener_datos(Paquete *paquete)
 			leer = bytes_a_devolver;
 
 		log_debug(logger, "Leo %d", leer);
+		char *aux = malloc(leer);
+		fread(aux,1,leer,bloque_abierto);
 		memcpy(buffer + leido, aux, leer);
 		fclose(bloque_abierto);
 		bytes_a_devolver -= leer;
