@@ -54,6 +54,7 @@ void inicializar_variables() {
 	sem_init(&mutex_handshake_cpu, 0, 0);
 	sem_init(&sem_ejecutar, 0, 0);
 	sem_init(&sem_multiprogramacion, 0, MULTIPROGRAMACION);
+	sem_init(&sem_listos, 0, 0);
 }
 
 void crear_listas()
@@ -81,13 +82,13 @@ void llenar_lista_estados()
 
 void consola()
 {
-	log_info(logger, "Esperando que conecte el diego y al menos 1 CPU\nSAFA esta en estado corrupto\n");
-	sem_wait(&mutex_handshake_diego);
-	log_debug(logger, "Handshake con el diego concretado\n");
-	sem_wait(&mutex_handshake_cpu);
-	log_debug(logger, "Handshake con un cpu concretado\n");
-	log_info(logger, "SAFA esta en estado operativo\n");
-	log_info(logger, "Puede usar la consola\n");
+	log_info(logger, "Esperando que conecte el diego y al menos 1 CPU\nSAFA esta en estado corrupto");
+	// sem_wait(&mutex_handshake_diego);
+	log_debug(logger, "Handshake con el diego concretado");
+	// sem_wait(&mutex_handshake_cpu);
+	log_debug(logger, "Handshake con un cpu concretado");
+	log_info(logger, "SAFA esta en estado operativo");
+	log_info(logger, "Puede usar la consola");
 
 	char *linea;
 	while (true)
@@ -192,6 +193,7 @@ void accion(void *socket)
 	//while (RecibirPaqueteServidorSafa(socketFD, SAFA, &paquete) > 0)
 	while (RecibirDatos(&paquete.header , socketFD, TAMANIOHEADER) > 0)
 	{
+		log_header(logger, &paquete, "Llego un paquete");
 		switch (paquete.header.emisor)
 		{
 		case ELDIEGO:
@@ -286,11 +288,7 @@ void manejar_desconexion_cpu(int socket)
 			printf("Terminando SAFA.\n"
 					"Hasta la proxima!\n");
 			exit(1);
-		}	
-
-		// Esperar a que conecte otra por x tiempo?
-		// sleep(30) Si sigue siendo 0 el list size exit(1)
-		// Si entro otra cpu, continua ejecutando
+		}
 	}
 }
 
@@ -332,8 +330,9 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		if(verificar_si_murio(dtb, lista_nuevos, pid, dtb->PC))
 			break;
 
-		bloquear_dummy(lista_ejecutando, pid);
-		pasaje_a_ready(dtb->gdtPID);
+		bloquear_dummy(lista_bloqueados, pid);
+		notificar_al_plp(dtb->gdtPID);
+		log_info(logger, "GDT %d pasa a lista de procesos listos", pid);
 		liberar_archivo_abierto(escriptorio_cargado);
 
 		break;
@@ -344,7 +343,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		memcpy(&pid, paquete->Payload, tam_pid);
 		DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
 		log_error(logger, "Fallo la carga en memoria del GDT %d", dtb->gdtPID);
-		bloquear_dummy(lista_ejecutando, dtb->gdtPID);
+		bloquear_dummy(lista_bloqueados, dtb->gdtPID);
 		dtb_actualizar(dtb, lista_nuevos, lista_finalizados, dtb->PC, DTB_FINALIZADO, 0);
 		break;
 	}
@@ -355,7 +354,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
 		ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
 		log_error(logger, "No existe el escriptorio %s del GDT %d", escriptorio->path, dtb->gdtPID);
-		bloquear_dummy(lista_ejecutando, dtb->gdtPID);
+		bloquear_dummy(lista_bloqueados, dtb->gdtPID);
 		dtb_actualizar(dtb, lista_nuevos, lista_finalizados, dtb->PC, DTB_FINALIZADO, 0);
 		break;
 	}
@@ -431,6 +430,7 @@ void manejar_errores_diego(Paquete *paquete)
 	memcpy(&pid, paquete->Payload, INTSIZE);
 	DTB *dtb = dtb_encuentra(lista_bloqueados, pid, GDT);
 	dtb_finalizar(dtb, lista_bloqueados, pid, dtb->PC);
+	sem_post(&sem_multiprogramacion);
 	switch(paquete->header.tipoMensaje)
 	{
 	case PATH_INEXISTENTE:
@@ -473,6 +473,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 	{
 	case ESHANDSHAKE:
 	{
+		log_debug(logger, "ESHANDSHAKE socket %d", socketFD);
 		t_cpu *cpu_nuevo = malloc(sizeof(t_cpu));
 		cpu_nuevo->socket = socketFD;
 		cpu_nuevo->estado = CPU_LIBRE;
@@ -488,8 +489,9 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		liberar_cpu(socketFD);
 		log_debug(logger, "DUMMY_BLOQUEA");
 		memcpy(&pid, paquete->Payload, INTSIZE);
+		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, DUMMY);
 		log_info(logger, "Se ejecuto el dummy de GDT %d", pid);
-		//bloquear_dummy(lista_ejecutando, pid);
+		dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, dtb->PC, DTB_BLOQUEADO, socketFD);
 		break;
 	}
 	case DTB_BLOQUEAR:
@@ -512,6 +514,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 	case QUANTUM_FALTANTE:
 	{
 		liberar_cpu(socketFD);
+		log_debug(logger, "QUANTUM_FALTANTE");
 		deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
 		
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
@@ -522,9 +525,11 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, pc, DTB_BLOQUEADO, socketFD);
 		break;
 	}
+
 	case DTB_EJECUTO:
 	{
 		liberar_cpu(socketFD);
+		log_debug(logger, "DTB_EJECUTO");
 		deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
 		
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
@@ -538,17 +543,18 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 	case DTB_FINALIZAR: //Aca es cuando el dtb finaliza "normalmente". Lo detecta CPU
 	{
 		liberar_cpu(socketFD);
-		memcpy(&pid, paquete->Payload, INTSIZE);
-
+		log_debug(logger, "DTB_FINALIZO");
+		deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
+	
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 		ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
-		dtb->PC = escriptorio->cantLineas;
-		metricas_actualizar(dtb, dtb->PC);
-		dtb_finalizar(dtb, lista_ejecutando, pid, dtb->PC);
+		metricas_actualizar(dtb, pc);
+		dtb_finalizar(dtb, lista_ejecutando, pid, pc);
 		break;
 	}
 	case WAIT:
 	{
+		log_debug(logger, "WAIT");
 		t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc, WAIT);
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 		metricas_actualizar(dtb, pc);
@@ -558,90 +564,13 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 	}
 	case SIGNAL:
 	{
+		log_debug(logger, "SIGNAL");
 		t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc, SIGNAL);
 		log_debug(logger, "El pid %d pide signal a %s", pid, recurso->id);
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 		metricas_actualizar(dtb, pc);
 		recurso_signal(recurso, dtb->gdtPID, pc, socketFD);
 		verificar_si_murio(dtb, lista_ejecutando, pid, pc);
-		break;
-	}
-	case ABORTAR:
-	{
-		liberar_cpu(socketFD);
-		deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
-
-		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
-		log_error(logger, "Asignar Error %d: El archivo no se encuentra abierto por GDT %d", ABORTAR, dtb->gdtPID);
-		metricas_actualizar(dtb, pc);
-		
-		dtb_finalizar(dtb, lista_ejecutando, pid, pc);
-		break;
-	}
-	case ABORTARF:
-	{
-		liberar_cpu(socketFD);
-		deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
-
-		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
-		log_error(logger, "Flush Error %d: El archivo no se encuentra abierto por GDT %d", ABORTARF, dtb->gdtPID);
-		metricas_actualizar(dtb, pc);
-		
-		dtb_finalizar(dtb, lista_ejecutando, pid, pc);
-		break;
-	}
-	case ABORTARC:
-	{
-		liberar_cpu(socketFD);
-		deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
-
-		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
-		log_error(logger, "Cerrar Error %d: El archivo no se encuentra abierto por GDT %d", ABORTARC, dtb->gdtPID);
-		metricas_actualizar(dtb, pc);
-		
-		dtb_finalizar(dtb, lista_ejecutando, pid, pc);
-		break;
-	}
-	case FALLO_DE_SEGMENTO_ASIGNAR:
-	{
-		liberar_cpu(socketFD);
-
-		memcpy(&pid, paquete->Payload, INTSIZE);
-		desplazamiento += INTSIZE;
-		memcpy(&pc, paquete->Payload + desplazamiento, INTSIZE);
-		desplazamiento += INTSIZE;
-		
-		log_error(logger, "Asignar Error %d: Fallo de segmento en FM9 de GDT %d", ESPACIO_INSUFICIENTE_ASIGNAR, pid);
-		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
-		dtb_finalizar(dtb, lista_ejecutando, pid, pc);
-		break;
-	}
-	case ESPACIO_INSUFICIENTE_ASIGNAR:
-	{
-		liberar_cpu(socketFD);
-
-		memcpy(&pid, paquete->Payload, INTSIZE);
-		desplazamiento += INTSIZE;
-		memcpy(&pc, paquete->Payload + desplazamiento, INTSIZE);
-		desplazamiento += INTSIZE;
-
-		log_error(logger, "Asignar Error %d: Espacio insuficiente en FM9 de GDT %d", ESPACIO_INSUFICIENTE_ASIGNAR, pid);
-		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);			
-		dtb_finalizar(dtb, lista_ejecutando, pid, pc);
-		break;
-	}
-	case FALLO_DE_SEGMENTO_CLOSE:
-	{
-		liberar_cpu(socketFD);
-
-		memcpy(&pid, paquete->Payload, INTSIZE);
-		desplazamiento += INTSIZE;
-		memcpy(&pc, paquete->Payload + desplazamiento, INTSIZE);
-		desplazamiento += INTSIZE;
-
-		log_error(logger, "Close Error %d: Fallo de segmento en FM9 de GDT %d", FALLO_DE_SEGMENTO_CLOSE, pid);
-		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);			
-		dtb_finalizar(dtb, lista_ejecutando, pid, pc);
 		break;
 	}
 	case CLOSE:
@@ -658,12 +587,59 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		list_remove_and_destroy_by_condition(dtb->archivosAbiertos, LAMBDA (bool _(void *_archivo) {return coincide_archivo(_archivo, cerrado->path); }), liberar_archivo_abierto);			
 		break;
 	}
+	default:
+	{
+		liberar_cpu(socketFD);
+		manejar_errores_cpu(paquete);
+		break;
+	}
+	}
+}
+
+void manejar_errores_cpu(Paquete *paquete)
+{
+	u_int32_t pid = 0, pc = 0;
+	int desplazamiento = 0;
+	deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
+	DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
+	Tipo tipo = paquete->header.tipoMensaje;
+	if(tipo == ABORTARA || tipo == ABORTARF || tipo == ABORTARC)
+		metricas_actualizar(dtb, pc);
+	dtb_finalizar(dtb, lista_ejecutando, pid, pc);	
+	
+	switch(tipo)
+	{
+	case ABORTARA:
+		log_debug(logger, "ABORTARA");
+		log_error(logger, "Asignar Error %d: El archivo no se encuentra abierto por GDT %d", ABORTARA, dtb->gdtPID);
+		break;
+	case ABORTARF:
+		log_debug(logger, "ABORTARF");
+		log_error(logger, "Flush Error %d: El archivo no se encuentra abierto por GDT %d", ABORTARF, dtb->gdtPID);
+		break;
+	case ABORTARC:
+		log_debug(logger, "ABORTARC");
+		log_error(logger, "Cerrar Error %d: El archivo no se encuentra abierto por GDT %d", ABORTARC, dtb->gdtPID);
+		break;
+	case FALLO_DE_SEGMENTO_ASIGNAR:
+		log_debug(logger, "FALLO_DE_SEGMENTO_ASIGNAR");
+		log_error(logger, "Asignar Error %d: Fallo de segmento en FM9 de GDT %d", FALLO_DE_SEGMENTO_ASIGNAR, pid);
+		break;
+	case ESPACIO_INSUFICIENTE_ASIGNAR:
+		log_debug(logger, "ESPACIO_INSUFICIENTE_ASIGNAR");
+		log_error(logger, "Asignar Error %d: Espacio insuficiente en FM9 de GDT %d", ESPACIO_INSUFICIENTE_ASIGNAR, pid);
+		break;
+	case FALLO_DE_SEGMENTO_CLOSE:
+		log_debug(logger, "FALLO_DE_SEGMENTO_CLOSE");
+		log_error(logger, "Close Error %d: Fallo de segmento en FM9 de GDT %d", FALLO_DE_SEGMENTO_CLOSE, pid);
+		break;
 	}
 }
 
 void metricas_actualizar(DTB *dtb, u_int32_t pc)
 {
 	u_int32_t sentencias_ejecutadas = pc - dtb->PC;
+	log_debug(logger, "GDT %d ejecuto %d sentencias");
 
 	actualizar_sentencias_en_nuevos(sentencias_ejecutadas);
 	actualizar_sentencias_en_no_finalizados(sentencias_ejecutadas);
@@ -767,10 +743,9 @@ void recurso_signal(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket)
 t_recurso *recurso_recibir(void *payload, int *pid, int *pc, Tipo senial)
 {
 	int desplazamiento = 0;
-	log_debug(logger, "deserializo string");
 	char *id_recurso = string_deserializar(payload, &desplazamiento);
+	log_debug(logger, "Recurso recibido: %s", id_recurso);
 
-	log_debug(logger, "deserializo pid y pc");
 	deserializar_pid_y_pc(payload, pid, pc, &desplazamiento);
 
 	log_debug(logger, "Busco el recurso %s para el pid %d", id_recurso, *pid);
@@ -778,9 +753,10 @@ t_recurso *recurso_recibir(void *payload, int *pid, int *pc, Tipo senial)
 	if (recurso == NULL)
 	{
 		log_debug(logger, "El recurso no existe");
-		int flag = senial == SIGNAL;
+		int flag = senial == WAIT;
 		recurso = recurso_crear(id_recurso, flag);
 	}
+	free(id_recurso);
 
 	return recurso;
 }
@@ -828,7 +804,6 @@ void event_watcher()
 {
 	while(true)
 	{
-		//sleep(1);
 		int multip_vieja = MULTIPROGRAMACION;
 		char buffer[BUF_INOTIFY_LEN];
 

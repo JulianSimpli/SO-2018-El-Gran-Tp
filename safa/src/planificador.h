@@ -7,6 +7,7 @@
 #include "../../Bibliotecas/dtb.h"
 #include "../../Bibliotecas/sockets.h"
 #include "../../Bibliotecas/helper.h"
+#include "../../Bibliotecas/loggers.h"
 
 typedef enum {
 	DTB_NUEVO, DTB_LISTO, DTB_EJECUTANDO, DTB_BLOQUEADO, DTB_FINALIZADO,
@@ -60,7 +61,6 @@ t_list *lista_info_dtb;
 
 t_list *lista_recursos_global;
 
-t_log *logger;
 t_log* logger_fin;
 
 u_int32_t numero_pid, procesos_finalizados;
@@ -74,12 +74,12 @@ pthread_t hilo_consola, hilo_plp, hilo_pcp;
 
 sem_t sem_ejecutar;
 sem_t sem_multiprogramacion;
+sem_t sem_listos;
 
 //Funciones
 //Hilo planificador largo plazo
 void planificador_largo_plazo();
 void crear_dummy();
-void pasaje_a_ready(u_int32_t pid);
 void notificar_al_plp(u_int32_t pid);
 
 //Funciones Dummy
@@ -120,7 +120,7 @@ t_cpu* cpu_con_socket(int socket);
 bool cpu_coincide_socket(int socket, void* cpu);
 bool esta_libre_cpu(void* cpu);
 bool hay_cpu_libre();
-void ordenar_por_menor_ejecutados();
+void ordenar_cpu_por_menor_ejecutados();
 
 
 //Funciones de Consola

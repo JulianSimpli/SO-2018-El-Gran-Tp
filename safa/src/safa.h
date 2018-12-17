@@ -41,6 +41,7 @@ void accion(void* socket);
 void manejar_paquetes_diego(Paquete *paquete, int socketFD);
 void manejar_errores_diego(Paquete *paquete);
 void manejar_paquetes_CPU(Paquete *paquete, int socketFD);
+void manejar_errores_cpu(Paquete *paquete);
 void *config_cpu_serializar(int *tamanio_payload);
 void enviar_handshake_cpu(int socketFD);
 void enviar_handshake_diego(int socketFD);

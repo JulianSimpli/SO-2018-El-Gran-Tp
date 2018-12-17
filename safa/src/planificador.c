@@ -39,13 +39,6 @@ void crear_dummy()
 	}
 }
 
-void pasaje_a_ready(u_int32_t pid)
-{
-	bloquear_dummy(lista_ejecutando, pid);
-	notificar_al_plp(pid);
-	log_info(logger, "GDT %d pasa a lista de procesos listos", pid);
-}
-
 void notificar_al_plp(u_int32_t pid)
 {
 	DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
@@ -57,7 +50,7 @@ void notificar_al_plp(u_int32_t pid)
 
 bool dummy_creado(DTB *dtb)
 {
-	return (dtb_encuentra(lista_listos, dtb->gdtPID, DUMMY) != NULL) || (dtb_encuentra(lista_ejecutando, dtb->gdtPID, DUMMY) != NULL);
+	return (dtb_encuentra(lista_listos, dtb->gdtPID, DUMMY) != NULL) || (dtb_encuentra(lista_ejecutando, dtb->gdtPID, DUMMY) != NULL) || (dtb_encuentra(lista_bloqueados, dtb->gdtPID, DUMMY) != NULL);
 }
 
 void bloquear_dummy(t_list *lista, u_int32_t pid)
@@ -82,45 +75,45 @@ void planificador_corto_plazo()
 {
 	while (true)
 	{
-		ordenar_por_menor_ejecutados();
-		if (hay_cpu_libre() && !list_is_empty(lista_listos))
+		sem_wait(&sem_listos);
+		ordenar_cpu_por_menor_ejecutados();
+		usleep(RETARDO_PLANIF*1000);
+		log_debug(logger, "PCP: Dormi %d milisegundos", RETARDO_PLANIF);
+
+		if (!strcmp(ALGORITMO_PLANIFICACION, "FIFO"))
+			planificar_fifo();
+		else if (!strcmp(ALGORITMO_PLANIFICACION, "RR"))
+			planificar_rr();
+		else if (!strcmp(ALGORITMO_PLANIFICACION, "VRR"))
+			planificar_vrr();
+		else if (!strcmp(ALGORITMO_PLANIFICACION, "IOBF"))
+			planificar_iobound();
+		else
 		{
-			if (!strcmp(ALGORITMO_PLANIFICACION, "FIFO"))
-				planificar_fifo();
-			else if (!strcmp(ALGORITMO_PLANIFICACION, "RR"))
-				planificar_rr();
-			else if (!strcmp(ALGORITMO_PLANIFICACION, "VRR"))
-				planificar_vrr();
-			else if (!strcmp(ALGORITMO_PLANIFICACION, "IOBF"))
-				planificar_iobound();
-			else
-			{
-				printf("No se conoce el algoritmo. Cambielo desde SAFA.config\n");
-				sleep(10);
-			}
+			log_debug(logger, "No se conoce el algoritmo. Cambielo desde SAFA.config");
+			sleep(10);
 		}
-		sleep(RETARDO_PLANIF/1000);
 	}
 }
 
 void planificar_fifo()
 {
+	log_debug(logger, "PCP: FIFO");
 	ejecutar_primer_dtb_listo();
 }
 void planificar_rr()
 {
-	// rearma cola listo y luego
+	log_debug(logger, "PCP: RR");
 	ejecutar_primer_dtb_listo();
 }
 void planificar_vrr()
 {
-	if (!list_is_empty(lista_prioridad))
-		ejecutar_primer_dtb_prioridad();
-	else
-		ejecutar_primer_dtb_listo();
+	log_debug(logger, "PCP: VRR");
+	ejecutar_primer_dtb_prioridad();
+	ejecutar_primer_dtb_listo();
 }
 
-void ordenar_por_menor_ejecutados()
+void ordenar_cpu_por_menor_ejecutados()
 {
 	bool mas_ejecuto(void *_cpu_mayor, void *_cpu_menor)
 	{
@@ -129,20 +122,28 @@ void ordenar_por_menor_ejecutados()
 	list_sort(lista_cpu, mas_ejecuto);
 }
 
-
 void planificar_iobound()
 {
+	log_debug(logger, "PCP: IOBF");
 	bool io_bound_first(void *_dtb_mayor, void *_dtb_menor)
 	{
 		return ((DTB *)_dtb_mayor)->entrada_salidas > ((DTB *)_dtb_menor)->entrada_salidas;
 	}
+
+	list_sort(lista_prioridad, io_bound_first);	
 	list_sort(lista_listos, io_bound_first);
+
+	usleep(RETARDO_PLANIF*1000);
+	ejecutar_primer_dtb_prioridad();
 	ejecutar_primer_dtb_listo();
 }
 
 //Funciones planificador corto plazo
 void ejecutar_primer_dtb_listo()
 {
+	if(list_is_empty(lista_listos) || !hay_cpu_libre())
+		return;
+	
 	t_cpu *cpu_libre = list_find(lista_cpu, esta_libre_cpu);
 	cpu_libre->estado = CPU_OCUPADA;
 	log_debug(logger, "Esta libre la cpu %d\n", cpu_libre->socket);
@@ -181,6 +182,9 @@ void ejecutar_primer_dtb_listo()
 
 void ejecutar_primer_dtb_prioridad()
 {
+	if(list_is_empty(lista_prioridad) || !hay_cpu_libre())
+		return;
+
 	t_cpu *cpu_libre = list_find(lista_cpu, esta_libre_cpu);
 	cpu_libre->estado = CPU_OCUPADA;
 	DTB *dtb = list_get(lista_prioridad, 0);
@@ -221,6 +225,7 @@ DTB *dtb_crear(u_int32_t pid, char *path, int flag_inicializacion)
 	{
 		dtb_nuevo->gdtPID = pid;
 		list_add(lista_listos, dtb_nuevo);
+		sem_post(&sem_listos);
 		log_info(logger, "Dummy del GDT %d creado correctamente", dtb_nuevo->gdtPID);
 		break;
 	}
@@ -278,19 +283,26 @@ DTB *dtb_actualizar(DTB *dtb, t_list *source, t_list *dest, u_int32_t pc, Estado
 		case DTB_FINALIZADO:
 		{
 			procesos_finalizados++;
-			printf("GDT %d se ha movido de %s a finalizado\n", dtb->gdtPID, Estados[info_dtb->estado]);
-			log_info(logger, "GDT %d se ha movido de %s a finalizado", dtb->gdtPID, Estados[info_dtb->estado]);
+			log_info(logger, "GDT %d %s->%s", dtb->gdtPID, Estados[info_dtb->estado], Estados[estado]);
 			advertencia();
 			break;
 		}
+		case DTB_LISTO:
+		{
+			sem_post(&sem_listos);
+			log_info(logger, "GDT %d %s->%s", dtb->gdtPID, Estados[info_dtb->estado], Estados[estado]);
+			break;	
+		}
 		default:
 		{
-			log_info(logger, "GDT %d se ha movido de %s a %s", dtb->gdtPID, Estados[info_dtb->estado], Estados[estado]);
+			log_info(logger, "GDT %d %s->%s", dtb->gdtPID, Estados[info_dtb->estado], Estados[estado]);
 			break;
 		}
 		}
 		info_dtb_actualizar(estado, socket, info_dtb);
 	}
+	else
+		log_info(logger, "Dummy %d->%s", dtb->gdtPID, Estados[estado]);
 
 	return dtb;
 }
@@ -611,7 +623,7 @@ void manejar_finalizar(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_list *list
 			loggear_finalizacion(dtb, info_dtb);
 			dtb_actualizar(dtb, lista_actual, lista_finalizados, dtb->PC, DTB_FINALIZADO, info_dtb->socket_cpu);
 		}
-		else if (dtb_encuentra(lista_listos, pid, DUMMY))
+		else if (dtb_encuentra(lista_listos, pid, DUMMY) != NULL)
 		{
 			bloquear_dummy(lista_listos, pid);
 			loggear_finalizacion(dtb, info_dtb);
@@ -655,8 +667,7 @@ void manejar_finalizar_bloqueado(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_
 	t_recurso *recurso = recurso_bloqueando_pid(pid);
 	if (recurso != NULL)
 	{
-		printf("El GDT %d esta bloqueado esperando por el recurso %s", pid, recurso->id);
-		printf("Se finalizara liberando al recurso, junto a todos los que tiene retenidos");
+		log_debug(logger, "El GDT %d esta bloqueado esperando por el recurso %s", pid, recurso->id);
 		bool coincide_pid(void *_pid_recurso)
 		{
 			int *pid_recurso = (int *)_pid_recurso;
@@ -665,11 +676,11 @@ void manejar_finalizar_bloqueado(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_
 		list_remove_by_condition(recurso->pid_bloqueados, coincide_pid);
 
 		dtb_finalizar(dtb, lista_actual, pid, dtb->PC);
+		log_debug(logger, "GDT %d finalizado. Recurso %s liberando al recurso, junto a todos los que tiene retenidos");
+
 	}
 	else
-		printf("El GDT %d esta bloqueado esperando que se realice una operacion\n"
-			   "Se esperara a que se desbloquee al proceso para finalizarlo\n",
-			   pid);
+		log_debug(logger, "El GDT %d esta bloqueado esperando una E/S\nFinalizara cuando termine", pid);
 }
 
 t_recurso *recurso_bloqueando_pid(u_int32_t pid)
@@ -803,7 +814,7 @@ void recurso_liberar(void *_recurso)
 {
 	t_recurso *recurso = (t_recurso *)_recurso;
 	free(recurso->id);
-	list_destroy(recurso->pid_bloqueados);
+	list_destroy_and_destroy_elements(recurso->pid_bloqueados, free);
 	free(recurso);
 }
 
@@ -1083,12 +1094,11 @@ void liberar_parte_de_memoria(int procesos_eliminar)
 			list_remove_and_destroy_element(lista_finalizados, 0, dtb_liberar);
 		}
 		log_info(logger, "Se finalizaron los primeros %i procesos de la lista de finalizados", procesos_eliminar);
-		printf("Por consola, se liberaron de memoria %i procesos de la lista de finalizados\n", procesos_eliminar);
 	}
 	else
 	{
 		if (procesos_eliminar > list_size(lista_finalizados))
-			printf("Solo hay %d procesos en la lista de finalizados\n", procesos_finalizados);
+			log_debug(logger, "Solo hay %d procesos en la lista de finalizados\n", procesos_finalizados);
 		liberar_memoria();
 	}
 }
