@@ -3,8 +3,9 @@
 void log_header(t_log *logger, Paquete *paquete, const char *_contexto, ...)
 {
     // Esto que sigue es para poder loggear un string con formato
-    // Cuando lo pasaba a una funcion loggear_contexto (para usar en cada caso) lo imprimia mal
-    // Igual se soluciona escribiendo arriba de log_header, un log_info con lo que quieras y listo
+    // Cuando lo pasaba a una funcion loggear_contexto (para usar esa y no repetir codigo) lo imprimia mal
+    // Igual se solucionaba escribiendo arriba de log_header (o log_x), un log_info con lo que quieras y listo
+    // Pero asi anda
     /*
     if(_contexto != '\0')
         loggear_contexto(logger, _contexto);

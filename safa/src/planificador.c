@@ -60,7 +60,7 @@ void bloquear_dummy(t_list *lista, u_int32_t pid)
 		return dtb_coincide_pid(dtb, pid, DUMMY);
 	}
 	list_remove_and_destroy_by_condition(lista, compara_dummy, dtb_liberar);
-	log_info(logger, "Dummy del GDT %d bloqueado", pid);
+	log_info(logger, "Dummy del GDT %d destruido", pid);
 }
 
 void desbloquear_dummy(DTB *dtb_nuevo)

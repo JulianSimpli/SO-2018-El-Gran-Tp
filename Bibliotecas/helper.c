@@ -64,7 +64,7 @@ void deserializar_pid_y_pc(void *payload, u_int32_t *pid, u_int32_t *pc, int *de
 	*desplazamiento += tamanio;
 	memcpy(pc, payload + *desplazamiento, tamanio);
 	*desplazamiento += tamanio;
-
+	log_debug(logger, "Deserialice: PID: %d y PC: %d", *pid, *pc);
 }
 
 //funciones de exit

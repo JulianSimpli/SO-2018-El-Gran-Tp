@@ -83,9 +83,9 @@ void llenar_lista_estados()
 void consola()
 {
 	log_info(logger, "Esperando que conecte el diego y al menos 1 CPU\nSAFA esta en estado corrupto");
-	// sem_wait(&mutex_handshake_diego);
+	sem_wait(&mutex_handshake_diego);
 	log_debug(logger, "Handshake con el diego concretado");
-	// sem_wait(&mutex_handshake_cpu);
+	sem_wait(&mutex_handshake_cpu);
 	log_debug(logger, "Handshake con un cpu concretado");
 	log_info(logger, "SAFA esta en estado operativo");
 	log_info(logger, "Puede usar la consola");
@@ -490,7 +490,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		log_debug(logger, "DUMMY_BLOQUEA");
 		memcpy(&pid, paquete->Payload, INTSIZE);
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, DUMMY);
-		log_info(logger, "Se ejecuto el dummy de GDT %d", pid);
+		log_info(logger, "Se ejecuto el dummy de GDT %d", dtb->gdtPID);
 		dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, dtb->PC, DTB_BLOQUEADO, socketFD);
 		break;
 	}
@@ -638,8 +638,9 @@ void manejar_errores_cpu(Paquete *paquete)
 
 void metricas_actualizar(DTB *dtb, u_int32_t pc)
 {
+	log_debug(logger, "pc nuevo: %d - pc viejo: %d", pc, dtb->PC);
 	u_int32_t sentencias_ejecutadas = pc - dtb->PC;
-	log_debug(logger, "GDT %d ejecuto %d sentencias");
+	log_debug(logger, "GDT %d ejecuto %d sentencias", dtb->gdtPID, sentencias_ejecutadas);
 
 	actualizar_sentencias_en_nuevos(sentencias_ejecutadas);
 	actualizar_sentencias_en_no_finalizados(sentencias_ejecutadas);
