@@ -16,6 +16,7 @@
 #include "../../Bibliotecas/sockets.h"
 #include "../../Bibliotecas/dtb.h"
 #include "../../Bibliotecas/helper.h"
+#include "../../Bibliotecas/loggers.h"
 
 
 //Logger y config globales
@@ -42,6 +43,8 @@ void handshake_fm9();
 int interpretar(char *linea);
 void bloquea_dummy(Paquete *paquete);
 void bloqueate_safa(DTB *dtb);
+int enviar_pid_y_pc(DTB *dtb, Tipo tipo_mensaje);
+void dtb_liberar(DTB *dtb);
 
 void enviar_mensaje(Mensaje mensaje);
 Mensaje *recibir_mensaje(int conexion);

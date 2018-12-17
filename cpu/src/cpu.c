@@ -70,6 +70,7 @@ int ejecutar(char *linea, DTB *dtb)
 	{
 		if (!strcmp(primitivas[i].name, parameters[0]))
 		{
+			dtb->PC++;
 			log_debug(logger, "Interprete %s", primitivas[i].name);
 			existe = 1;
 			log_info(logger, primitivas[i].doc);
@@ -93,6 +94,7 @@ int ejecutar_algoritmo(Paquete *paquete)
 	log_debug(logger, "Deserialice el dtb");
 	log_debug(logger, "pid %d", dtb->gdtPID);
 	Paquete *nuevo_paquete = malloc(sizeof(Paquete));
+	int tam_pid_y_pc = 0;
 	ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
 	int cantidad_lineas = escriptorio->cantLineas;
 	int flag = 1;
@@ -108,23 +110,14 @@ int ejecutar_algoritmo(Paquete *paquete)
 				break;
 			}
 			flag = ejecutar(primitiva, dtb);
-			dtb->PC++;
+			log_debug(logger, "Voy por %d y tengo %d cantidad de lineas", dtb->PC, cantidad_lineas);
 			if (flag || finalizar)
 			{
 				finalizar = false;
 				break;
 			}
-			log_debug(logger, "Voy por %d y tengo %d cantidad de lineas", dtb->PC, cantidad_lineas);
 			if (cantidad_lineas == dtb->PC)
-			{
-				nuevo_paquete->header = cargar_header(INTSIZE, DTB_FINALIZAR, CPU);
-				nuevo_paquete->Payload = malloc(nuevo_paquete->header.tamPayload);
-				memcpy(nuevo_paquete->Payload, &dtb->gdtPID, INTSIZE);
-				EnviarPaquete(socket_safa, nuevo_paquete);
-				free(nuevo_paquete->Payload);
-				free(nuevo_paquete);
-				return 1;
-			}
+				return enviar_pid_y_pc(dtb, DTB_FINALIZAR); 
 		}
 	}
 	else
@@ -146,7 +139,6 @@ int ejecutar_algoritmo(Paquete *paquete)
 			log_debug(logger, "Primitiva %s", primitiva);
 			flag = ejecutar(primitiva, dtb); //avanzar el PC dentro del paquete
 			log_debug(logger, "Flag %d", flag);
-			dtb->PC++;
 			log_debug(logger, "Voy por %d y tengo %d lineas", dtb->PC, cantidad_lineas);
 			if (flag || finalizar)
 			{
@@ -155,41 +147,20 @@ int ejecutar_algoritmo(Paquete *paquete)
 			}
 
 			if (cantidad_lineas == dtb->PC)
-			{
-				nuevo_paquete->header = cargar_header(INTSIZE, DTB_FINALIZAR, CPU);
-				nuevo_paquete->Payload = malloc(nuevo_paquete->header.tamPayload);
-				memcpy(nuevo_paquete->Payload, &dtb->gdtPID, INTSIZE);
-				EnviarPaquete(socket_safa, nuevo_paquete);
-				log_debug(logger, "Envie dtb finalizar");
-				free(nuevo_paquete->Payload);
-				free(nuevo_paquete);
-				return 1;
-			}
+				return enviar_pid_y_pc(dtb, DTB_FINALIZAR);
 		}
 		//armar el paquete para mandar a safa, que dependiendo de si es RR o VRR, envía quantum restante
 		//si es RR, manda DTB_EJECUTO
 		//si es VRR, manda QUANTUM_FALTANTE
 		if (!strcmp(algoritmo, "VRR"))
-		{
-			nuevo_paquete->header.tipoMensaje = QUANTUM_FALTANTE;
-			nuevo_paquete->Payload = realloc(nuevo_paquete->Payload, nuevo_paquete->header.tamPayload + sizeof(u_int32_t));
-			int restante = quantum_local - i;
-			memcpy(nuevo_paquete->Payload + nuevo_paquete->header.tamPayload, &restante, sizeof(u_int32_t));
-			nuevo_paquete->header.tamPayload += sizeof(u_int32_t);
-			EnviarPaquete(socket_safa, nuevo_paquete);
-			return 1;
-		}
+			return enviar_pid_y_pc(dtb, QUANTUM_FALTANTE);
 	}
 
 	if (!flag)
-	{
-		log_debug(logger, "Envio DTB EJECUTO");
-		nuevo_paquete->header.tipoMensaje = DTB_EJECUTO;
-		void *DTB_serializado = DTB_serializar(dtb, &nuevo_paquete->header.tamPayload);
-		nuevo_paquete->header.emisor = CPU;
-		nuevo_paquete->Payload = DTB_serializado;
-		EnviarPaquete(socket_safa, nuevo_paquete);
-	}
+		return enviar_pid_y_pc(dtb, DTB_EJECUTO);
+
+	dtb_liberar(dtb);
+	return 1;
 }
 
 char *pedir_primitiva(DTB *dtb)
@@ -461,7 +432,7 @@ int ejecutar_abrir(char **parameters, DTB *dtb)
 	ArchivoAbierto *archivo_encontrado = _DTB_encontrar_archivo(dtb, path);
 
 	if (archivo_encontrado != NULL)
-		return 1;
+		return 0;
 
 	Paquete *pedido_a_dam = malloc(sizeof(Paquete));
 	pedido_a_dam->header.tipoMensaje = ABRIR;
@@ -507,22 +478,9 @@ int ejecutar_asignar(char **parametros, DTB *dtb)
 	ArchivoAbierto *archivo_encontrado = _DTB_encontrar_archivo(dtb, path);
 
 	if (archivo_encontrado == NULL)
-	{
-		Paquete *abortar_gdt = malloc(sizeof(Paquete));
-		dtb->PC++;
-		abortar_gdt->header.tamPayload = 0;
-		abortar_gdt->header.emisor = CPU;
-		abortar_gdt->header.tipoMensaje = ABORTAR;
-		int tam_pid_y_pc = 0;
-		abortar_gdt->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
-		abortar_gdt->header.tamPayload = tam_pid_y_pc;
-
-		EnviarPaquete(socket_safa, abortar_gdt);
-		return 1;
-		//mandar mensaje a SAFA
-		//abortar GDT
+		return enviar_pid_y_pc(dtb, ABORTARA);
 		//Error 20001: El archivo no se encuentra abierto
-	}
+
 	Paquete *datos_a_fm9 = malloc(sizeof(Paquete));
 
 	int desplazamiento = 0;
@@ -563,7 +521,7 @@ int ejecutar_asignar(char **parametros, DTB *dtb)
 		log_debug(logger, "Fallo asignar, Error %d", asigno_fm9.header.tipoMensaje);
 		Paquete error_asignar;
 		int tam_pid_y_pc = 0;
-		error_asignar.Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC + 1, &tam_pid_y_pc);
+		error_asignar.Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
 		error_asignar.header = cargar_header(tam_pid_y_pc, asigno_fm9.header.tipoMensaje, CPU);
 		EnviarPaquete(socket_safa, &error_asignar);
 		free(error_asignar.Payload);
@@ -640,28 +598,9 @@ int ejecutar_flush(char **parametros, DTB *dtb)
 	ArchivoAbierto *archivo_encontrado = _DTB_encontrar_archivo(dtb, path);
 
 	if (archivo_encontrado == NULL)
-	{
-		Paquete *abortar_gdt = malloc(sizeof(Paquete));
-		abortar_gdt->header.tamPayload = 0;
-		abortar_gdt->header.emisor = CPU;
-		abortar_gdt->header.tipoMensaje = ABORTARF;
-		int tam_pid_y_pc = 0;
-		abortar_gdt->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC + 1, &tam_pid_y_pc);
-		abortar_gdt->header.tamPayload = tam_pid_y_pc;
-
-		EnviarPaquete(socket_safa, abortar_gdt);
-		log_error(logger, "Aborta pid %d porque no tiene el archivo abierto", dtb->gdtPID);
-
-		return 1;
-		//mandar mensaje a SAFA
-		//abortar GDT
-		//Error 30001: El archivo no se encuentra abierto
-	}
-
-	free(archivo_encontrado); //No se usan para nada estos datos
+		return enviar_pid_y_pc(dtb, ABORTARF); // Error 30001: El archivo no se encuentra abierto
 
 	//mensaje al DAM
-
 	int desplazamiento = 0;
 	void *archivo_serializado = DTB_serializar_archivo(archivo_encontrado, &desplazamiento);
 	Paquete *flush_a_dam = malloc(sizeof(Paquete));
@@ -679,6 +618,7 @@ int ejecutar_flush(char **parametros, DTB *dtb)
 	dtb->entrada_salidas++;
 	bloqueate_safa(dtb);
 
+	free(archivo_encontrado);
 	free(flush_a_dam->Payload);
 	free(flush_a_dam);
 	return 1;
@@ -693,22 +633,8 @@ int ejecutar_close(char **parametros, DTB *dtb)
 	ArchivoAbierto *archivo_encontrado = _DTB_encontrar_archivo(dtb, path);
 
 	if (archivo_encontrado == NULL)
-	{
-		Paquete *abortar_gdt = malloc(sizeof(Paquete));
-		abortar_gdt->header.tamPayload = 0;
-		abortar_gdt->header.emisor = CPU;
-		abortar_gdt->header.tipoMensaje = ABORTARC;
-		int tam_pid_y_pc = 0;
-		abortar_gdt->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC + 1, &tam_pid_y_pc);
-		abortar_gdt->header.tamPayload = tam_pid_y_pc;
-		EnviarPaquete(socket_safa, abortar_gdt);
-		free(abortar_gdt->Payload);
-		free(abortar_gdt);
-		return 1;
-		//mandar mensaje a SAFA
-		//abortar GDT
-		//Error 40001: El archivo no se encuentra abierto
-	}
+		return enviar_pid_y_pc(dtb, ABORTARC); //Error 40001: El archivo no se encuentra abierto
+
 	Paquete *liberar_memoria = malloc(sizeof(Paquete));
 
 	int size_archivo = 0;
@@ -838,7 +764,7 @@ void bloqueate_safa(DTB *dtb)
 	bloqueate_safa->header.emisor = CPU;
 	int tam_pid_y_pc = 0;
 	void *pid_pc_serializados;
-	pid_pc_serializados = serializar_pid_y_pc(dtb->gdtPID, dtb->PC + 1, &tam_pid_y_pc);
+	pid_pc_serializados = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
 	bloqueate_safa->header.tamPayload = tam_pid_y_pc + sizeof(u_int32_t);
 	bloqueate_safa->Payload = malloc(bloqueate_safa->header.tamPayload);
 	memcpy(bloqueate_safa->Payload, pid_pc_serializados, tam_pid_y_pc);
@@ -849,4 +775,25 @@ void bloqueate_safa(DTB *dtb)
 	free(pid_pc_serializados);
 	free(bloqueate_safa->Payload);
 	free(bloqueate_safa);
+}
+
+int enviar_pid_y_pc(DTB *dtb, Tipo tipo_mensaje)
+{
+		Paquete *paquete = malloc(sizeof(Paquete));
+		int tam_pid_y_pc = 0;
+		paquete->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
+		paquete->header = cargar_header(tam_pid_y_pc, tipo_mensaje, CPU);
+		EnviarPaquete(socket_safa, paquete);
+		log_header(logger, paquete, "Mando pid: %d y pc: %d a Safa", dtb->gdtPID, dtb->PC);
+		free(paquete->Payload);
+		free(paquete);
+		dtb_liberar(dtb);
+
+		return 1;
+}
+
+void dtb_liberar(DTB *dtb)
+{
+	list_clean_and_destroy_elements(((DTB *)dtb)->archivosAbiertos, liberar_archivo_abierto);
+	free(dtb);
 }
