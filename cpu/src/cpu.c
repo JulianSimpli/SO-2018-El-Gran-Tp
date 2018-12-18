@@ -70,6 +70,8 @@ int ejecutar(char *linea, DTB *dtb)
 	{
 		if (!strcmp(primitivas[i].name, parameters[0]))
 		{
+			ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
+			log_debug(logger, "DTB %d ejecuta PC %d / %d", dtb->gdtPID, dtb->PC, escriptorio->cantLineas);
 			dtb->PC++;
 			log_debug(logger, "Interprete %s", primitivas[i].name);
 			existe = 1;
@@ -103,14 +105,13 @@ int ejecutar_algoritmo(Paquete *paquete)
 		while (1)
 		{
 			char *primitiva = pedir_primitiva(dtb);
-			log_debug(logger, "Primitiva %s", primitiva);
+			log_debug(logger, "Primitiva: %s", primitiva);
 			if (!strcmp(primitiva, "Fallo"))
 			{
 				log_debug(logger, "Fallo el pedido de primitiva");
 				break;
 			}
 			flag = ejecutar(primitiva, dtb);
-			log_debug(logger, "Voy por %d y tengo %d cantidad de lineas", dtb->PC, cantidad_lineas);
 			if (flag || finalizar)
 			{
 				finalizar = false;
@@ -139,7 +140,6 @@ int ejecutar_algoritmo(Paquete *paquete)
 			log_debug(logger, "Primitiva %s", primitiva);
 			flag = ejecutar(primitiva, dtb); //avanzar el PC dentro del paquete
 			log_debug(logger, "Flag %d", flag);
-			log_debug(logger, "Voy por %d y tengo %d lineas", dtb->PC, cantidad_lineas);
 			if (flag || finalizar)
 			{
 				finalizar = false;
@@ -149,6 +149,8 @@ int ejecutar_algoritmo(Paquete *paquete)
 			if (cantidad_lineas == dtb->PC)
 				return enviar_pid_y_pc(dtb, DTB_FINALIZAR);
 		}
+		if(i == quantum_local)
+			log_debug(logger, "DTB %d termino su quantum de %d", dtb->gdtPID, quantum_local);
 		//armar el paquete para mandar a safa, que dependiendo de si es RR o VRR, envía quantum restante
 		//si es RR, manda DTB_EJECUTO
 		//si es VRR, manda QUANTUM_FALTANTE
@@ -183,16 +185,13 @@ char *pedir_primitiva(DTB *dtb)
 
 	paquete->header = cargar_header(desplazamiento, NUEVA_PRIMITIVA, CPU);
 
-	log_debug(logger, "Pido a fm9 siguiente primitiva");
-
 	int ret = EnviarPaquete(socket_fm9, paquete);
 	if (ret != -1)
 	{
-		log_debug(logger, "Le pedi primitiva");
+		log_header(logger, paquete, "Le pedi primitiva a FM9");
 		Paquete *primitiva_recibida = malloc(sizeof(Paquete));
 		RecibirPaqueteCliente(socket_fm9, primitiva_recibida);
-		log_debug(logger, "%d", primitiva_recibida->header.tipoMensaje);
-		log_debug(logger, "%d", primitiva_recibida->header.tamPayload);
+		log_header(logger, primitiva_recibida, "Me llego la primitiva");
 		if (primitiva_recibida->header.tipoMensaje == ERROR)
 			return "Fallo";
 		char *primitiva = malloc(primitiva_recibida->header.tamPayload);
@@ -205,20 +204,17 @@ char *pedir_primitiva(DTB *dtb)
 
 int interpretar_safa(Paquete *paquete)
 {
-	log_info(logger, "%d: Interpreto el tipo de mensaje", process_get_thread_id());
+	log_header(logger, paquete, "%d: Interpreto el tipo de mensaje", process_get_thread_id());
 	switch (paquete->header.tipoMensaje)
 	{
 	case ESDTBDUMMY:
-		log_debug(logger, "ESDTBDUMMY");
 		EnviarPaquete(socket_dam, paquete); //envia el dtb al diego para que este haga el pedido correspondiente a MDJ
 		bloquea_dummy(paquete);
 		break;
 	case ESDTB:
-		log_debug(logger, "ESDTB");
 		ejecutar_algoritmo(paquete);
 		break;
 	case ESDTBQUANTUM:
-		log_debug(logger, "ESDTBQUANTUM");
 		ejecutar_algoritmo(paquete);
 		break;
 	case ROJADIRECTA:
@@ -426,7 +422,6 @@ int crear_socket_fm9()
 
 int ejecutar_abrir(char **parameters, DTB *dtb)
 {
-	printf("ABRIR\n");
 	char *path = parameters[1];
 
 	ArchivoAbierto *archivo_encontrado = _DTB_encontrar_archivo(dtb, path);
@@ -445,6 +440,7 @@ int ejecutar_abrir(char **parameters, DTB *dtb)
 	memcpy(pedido_a_dam->Payload + sizeof(u_int32_t), path_serializado, len);
 	//mensaje a DAM
 	EnviarPaquete(socket_dam, pedido_a_dam);
+	log_header(logger, pedido_a_dam, "Envie al Diego GDT %d abrir %s", dtb->gdtPID, path);
 
 	dtb->entrada_salidas++;
 	bloqueate_safa(dtb);
@@ -462,14 +458,12 @@ int ejecutar_abrir(char **parameters, DTB *dtb)
 
 int ejecutar_concentrar(char **parametros, DTB *dtb)
 {
-	printf("CONCENTRAR\n");
 	sleep(retardo);
 	return 0;
 }
 
 int ejecutar_asignar(char **parametros, DTB *dtb)
 {
-	printf("ASIGNAR\n");
 	char *path = parametros[1];
 	int linea = atoi(parametros[2]);
 	char *dato = parametros[3];
@@ -506,6 +500,7 @@ int ejecutar_asignar(char **parametros, DTB *dtb)
 	datos_a_fm9->header = cargar_header(desplazamiento, ASIGNAR, CPU);
 
 	EnviarPaquete(socket_fm9, datos_a_fm9);
+	log_header(logger, datos_a_fm9, "Envie asignar a FM9 de GDT %d", dtb->gdtPID);
 	free(arch_serializado);
 	free(path);
 	free(dato_serializado);
@@ -515,18 +510,12 @@ int ejecutar_asignar(char **parametros, DTB *dtb)
 
 	Paquete asigno_fm9;
 	RecibirPaqueteCliente(socket_fm9, &asigno_fm9);
+	log_header(logger, &asigno_fm9, "Recibi de FM9 asignacion de GDT %d", dtb->gdtPID);
 
 	if (asigno_fm9.header.tipoMensaje != ASIGNAR)
-	{
-		log_debug(logger, "Fallo asignar, Error %d", asigno_fm9.header.tipoMensaje);
-		Paquete error_asignar;
-		int tam_pid_y_pc = 0;
-		error_asignar.Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
-		error_asignar.header = cargar_header(tam_pid_y_pc, asigno_fm9.header.tipoMensaje, CPU);
-		EnviarPaquete(socket_safa, &error_asignar);
-		free(error_asignar.Payload);
-		return 1;
-	}
+		return enviar_pid_y_pc(dtb, asigno_fm9.header.tipoMensaje);
+
+
 	return 0;
 }
 
@@ -544,15 +533,13 @@ void enviar_pedido_recurso(char *recurso, int pid, int pc, Tipo senial)
 	pedido_recurso.header = cargar_header(len_recurso + INTSIZE * 2, senial, CPU);
 
 	EnviarPaquete(socket_safa, &pedido_recurso);
-	log_debug(logger, "El pid %d pidio %d para el recurso %s", pid, senial, recurso);
+	log_header(logger, &pedido_recurso, "El pid %d tiro senial al recurso %s", pid, senial, recurso);
 	free(recurso_serializado);
 	free(pedido_recurso.Payload);
 }
 
 int ejecutar_wait(char **parametros, DTB *dtb)
 {
-	printf("WAIT\n");
-
 	char *recurso = parametros[1];
 
 	enviar_pedido_recurso(recurso, dtb->gdtPID, dtb->PC, WAIT);
@@ -571,7 +558,6 @@ int ejecutar_wait(char **parametros, DTB *dtb)
 
 int ejecutar_signal(char **parametros, DTB *dtb)
 {
-	printf("SIGNAL\n");
 	char *recurso = parametros[1];
 
 	enviar_pedido_recurso(recurso, dtb->gdtPID, dtb->PC, SIGNAL);
@@ -591,8 +577,6 @@ int ejecutar_signal(char **parametros, DTB *dtb)
  */
 int ejecutar_flush(char **parametros, DTB *dtb)
 {
-	printf("FLUSH\n");
-
 	char *path = parametros[1];
 
 	ArchivoAbierto *archivo_encontrado = _DTB_encontrar_archivo(dtb, path);
@@ -612,13 +596,12 @@ int ejecutar_flush(char **parametros, DTB *dtb)
 	memcpy(flush_a_dam->Payload, &dtb->gdtPID, INTSIZE);
 	memcpy(flush_a_dam->Payload + INTSIZE, archivo_serializado, desplazamiento);
 	EnviarPaquete(socket_dam, flush_a_dam);
-	log_debug(logger, "Enviar flush a dam de pid %d", dtb->gdtPID);
+	log_header(logger, flush_a_dam, "Envie flush a Diego de GDT %d a archivo %s", dtb->gdtPID, path);
 
 	//mensaje a SAFA
 	dtb->entrada_salidas++;
 	bloqueate_safa(dtb);
 
-	free(archivo_encontrado);
 	free(flush_a_dam->Payload);
 	free(flush_a_dam);
 	return 1;
@@ -626,8 +609,6 @@ int ejecutar_flush(char **parametros, DTB *dtb)
 
 int ejecutar_close(char **parametros, DTB *dtb)
 {
-	printf("CLOSE\n");
-
 	char *path = parametros[1];
 
 	ArchivoAbierto *archivo_encontrado = _DTB_encontrar_archivo(dtb, path);
@@ -652,20 +633,20 @@ int ejecutar_close(char **parametros, DTB *dtb)
 	liberar_memoria->header = cargar_header(desplazamiento, CLOSE, CPU);
 
 	EnviarPaquete(socket_fm9, liberar_memoria);
+	log_header(logger, liberar_memoria, "Envie a FM9 que GDT %d quiere cerrar %s", dtb->gdtPID, path);
 
 	Paquete archivo_cerrado;
 	RecibirPaqueteCliente(socket_fm9, &archivo_cerrado);
+	log_header(logger, &archivo_cerrado, "Recibi de FM9 el intento de GDT %d de cerrar %s", dtb->gdtPID, path);
 
 	if (archivo_cerrado.header.tipoMensaje == FALLO_DE_SEGMENTO_CLOSE)
 	{
-		log_debug(logger, "Fallo de segmento close");
-
 		Paquete error_close;
 		int tam_pid_y_pc = 0;
 		error_close.Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC + 1, &tam_pid_y_pc);
 		error_close.header = cargar_header(tam_pid_y_pc, archivo_cerrado.header.tipoMensaje, CPU);
 		EnviarPaquete(socket_safa, &error_close);
-
+		log_header(logger, &error_close, "Envie a SAFA que GDT %d tuvo Fallo de Segmento al intentar cerrar %s", dtb->gdtPID, path);
 		free(error_close.Payload);
 		free(liberar_memoria->Payload);
 		free(liberar_memoria);
@@ -673,6 +654,7 @@ int ejecutar_close(char **parametros, DTB *dtb)
 	}
 
 	EnviarPaquete(socket_safa, liberar_memoria);
+	log_header(logger, liberar_memoria, "Envie a SAFA que GDT %d cerro %s", dtb->gdtPID, path);
 	free(liberar_memoria->Payload);
 	free(liberar_memoria);
 	return 0;
@@ -687,8 +669,6 @@ int ejecutar_close(char **parametros, DTB *dtb)
 
 int ejecutar_crear(char **parametros, DTB *dtb)
 {
-	printf("CREAR\n");
-
 	char *path = parametros[1];
 	int lineas = atoi(parametros[2]);
 
@@ -710,7 +690,7 @@ int ejecutar_crear(char **parametros, DTB *dtb)
 	crear_archivo->header = cargar_header(crear_archivo->header.tamPayload, CREAR_ARCHIVO, CPU);
 	//mensaje a DAM
 	EnviarPaquete(socket_dam, crear_archivo);
-	log_debug(logger, "El pid %d quiere crear %s con %d lineas", dtb->gdtPID, path, lineas);
+	log_header(logger, crear_archivo, "Le mande al Diego que GDT %d quiere crear %s con %d lineas", dtb->gdtPID, path, lineas);
 
 	//mensaje a SAFA
 	dtb->entrada_salidas++;
@@ -726,7 +706,6 @@ int ejecutar_crear(char **parametros, DTB *dtb)
 
 int ejecutar_borrar(char **parametros, DTB *dtb)
 {
-	printf("BORRAR\n");
 	char *path = parametros[1];
 
 	int len = 0;
@@ -742,6 +721,7 @@ int ejecutar_borrar(char **parametros, DTB *dtb)
 	memcpy(borrar_archivo->Payload + INTSIZE, path_serializado, len);
 	//mensaje a DAM
 	EnviarPaquete(socket_dam, borrar_archivo);
+	log_header(logger, borrar_archivo, "Envie al Diego que GDT %d borre archivo %s", dtb->gdtPID, path);
 
 	//mensaje a SAFA
 	dtb->entrada_salidas++;
@@ -770,7 +750,7 @@ void bloqueate_safa(DTB *dtb)
 	memcpy(bloqueate_safa->Payload, pid_pc_serializados, tam_pid_y_pc);
 	memcpy(bloqueate_safa->Payload + tam_pid_y_pc, &dtb->entrada_salidas, sizeof(u_int32_t));
 	EnviarPaquete(socket_safa, bloqueate_safa);
-	log_debug(logger, "Le pido a safa que bloque el pid %d", dtb->gdtPID);
+	log_header(logger, bloqueate_safa, "Le pido a safa que bloquee el PID:%d en el PC:%d", dtb->gdtPID, dtb->PC);
 
 	free(pid_pc_serializados);
 	free(bloqueate_safa->Payload);
@@ -784,7 +764,7 @@ int enviar_pid_y_pc(DTB *dtb, Tipo tipo_mensaje)
 		paquete->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
 		paquete->header = cargar_header(tam_pid_y_pc, tipo_mensaje, CPU);
 		EnviarPaquete(socket_safa, paquete);
-		log_header(logger, paquete, "Mando pid: %d y pc: %d a Safa", dtb->gdtPID, dtb->PC);
+		log_header(logger, paquete, "Mando PID:%d y PC:%d a Safa", dtb->gdtPID, dtb->PC);
 		free(paquete->Payload);
 		free(paquete);
 		dtb_liberar(dtb);
@@ -794,6 +774,6 @@ int enviar_pid_y_pc(DTB *dtb, Tipo tipo_mensaje)
 
 void dtb_liberar(DTB *dtb)
 {
-	list_clean_and_destroy_elements(((DTB *)dtb)->archivosAbiertos, liberar_archivo_abierto);
+	list_clean_and_destroy_elements(dtb->archivosAbiertos, liberar_archivo_abierto);
 	free(dtb);
 }

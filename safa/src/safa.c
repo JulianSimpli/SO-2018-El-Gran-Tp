@@ -12,7 +12,7 @@ int transfer_size = 0;
 void crear_loggers()
 {
 	logger = log_create("logs/safa.log", "safa", true, LOG_LEVEL_DEBUG);
-	logger_fin = log_create ("logs/DTB_finalizados.log", "safa", true, LOG_LEVEL_INFO);
+	logger_fin = log_create ("logs/DTB_finalizados.log", "safa", true, LOG_LEVEL_DEBUG);
 	log_info(logger, "Iniciando SAFA.log");
 	log_info(logger_fin, "INFORMACION DE DTBs FINALIZADOS");
 }
@@ -98,13 +98,15 @@ void consola()
 			add_history(linea);
 		char **lineaSpliteada = string_split(linea, " ");
 		if (lineaSpliteada[0] == NULL)
+		{
+			free(lineaSpliteada);
 			continue;
-		printf("operacion es %s\n", lineaSpliteada[0]);
+		}
 		parseo_consola(lineaSpliteada[0], lineaSpliteada[1]);
 		free(linea);
-		if (!lineaSpliteada[0])
+		if (lineaSpliteada[0])
 			free(lineaSpliteada[0]);
-		if (!lineaSpliteada[0])
+		if (lineaSpliteada[1])
 			free(lineaSpliteada[1]);
 		free(lineaSpliteada);
 	}
@@ -119,7 +121,7 @@ void parseo_consola(char *operacion, char *primer_parametro)
 			printf("expected ejecutar <path>\n");
 		else
 		{
-			printf("path a ejecutar es %s\n", primer_parametro);
+			printf("Escriptorio a ejecutar es %s\n", primer_parametro);
 			ejecutar(primer_parametro);
 		}
 	}
@@ -128,7 +130,7 @@ void parseo_consola(char *operacion, char *primer_parametro)
 		if (primer_parametro != NULL)
 		{
 			pid = atoi(primer_parametro);
-			printf("Mostrar status de proceso con PID %i\n", pid);
+			printf("Mostrar status de GDT %i\n", pid);
 			gdt_status(pid);
 		}
 		else
@@ -154,12 +156,12 @@ void parseo_consola(char *operacion, char *primer_parametro)
 		if (primer_parametro != NULL)
 		{
 			pid = atoi(primer_parametro);
-			printf("pid a mostrar metricas es %i\n", pid);
+			printf("Metricas de GDT %d\n", pid);
 			gdt_metricas(pid);
 		}
 		else
 		{
-			printf("metricas no trajo parametros. Solo se muestran estadisticas del sistema\n");
+			printf("Se mostraran metricas del sistema\n");
 			metricas();
 		}
 	}
@@ -193,7 +195,7 @@ void accion(void *socket)
 	//while (RecibirPaqueteServidorSafa(socketFD, SAFA, &paquete) > 0)
 	while (RecibirDatos(&paquete.header , socketFD, TAMANIOHEADER) > 0)
 	{
-		log_header(logger, &paquete, "Llego un paquete");
+		log_header(logger, &paquete, "Llego un paquete en el socket %d", socketFD);
 		switch (paquete.header.emisor)
 		{
 		case ELDIEGO:
@@ -228,7 +230,7 @@ void accion(void *socket)
 	}
 	// Si sale del while hubo error o desconexion
 	manejar_desconexion(socketFD);
-	if (paquete.Payload != NULL)
+	if (paquete.Payload != NULL && paquete.header.tamPayload > 0)
 		free(paquete.Payload);
 
 	close(socketFD);
@@ -265,7 +267,6 @@ void manejar_desconexion_cpu(int socket)
 	{
 		dtb_actualizar(dtb, lista_ejecutando, lista_listos, dtb->PC, DTB_LISTO, socket);
 		log_info(logger, "GDT %d desalojado de cpu %d desconectada", dtb->gdtPID, socket);
-		printf("Se desalojo al GDT %d de la cpu %d desconectada\n", dtb->gdtPID, socket);
 	}
 
 	bool _compara_cpu(void *_cpu)
@@ -274,7 +275,6 @@ void manejar_desconexion_cpu(int socket)
 	}
 	list_remove_and_destroy_by_condition(lista_cpu, _compara_cpu, free);
 	log_info(logger, "Cpu %d removida del sistema", socket);
-	printf("Cpu %d removida del sistema\n", socket);
 
 	if(list_is_empty(lista_cpu))
 	{
@@ -290,19 +290,19 @@ void manejar_desconexion_cpu(int socket)
 			exit(1);
 		}
 	}
+	else
+		log_info(logger, "Quedan %d cpus", list_size(lista_cpu));
+
 }
 
 void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 {
-	log_debug(logger, "Interpreto mensaje del diego");
-
 	u_int32_t pid = 0;
 	int tam_pid = INTSIZE;
 	switch (paquete->header.tipoMensaje)
 	{
 	case ESHANDSHAKE:
 	{
-		log_debug(logger, "ESHANDSHAKE");
 		sem_post(&mutex_handshake_diego);
 		socket_diego = socketFD;
 		paquete->Payload = malloc(paquete->header.tamPayload);
@@ -316,7 +316,6 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 	case DUMMY_SUCCESS:
 	{
 		// Payload contiene pid + ArchivoAbierto
-		log_debug(logger, "DUMMY_SUCCESS");
 		memcpy(&pid, paquete->Payload, tam_pid);
 		DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
 		log_info(logger, "GDT %d fue cargado en memoria correctamente", dtb->gdtPID);
@@ -339,7 +338,6 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 	}
 	case DUMMY_FAIL_CARGA:
 	{
-		log_debug(logger, "DUMMY_FAIL_CARGA");
 		memcpy(&pid, paquete->Payload, tam_pid);
 		DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
 		log_error(logger, "Fallo la carga en memoria del GDT %d", dtb->gdtPID);
@@ -349,7 +347,6 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 	}
 	case DUMMY_FAIL_NO_EXISTE:
 	{
-		log_debug(logger, "DUMMY_FAIL_NO_EXISTE");
 		memcpy(&pid, paquete->Payload, tam_pid);
 		DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
 		ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
@@ -360,7 +357,6 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 	}
 	case DTB_SUCCESS: //Incluye flush, crear, borrar.
 	{
-		log_debug(logger, "DTB_SUCCESS");
 		memcpy(&pid, paquete->Payload, tam_pid);
 
 		DTB *dtb = dtb_encuentra(lista_bloqueados, pid, GDT);
@@ -386,7 +382,6 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 	}
 	case ARCHIVO_ABIERTO:
 	{
-		log_debug(logger, "ARCHIVO_ABIERTO");
 		memcpy(&pid, paquete->Payload, tam_pid);
 		DTB *dtb = dtb_encuentra(lista_bloqueados, pid, GDT);
 		DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
@@ -473,7 +468,6 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 	{
 	case ESHANDSHAKE:
 	{
-		log_debug(logger, "ESHANDSHAKE socket %d", socketFD);
 		t_cpu *cpu_nuevo = malloc(sizeof(t_cpu));
 		cpu_nuevo->socket = socketFD;
 		cpu_nuevo->estado = CPU_LIBRE;
@@ -487,7 +481,6 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 	case DUMMY_BLOQUEA:
 	{
 		liberar_cpu(socketFD);
-		log_debug(logger, "DUMMY_BLOQUEA");
 		memcpy(&pid, paquete->Payload, INTSIZE);
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, DUMMY);
 		log_info(logger, "Se ejecuto el dummy de GDT %d", dtb->gdtPID);
@@ -496,7 +489,6 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 	}
 	case DTB_BLOQUEAR:
 	{
-		log_debug(logger, "DTB_BLOQUEAR");
 		liberar_cpu(socketFD);
 		deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
 
@@ -514,7 +506,6 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 	case QUANTUM_FALTANTE:
 	{
 		liberar_cpu(socketFD);
-		log_debug(logger, "QUANTUM_FALTANTE");
 		deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
 		
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
@@ -529,7 +520,6 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 	case DTB_EJECUTO:
 	{
 		liberar_cpu(socketFD);
-		log_debug(logger, "DTB_EJECUTO");
 		deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
 		
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
@@ -543,7 +533,6 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 	case DTB_FINALIZAR: //Aca es cuando el dtb finaliza "normalmente". Lo detecta CPU
 	{
 		liberar_cpu(socketFD);
-		log_debug(logger, "DTB_FINALIZO");
 		deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
 	
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
@@ -554,7 +543,6 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 	}
 	case WAIT:
 	{
-		log_debug(logger, "WAIT");
 		t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc, WAIT);
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 		metricas_actualizar(dtb, pc);
@@ -564,7 +552,6 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 	}
 	case SIGNAL:
 	{
-		log_debug(logger, "SIGNAL");
 		t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc, SIGNAL);
 		log_debug(logger, "El pid %d pide signal a %s", pid, recurso->id);
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
@@ -575,7 +562,6 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 	}
 	case CLOSE:
 	{
-		log_debug(logger, "CLOSE");
 		memcpy(&pid, paquete->Payload, INTSIZE);
 		desplazamiento += INTSIZE;
 		ArchivoAbierto *cerrado = DTB_leer_struct_archivo(paquete->Payload, &desplazamiento);
@@ -610,27 +596,21 @@ void manejar_errores_cpu(Paquete *paquete)
 	switch(tipo)
 	{
 	case ABORTARA:
-		log_debug(logger, "ABORTARA");
 		log_error(logger, "Asignar Error %d: El archivo no se encuentra abierto por GDT %d", ABORTARA, dtb->gdtPID);
 		break;
 	case ABORTARF:
-		log_debug(logger, "ABORTARF");
 		log_error(logger, "Flush Error %d: El archivo no se encuentra abierto por GDT %d", ABORTARF, dtb->gdtPID);
 		break;
 	case ABORTARC:
-		log_debug(logger, "ABORTARC");
 		log_error(logger, "Cerrar Error %d: El archivo no se encuentra abierto por GDT %d", ABORTARC, dtb->gdtPID);
 		break;
 	case FALLO_DE_SEGMENTO_ASIGNAR:
-		log_debug(logger, "FALLO_DE_SEGMENTO_ASIGNAR");
 		log_error(logger, "Asignar Error %d: Fallo de segmento en FM9 de GDT %d", FALLO_DE_SEGMENTO_ASIGNAR, pid);
 		break;
 	case ESPACIO_INSUFICIENTE_ASIGNAR:
-		log_debug(logger, "ESPACIO_INSUFICIENTE_ASIGNAR");
 		log_error(logger, "Asignar Error %d: Espacio insuficiente en FM9 de GDT %d", ESPACIO_INSUFICIENTE_ASIGNAR, pid);
 		break;
 	case FALLO_DE_SEGMENTO_CLOSE:
-		log_debug(logger, "FALLO_DE_SEGMENTO_CLOSE");
 		log_error(logger, "Close Error %d: Fallo de segmento en FM9 de GDT %d", FALLO_DE_SEGMENTO_CLOSE, pid);
 		break;
 	}
@@ -705,6 +685,7 @@ void seguir_ejecutando(int socket)
 	paquete->header = cargar_header(0, SIGASIGA, SAFA);
 
 	EnviarPaquete(socket, paquete);
+	log_header(logger, paquete, "Envie a CPU %d que siga ejecutando", socket);
 	free(paquete);
 }
 
@@ -714,6 +695,7 @@ void avisar_desalojo_a_cpu(int socket)
 	paquete->header = cargar_header(0, ROJADIRECTA, SAFA);
 
 	EnviarPaquete(socket, paquete);
+	log_header(logger, paquete, "Envie a CPU %d que desaloje", socket);
 	free(paquete);
 }
 
@@ -789,6 +771,7 @@ void enviar_handshake_cpu(int socketFD)
 	paquete->Payload = config_cpu_serializar(&tamanio_payload);
 	paquete->header = cargar_header(tamanio_payload, ESHANDSHAKE, SAFA);
 	EnviarPaquete(socketFD, paquete);
+	log_header(logger, paquete, "Envie Handshake a CPU %d", socketFD);
 	free(paquete->Payload);
 	free(paquete);
 }
@@ -797,8 +780,8 @@ void enviar_handshake_diego(int socketFD)
 {
 	Paquete paquete;
 	paquete.header = cargar_header(0, ESHANDSHAKE, SAFA);
-	log_info(logger, "Handshake a diego: %d", socketFD);
 	EnviarPaquete(socketFD, &paquete);
+	log_header(logger, &paquete, "Envie handshake al diego en socket %d", socketFD);
 }
 
 void event_watcher()
@@ -874,6 +857,7 @@ void enviar_valores_config(void *_cpu)
 	paquete->Payload = config_cpu_serializar(&tamanio_payload);
 	paquete->header = cargar_header(tamanio_payload, CAMBIO_CONFIG, SAFA);
 	EnviarPaquete(cpu->socket, paquete);
+	log_header(logger, paquete, "Envie valores de config a CPU %d", cpu->socket);
 	free(paquete->Payload);
 	free(paquete);
 }

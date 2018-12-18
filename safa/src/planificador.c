@@ -18,7 +18,7 @@ void planificador_largo_plazo()
 		sem_wait(&sem_ejecutar);
 		log_debug(logger, "Tengo uno a ejecutar");
 		sem_wait(&sem_multiprogramacion);
-		log_debug(logger, "El grado de multiplogramacion es suficiente");
+		log_debug(logger, "El grado de multiprogramacion es suficiente");
 		crear_dummy();
 	}
 }
@@ -159,19 +159,23 @@ void ejecutar_primer_dtb_listo()
 	{
 		paquete->header = cargar_header(tamanio_DTB, ESDTBDUMMY, SAFA);
 		EnviarPaquete(cpu_libre->socket, paquete);
-		log_info(logger, "Dummy %d ejecutando en cpu %d\n", dtb_exec->gdtPID, cpu_libre->socket);
+		log_header(logger, paquete, "Dummy %d ejecutando en cpu %d", dtb_exec->gdtPID, cpu_libre->socket);
 		break;
 	}
 	case GDT:
 	{
 		paquete->header = cargar_header(tamanio_DTB, ESDTB, SAFA);
 		EnviarPaquete(cpu_libre->socket, paquete);
+		log_header(logger, paquete, "GDT %d ejecutando en cpu %d", dtb_exec->gdtPID, cpu_libre->socket);
+
 		DTB_info *info_dtb = info_asociada_a_pid(dtb_exec->gdtPID);
+		if(!info_dtb->tiempo_respuesta)
+		{	
 		info_dtb->tiempo_fin = medir_tiempo();
 		log_debug(logger, "Tiempo fin: %f", info_dtb->tiempo_fin);
 		info_dtb->tiempo_respuesta = calcular_RT(info_dtb->tiempo_ini, info_dtb->tiempo_fin);
 		log_debug(logger, "Tiempo respuesta: %f", info_dtb->tiempo_respuesta);
-		log_info(logger, "GDT %d ejecutando en cpu %d\n", dtb_exec->gdtPID, cpu_libre->socket);
+		}
 		break;
 	}
 	}
@@ -197,10 +201,14 @@ void ejecutar_primer_dtb_prioridad()
 	memcpy(paquete->Payload + tamanio_dtb, &info_dtb->quantum_faltante, sizeof(u_int32_t));
 	paquete->header = cargar_header(tamanio_dtb + sizeof(u_int32_t), ESDTBQUANTUM, SAFA);
 	EnviarPaquete(cpu_libre->socket, paquete);
+	log_header(logger, paquete, "Envie desde la cola prioritaria al GDT %d a la CPU %d", dtb->gdtPID, cpu_libre->socket);
+	if(!info_dtb->tiempo_respuesta)
+	{
 	info_dtb->tiempo_fin = medir_tiempo();
 	log_debug(logger, "Tiempo fin: %f", info_dtb->tiempo_fin);
 	info_dtb->tiempo_respuesta = calcular_RT(info_dtb->tiempo_ini, info_dtb->tiempo_fin);
 	log_debug(logger, "Tiempo respuesta: %f", info_dtb->tiempo_respuesta);
+	}
 
 	free(paquete->Payload);
 	free(paquete);
@@ -430,7 +438,7 @@ void status()
 	for (int i = 0; i < (list_size(lista_estados)); i++)
 	{
 		t_list *lista_mostrar = list_get(lista_estados, i);
-		printf("Cola de Estado %s:\n", Estados[i]);
+		printf("Cola de %ss:\n", Estados[i]);
 		if (!list_is_empty(lista_mostrar))
 		{
 			contar_dummys_y_gdt(lista_mostrar);
@@ -440,7 +448,7 @@ void status()
 	int multip_actual = list_count_satisfying(lista_listos, es_gdt);
 	multip_actual += list_count_satisfying(lista_ejecutando, es_gdt);
 	multip_actual += list_count_satisfying(lista_bloqueados, es_gdt);
-	printf("Grado de multiprogramacion (procesos en memoria) actual es %d\n", multip_actual);
+	printf("Grado de multiprogramacion actual es %d\n", multip_actual);
 	return;
 }
 
@@ -477,16 +485,8 @@ void dtb_imprimir_basico(void *_dtb)
 	case GDT:
 	{
 		ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
-		printf("PID: %i\tEscriptorio: %s",
+		printf("PID: %i\tEscriptorio: %s\n",
 			   dtb->gdtPID, escriptorio->path);
-		if (escriptorio->cantLineas)
-		{
-			printf(", cantidad de lineas: %d\n", escriptorio->cantLineas);
-			mostrar_posicion(escriptorio);
-		}
-		else
-			printf("\n");
-
 		break;
 	}
 	}
@@ -508,8 +508,8 @@ void dtb_imprimir_polenta(void *_dtb)
 		   list_size(dtb->archivosAbiertos) - 1);
 
 	// Muestra archivos desde el indice 1 (todos menos el escriptorio)
-	int i = 0;
-	for (i = 1; i < list_size(dtb->archivosAbiertos); i++)
+	int i;
+	for (i = 0; i < list_size(dtb->archivosAbiertos); i++)
 	{
 		ArchivoAbierto *archivo = list_get(dtb->archivosAbiertos, i);
 		mostrar_archivo(archivo, i);
@@ -522,7 +522,7 @@ void dtb_imprimir_polenta(void *_dtb)
 		for (int j = 0; j < list_size(info_dtb->recursos_asignados); j++)
 		{
 			t_recurso_asignado *recurso_asignado = list_get(info_dtb->recursos_asignados, j);
-			printf("Recurso %d: %s\n en %d instancias",
+			printf("Recurso %d: %s\t %d instancias\n",
 				   j, recurso_asignado->recurso->id, recurso_asignado->instancias);
 		}
 	}
@@ -570,20 +570,26 @@ void mostrar_proceso(void *_dtb)
 void mostrar_archivo(void *_archivo, int index) // queda en void *_archivo por si volvemos a list_iterate
 {
 	ArchivoAbierto *archivo = (ArchivoAbierto *)_archivo;
-	printf("Archivo %d:\n"
-		   "Directorio: %s",
-		   // Agregar si se agregan campos a ArchivoAbierto
-		   index, archivo->path);
+	if(index == 0)
+		printf("Escriptorio: %s", archivo->path);
+	else
+	{	
+		printf("Archivo %d:\t"
+		"Directorio: %s",
+		// Agregar si se agregan campos a ArchivoAbierto
+		index, archivo->path);
+	}
+
 	if (archivo->cantLineas)
 		printf(", cantidad de lineas: %i", archivo->cantLineas);
-	printf("\n");
+	printf("\t");
 	mostrar_posicion(archivo);
 }
 
 void mostrar_posicion(ArchivoAbierto *archivo)
 {
-	printf("Posicion en memoria:\n"
-		   "Segmento: %d\n"
+	printf("Posicion en memoria:\t"
+		   "Segmento: %d\t"
 		   "Pagina: %d\n",
 		   archivo->segmento, archivo->pagina);
 }
@@ -734,9 +740,9 @@ void loggear_finalizacion(DTB *dtb, DTB_info *info_dtb)
 	if (dtb->PC > 1)
 	{
 		if (info_dtb->socket_cpu)
-			fprintf(logger_file, "Ultima cpu usada: %d", info_dtb->socket_cpu);
+			fprintf(logger_file, "Ultima cpu usada: %d\n", info_dtb->socket_cpu);
 
-		fprintf(logger_file, "Ejecuto %d operaciones de entrada/salida", dtb->entrada_salidas);
+		fprintf(logger_file, "Sentencias de E/S: %d\n", dtb->entrada_salidas);
 	}
 	else if (dtb->PC == 1 && !info_dtb->kill)
 		fprintf(logger_file, "El proceso nunca pudo ser cargado en memoria");
@@ -777,6 +783,7 @@ void enviar_finalizar_dam(u_int32_t pid)
 	memcpy(paquete->Payload, &pid, INTSIZE);
 	memcpy(paquete->Payload + INTSIZE, serializado, d);
 	EnviarPaquete(socket_diego, paquete);
+	log_header(logger, paquete, "Envie finalizar GDT %d a Diego", dtb->gdtPID);
 	free(paquete->Payload);
 	free(paquete);
 	free(serializado);
@@ -791,9 +798,9 @@ void enviar_finalizar_cpu(u_int32_t pid, int socket_cpu)
 	memcpy(paquete->Payload, &pid, sizeof(u_int32_t));
 	paquete->header = cargar_header(sizeof(u_int32_t), FINALIZAR, SAFA);
 	EnviarPaquete(socket_cpu, paquete);
+	log_header(logger, paquete, "Envie finalizar GDT %d a CPU %d", pid, socket_cpu);
 	free(paquete->Payload);
 	free(paquete);
-	printf("Le mande a cpu que finalice GDT %d\n", pid);
 }
 
 // Recursos
@@ -1101,6 +1108,60 @@ void liberar_parte_de_memoria(int procesos_eliminar)
 			log_debug(logger, "Solo hay %d procesos en la lista de finalizados\n", procesos_finalizados);
 		liberar_memoria();
 	}
+}
+
+
+void log_info_dtb(t_log *logger, DTB_info *info_dtb, const char* _contexto, ...)
+{
+    va_list arguments;
+    va_start(arguments, _contexto);
+    char *contexto = string_from_vformat(_contexto, arguments);
+    log_info(logger, "%s", contexto);
+
+    va_end(arguments);	
+    free(contexto);
+
+    log_debug(logger, "info_dtb->estado: %s", Estados[info_dtb->estado]);
+    log_debug(logger, "info_dtb->socket_cpu: %d", info_dtb->socket_cpu);
+    log_debug(logger, "info_dtb->tiempo_respuesta: %f", info_dtb->tiempo_respuesta);
+	if(info_dtb->kill)
+    	log_debug(logger, "Finalizo por consola");
+
+    int i;
+    for(i = 0; i < list_size(info_dtb->recursos_asignados); i++)
+    {
+        t_recurso_asignado *rec_asignado = list_get(info_dtb->recursos_asignados, i);
+        log_recurso(logger, rec_asignado->recurso, "info_dtb->recursos_asignados");
+        log_debug(logger, "Instancias: %d", rec_asignado->instancias);
+    }
+    if(info_dtb->quantum_faltante)
+        log_debug(logger, "info_dtb->quantum_faltante: %d", info_dtb->quantum_faltante);
+    
+    log_debug(logger, "info_dtb->sentencias_en_nuevo: %d", info_dtb->sentencias_en_nuevo);
+    log_debug(logger, "info_dtb->sentencias_al_diego: %d", info_dtb->sentencias_al_diego);
+    log_debug(logger, "info_dtb->sentencias_hasta_finalizar: %d", info_dtb->sentencias_hasta_finalizar);
+}
+
+void log_recurso(t_log *logger, t_recurso *recurso, const char *_contexto, ...)
+{
+    va_list arguments;
+    va_start(arguments, _contexto);
+    char *contexto = string_from_vformat(_contexto, arguments);
+    log_info(logger, "%s", contexto);
+
+    va_end(arguments);	
+    free(contexto);
+
+    log_debug(logger, "recurso->id: %s", recurso->id);
+    log_debug(logger, "recurso->semaforo: %d", recurso->semaforo);
+    
+    int i;
+    log_debug(logger, "recurso->pid_bloqueados:");
+    for(i = 0; i < list_size(recurso->pid_bloqueados); i++)
+    {
+        u_int32_t *pid = list_get(recurso->pid_bloqueados, i);
+        log_debug(logger, "Bloqueado %d: GDT %d", i, *pid);
+    }
 }
 
 // FUNCIONES VIEJAS QUE NO SE USAN. LAS DEJO POR LAS DUDAS

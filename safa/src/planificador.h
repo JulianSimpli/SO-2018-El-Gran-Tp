@@ -177,6 +177,10 @@ void advertencia();
 void liberar_memoria();
 void liberar_parte_de_memoria(int procesos_a_eliminar);
 
+// Logs
+void log_info_dtb(t_log *logger, DTB_info *dtb_info, const char* _contexto, ...);
+void log_recurso(t_log *logger, t_recurso *recurso, const char *_contexto, ...);
+
 
 // NO SE USAN MAS
 // DTB *dtb_reemplazar_de_lista(DTB *dtb_nuevo, t_list *source, t_list *dest, Estado estado);
