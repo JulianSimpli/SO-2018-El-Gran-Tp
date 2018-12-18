@@ -10,6 +10,7 @@
 
 //#include "sockets.h"
 //#include "dtb.h"
+//#include "loggers.h"
 #include <commons/collections/list.h>
 #include "../../Bibliotecas/sockets.h"
 #include "../../Bibliotecas/helper.h"
@@ -37,6 +38,7 @@ typedef struct {
 } Frame;
 
 typedef struct {
+	int numeroFrame;
 	int inicio;
 	int fin;
 } Pagina;
@@ -46,43 +48,42 @@ typedef struct {
 	t_list* segmentos; //tabla/lista de 'SegmentoArchivo' que posee un proceso
 } ProcesoArchivo;
 
-typedef struct {
-	int idProceso;
-	char* pathArchivo;
-	sem_t sem;
-} PidPath;
-
-void consola();
-void inicializarFramesMemoria();
+//funciones para SEG
 void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo, int socketFD);
-void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo, int socketFD);
-void printSEG(int pid);
-void printSPA(int pid);
-void imprimirMemoria();
-void liberarMemoriaDesdeHasta(int nroLineaInicio, int nroLineaFin);
-bool archivoAbierto(char* path);
 int liberarArchivoSEG(int pid, char* path, int socketFD);
-int liberarArchivoSPA(int pid, char* path, int socketFD);
 char* lineaDeUnaPosicionSEG(int pid, int pc);
+void asignarSEG(int pid, char* path, int pos, char* dato, int socketFD);
+void flushSEG(char* path, int pid, int socketFD);
+int numeroDeSegmento(int pid, char* path);
+
+//funciones para SPA
+void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo, int socketFD);
+int liberarArchivoSPA(int pid, char* path, int socketFD);
 char* lineaDeUnaPosicionSPA(int pid, int pc);
+void asignarSPA(int pid, char* path, int pos, char* dato, int socketFD);
+void flushSPA(char* path, int pid, int socketFD);
+int numeroDePagina(int pid, char* path);
+
+//funciones de conexiones
 void enviar_abrio_a_dam(int socketFD, u_int32_t pid, char* fid, char* file);
+void manejar_paquetes_CPU(Paquete* paquete, int socketFD);
 void manejar_paquetes_diego(Paquete* paquete, int socketFD);
 void EnviarHandshakeELDIEGO(int socketFD);
-void manejar_paquetes_CPU(Paquete* paquete, int socketFD);
-void asignarSEG(int pid, char* path, int pos, char* dato, int socketFD);
-void asignarSPA(int pid, char* path, int pos, char* dato, int socketFD);
-void flushSEG(char* path, int socketFD);
-void flushSPA(char* path, int socketFD);
-void agregarArchivoYProcesoALista(int pid, char* path);
-void quitarArchivoYProcesoDeTabla(int pid, char* path);
+
+//funciones de memoria
+void liberarMemoriaDesdeHasta(int nroLineaInicio, int nroLineaFin);
 int lineasLibresConsecutivasMemoria(int lineasAGuardar);
-int numeroDeSegmento(int pid, char* path);
-int numeroDePagina(int pid, char* path);
 int primerFrameLibre();
-int contarElementosArray(char** array);
 int framesSuficientes(int lineasAGuardar);
-void lockearArchivo(char* path);
-void deslockearArchivo(char* path);
+
+//funciones de logs
+void logProcesoSEG(int pid);
+void logProcesoSPA(int pid);
+void logEstadoFrames();
+void logMemoria();
+
+//otros
+void consola();
 char** cargarArray(char* archivo, int* cantidadLineas);
 int contar_lineas (char *file);
 

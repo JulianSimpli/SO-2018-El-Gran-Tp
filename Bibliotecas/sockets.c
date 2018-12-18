@@ -26,7 +26,7 @@ void ServidorConcurrente(char* ip, int puerto, Emisor nombre, t_list** listaDeHi
 			perror("accept");
 			continue;
 		}
-		printf("\nNueva conexion de %s en " "socket %d\n", inet_ntoa(their_addr.sin_addr), new_fd);
+//		printf("\nNueva conexion de %s en " "socket %d\n", inet_ntoa(their_addr.sin_addr), new_fd);
 		structHilo* itemNuevo = malloc(sizeof(structHilo));
 		itemNuevo->socket = new_fd;
 		pthread_create(&(itemNuevo->hilo), NULL, (void*)accionHilo, &new_fd);
