@@ -173,7 +173,7 @@ char *pedir_primitiva(DTB *dtb)
 {
 	Paquete *paquete = malloc(sizeof(Paquete));
 	ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
-	Posicion *posicion = generar_posicion(dtb, escriptorio, 0);
+	Posicion *posicion = generar_posicion(dtb, escriptorio, dtb->PC - 1);
 	log_posicion(logger, posicion, "Genero direccion logica para pedir primitiva a FM9");
 	
 	Paquete primitiva_pedida;
@@ -472,7 +472,7 @@ int ejecutar_asignar(char **parametros, DTB *dtb)
 		return enviar_pid_y_pc(dtb, ABORTARA);
 		//Error 20001: El archivo no se encuentra abierto
 
-	Posicion *posicion = generar_posicion(dtb, archivo_encontrado, linea);
+	Posicion *posicion = generar_posicion(dtb, archivo_encontrado, linea - 1);
 	log_posicion(logger, posicion, "Genero Direccion Logica para asignar");
 
 	Paquete *datos_a_fm9 = malloc(sizeof(Paquete));
@@ -573,7 +573,7 @@ int ejecutar_flush(char **parametros, DTB *dtb)
 	int desplazamiento = 0;
 	int tam_posicion = 0;
 	int tam_path = 0;
-	Posicion *posicion = generar_posicion(dtb, archivo_encontrado, 1);
+	Posicion *posicion = generar_posicion(dtb, archivo_encontrado, 0);
 	log_posicion(logger, posicion, "Genero Direccion Logica para flush");
 
 	void *posicion_serializada = serializar_posicion(posicion, &tam_posicion);
@@ -610,7 +610,7 @@ int ejecutar_close(char **parametros, DTB *dtb)
 	if (archivo_encontrado == NULL)
 		return enviar_pid_y_pc(dtb, ABORTARC); //Error 40001: El archivo no se encuentra abierto
 
-	Posicion *posicion = generar_posicion(dtb, archivo_encontrado, 1);
+	Posicion *posicion = generar_posicion(dtb, archivo_encontrado, 0);
 	log_posicion(logger, posicion, "Genero Direccion Logica de lo que quiero cerrar");
 
 	Paquete *liberar_memoria = malloc(sizeof(Paquete));

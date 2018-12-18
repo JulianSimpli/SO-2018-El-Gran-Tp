@@ -107,10 +107,7 @@ Posicion *generar_posicion(DTB *dtb, ArchivoAbierto *archivo, u_int32_t offset)
 	posicion->pid = dtb->gdtPID;
 	posicion->segmento = archivo->segmento;
 	posicion->pagina = archivo->pagina;
-	if(offset)
-		posicion->offset = offset - 1;
-	else
-		posicion->offset = dtb->PC - 1;
+	posicion->offset = offset;
 	
 	return posicion;
 }

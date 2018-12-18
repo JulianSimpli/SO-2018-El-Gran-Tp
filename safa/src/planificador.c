@@ -777,7 +777,7 @@ void enviar_finalizar_dam(u_int32_t pid)
 	int d = 0;
 	DTB *dtb = dtb_buscar_en_todos_lados(pid, &info_dtb, &actual);
 	ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
-	Posicion *posicion = generar_posicion(dtb, escriptorio, 1);
+	Posicion *posicion = generar_posicion(dtb, escriptorio, 0);
 	int tam_pos = 0;
 	void *posicion_serializada = serializar_posicion(posicion, &tam_pos);
 	paquete->header = cargar_header(tam_pos, FINALIZAR, SAFA);

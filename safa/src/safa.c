@@ -383,7 +383,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 
 		ArchivoAbierto *archivo = DTB_leer_struct_archivo(paquete->Payload, &tam_pid);
 		list_add(dtb->archivosAbiertos, archivo);
-		log_info(logger, "GDT %d abrio %s", dtb->gdtPID, archivo->path);
+		log_archivo(logger, archivo, "GDT %d abrio %s", dtb->gdtPID, archivo->path);
 
 		if(dtb->PC == escriptorio->cantLineas)
 		{
