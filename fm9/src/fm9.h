@@ -39,8 +39,6 @@ typedef struct {
 
 typedef struct {
 	int numeroFrame;
-	int inicio;
-	int fin;
 } Pagina;
 
 typedef struct {
@@ -50,18 +48,18 @@ typedef struct {
 
 //funciones para SEG
 void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo, int socketFD);
-int liberarArchivoSEG(int pid, char* path, int socketFD);
+int liberarArchivoSEG(int pid, int seg, int socketFD);
 char* lineaDeUnaPosicionSEG(int pid, int pc);
-void asignarSEG(int pid, char* path, int pos, char* dato, int socketFD);
-void flushSEG(char* path, int pid, int socketFD);
+void asignarSEG(int pid, int seg, int pos, char* dato, int socketFD);
+void flushSEG(int seg, int pid, int socketFD);
 int numeroDeSegmento(int pid, char* path);
 
 //funciones para SPA
 void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo, int socketFD);
-int liberarArchivoSPA(int pid, char* path, int socketFD);
+int liberarArchivoSPA(int pid, int seg, int socketFD);
 char* lineaDeUnaPosicionSPA(int pid, int pc);
-void asignarSPA(int pid, char* path, int pos, char* dato, int socketFD);
-void flushSPA(char* path, int pid, int socketFD);
+void asignarSPA(int pid, int seg, int pos, char* dato, int socketFD);
+void flushSPA(int seg, int pid, int socketFD);
 int numeroDePagina(int pid, char* path);
 
 //funciones de conexiones

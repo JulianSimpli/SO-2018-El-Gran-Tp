@@ -89,18 +89,19 @@ SegmentoArchivoSPA* obtenerSegmentoSPA(t_list* lista, char* path) {
 
 ///////////////////////////// ↓↓↓ LINEA DE UNA POSICION n ↓↓↓ //////////////////////////////
 char* lineaDeUnaPosicionSPA(int pid, int pc) {
-	int pcReal = pc - 1;
+//	int pcReal = pc - 1;
 	ProcesoArchivo* unProceso = obtenerProcesoId(pid);
 	SegmentoArchivoSPA* segmento = list_get(unProceso->segmentos, 0);
-	if(pcReal < segmento->cantidadLineas) {
+	if(pc < segmento->cantidadLineas) {
 		int calculoDePagina;
-		if(pcReal) {
-		calculoDePagina = ceil((float) pcReal/(float) lineasPorFrame);
+		if(pc) {
+		calculoDePagina = ceil((float) pc/(float) lineasPorFrame);
 		} else
 			calculoDePagina = 0;
-		int calculoDeLinea = pcReal - (lineasPorFrame * calculoDePagina);
+		int calculoDeLinea = pc - (lineasPorFrame * calculoDePagina);
 		Pagina* pagina = list_get(segmento->paginas, calculoDePagina);
 		Frame* frame = list_get(framesMemoria, pagina->numeroFrame);
+		log_info(logger, "La DF es: frame %d + offset %d -> linea: %d", pagina->numeroFrame, pc, (frame->inicio + pc));
 		return ((char*) list_get(frame->lineas, calculoDeLinea));
 	} else {
 		//segmentation fault
@@ -109,11 +110,12 @@ char* lineaDeUnaPosicionSPA(int pid, int pc) {
 }
 
 char* lineaDeUnaPosicionSEG(int pid, int pc) {
-	int pcReal = pc-1; //porque la linea 1 del archivo esta guardada en la posicion 0
+//	int pcReal = pc-1; //porque la linea 1 del archivo esta guardada en la posicion 0
 	ProcesoArchivo* unProceso = obtenerProcesoId(pid);
 	SegmentoArchivoSEG* unSegmento = list_get(unProceso->segmentos, 0);
-	if(pcReal <= unSegmento->fin) {
-		return ((char*) list_get(unSegmento->lineas, pcReal));
+	if(pc <= unSegmento->fin) {
+		log_info(logger, "La DF es: posicion de inicio de segmento %d + offset %d -> linea: %d", unSegmento->inicio, pc, (unSegmento->inicio + pc));
+		return ((char*) list_get(unSegmento->lineas, pc));
 	} else
 		//segmentation fault
 		return NULL;
@@ -238,8 +240,6 @@ void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo, int socketFD) 
 				}
 				frame->disponible = 0;
 				pagina->numeroFrame = nroFrameLibre;
-				pagina->inicio = frame->inicio;
-				pagina->fin = frame->fin;
 				list_add(segmento->paginas, pagina);
 			}
 			segmento->cantidadLineas = cantidadDeLineas;
@@ -267,8 +267,6 @@ void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo, int socketFD) 
 				}
 				frame->disponible = 0;
 				pagina->numeroFrame = nroFrameLibre;
-				pagina->inicio = frame->inicio;
-				pagina->fin = frame->fin;
 				list_add(segmento->paginas, pagina);
 			}
 			segmento->cantidadLineas = (cantidadDeLineas);
@@ -290,12 +288,16 @@ void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo, int socketFD) 
 ////////////////////////////// ↑↑↑ PRIMITIVA ABRIR ↑↑↑ ////////////////////////////////////////////////
 
 ////////////////////////////// ↓↓↓  PRIMITIVA CLOSE ↓↓↓  //////////////////////////////////////////////
-int liberarArchivoSPA(int pid, char* path, int socket) {
+int liberarArchivoSPA(int pid, int seg, int socket) {
 	Tipo tipoMensaje = 0;
 	//traigo el segmento y las paginas que ocupa
 	ProcesoArchivo* proceso = obtenerProcesoId(pid);
-	SegmentoArchivoSPA* segmento = obtenerSegmentoSPA(proceso->segmentos, path);
+	SegmentoArchivoSPA* segmento = list_get(proceso->segmentos, seg);
+	Pagina* paginaCero = list_get(segmento->paginas, 0);
+	Frame* frameCero = list_get(framesMemoria, paginaCero->numeroFrame);
+	log_info(logger, "Archivo a liberar: %s", segmento->idArchivo);
 	//obtengo las paginas que posee el segmento del archivo a liberar
+	log_info(logger, "La DF resuelta es: frame %d + offset %d -> linea %d", paginaCero->numeroFrame, 0, (frameCero->inicio + 0));
 	log_info(logger, "El pid %d posee %d segmentos", pid, list_size(proceso->segmentos));
 	for(int x = 0; x < segmento->cantidadPaginas; x++) {
 		Pagina* pagina = list_get(segmento->paginas, x);
@@ -303,32 +305,28 @@ int liberarArchivoSPA(int pid, char* path, int socket) {
 		frame->disponible = 1;
 		liberarMemoriaDesdeHasta(frame->inicio, frame->fin);
 	}
-	list_remove_and_destroy_by_condition(proceso->segmentos,
-			LAMBDA(bool _(SegmentoArchivoSPA* s) {return !strcmp(s->idArchivo, path);}),
-				LAMBDA(void _(SegmentoArchivoSPA* ss) {
+	list_remove_and_destroy_element(proceso->segmentos, seg, LAMBDA(void _(SegmentoArchivoSPA* ss) {
 					free(ss->idArchivo);
 					list_destroy(ss->paginas);
 					free(ss);}));
-	log_info(logger, "Archivo %s liberado correctamente", path);
 	log_info(logger, "Ahora el pid %d posee %d segmentos", pid, list_size(proceso->segmentos));
 	tipoMensaje = CLOSE;
 	return tipoMensaje;
 }
 
-int liberarArchivoSEG(int pid, char* path, int socket) {
+int liberarArchivoSEG(int pid, int seg, int socket) {
 	Tipo tipoMensaje = 0;
 	ProcesoArchivo* proceso = obtenerProcesoId(pid);
-	SegmentoArchivoSEG* segmento = obtenerSegmentoSEG(proceso->segmentos, path);
+	SegmentoArchivoSEG* segmento = list_get(proceso->segmentos, seg);
+	log_info(logger, "Archivo a liberar: %s", segmento->idArchivo);
+	log_info(logger, "La DF resuelta es: inicio de segmento %d + offset %d -> linea %d", segmento->inicio, 0, (segmento->inicio + 0));
 	log_info(logger, "El pid %d posee %d segmentos", pid, list_size(proceso->segmentos));
 	liberarMemoriaDesdeHasta(segmento->inicio, segmento->fin);
-	list_clean(segmento->lineas);
-	list_remove_and_destroy_by_condition(proceso->segmentos,
-			LAMBDA(bool _(SegmentoArchivoSEG* s) {return !strcmp(s->idArchivo, path);}),
-				LAMBDA(void _(SegmentoArchivoSEG* ss) {
+	list_remove_and_destroy_element(proceso->segmentos, seg,
+			LAMBDA(void _(SegmentoArchivoSEG* ss) {
 					free(ss->idArchivo);
 					list_destroy(ss->lineas);
 					free(ss);}));
-	log_info(logger, "Archivo %s liberado correctamente", path);
 	log_info(logger, "Ahora el pid %d posee %d segmentos", pid, list_size(proceso->segmentos));
 	tipoMensaje = CLOSE;
 	return tipoMensaje;
@@ -336,48 +334,50 @@ int liberarArchivoSEG(int pid, char* path, int socket) {
 //////////////////////////////// ↑↑↑  PRIMITIVA CLOSE ↑↑↑  //////////////////////////////////////////
 
 ////////////////////////////// ↓↓↓ PRIMITIVA ASIGNAR ↓↓↓ ////////////////////////////////////////////
-void asignarSPA(int pid, char* path, int pos, char* dato, int socketFD) {
-	int posReal = pos - 1; //dado que la linea 1 de un archivo, se persiste la posicion 0
+void asignarSPA(int pid, int seg, int pos, char* dato, int socketFD) {
+//	int posReal = pos - 1; //dado que la linea 1 de un archivo, se persiste la posicion 0
 	Paquete paquete;
 	ProcesoArchivo* proceso = obtenerProcesoId(pid);
-	SegmentoArchivoSPA* segmento = obtenerSegmentoSPA(proceso->segmentos, path);
+	SegmentoArchivoSPA* segmento = list_get(proceso->segmentos, seg);
 	//esta dentro de su rango de memoria?
-	int calculoDePagina = ceil((float) posReal/(float) lineasPorFrame) -1;
-	if(calculoDePagina < segmento->cantidadPaginas && pos <= segmento->cantidadLineas) {
+	int calculoDePagina = ceil((float) pos/(float) lineasPorFrame) -1;
+	if(calculoDePagina < segmento->cantidadPaginas && pos < segmento->cantidadLineas) {
 		//tengo el numero de pagina y la linea donde se ubica la posicion recibida
 		Pagina* pag = list_get(segmento->paginas, calculoDePagina);
-		int calculoDeLinea = posReal - (calculoDePagina * lineasPorFrame);
+		int calculoDeLinea = pos - (calculoDePagina * lineasPorFrame);
+		log_info(logger, "El dato a ASGINAR se encuentra en la pagina %d del segmento %d, linea %d de la misma", calculoDePagina, seg, calculoDeLinea);
 		//busco el frame en memoria principal por linea de inicio
 		Frame* frame = list_get(framesMemoria, pag->numeroFrame);
 		list_replace(frame->lineas, calculoDeLinea, dato);
 		strcpy(memoria[frame->inicio + calculoDeLinea], dato);
-		log_info(logger, "Asignar de pid: %d del dato: %s en la posicion: %d realizado con exito", pid, dato, pos);
+		log_info(logger, "La DF resuelta es frame %d + offset %d -> linea %d", pag->numeroFrame, pos, (frame->inicio + pos));
 		paquete.header = cargar_header(0, ASIGNAR, FM9);
 		EnviarPaquete(socketFD, &paquete);
-		log_header(logger, &paquete, "ASIGNAR exitoso\nConfirmacion a DAM enviada");
+		log_header(logger, &paquete, "Asignar de pid: %d del dato: %s en la linea: %d realizado con exito\nConfirmacion a DAM enviada", pid, dato, pos + 1);
 	} else {
-		log_info(logger, "la posicion: %d no pertenece al rango de memoria del pid: %d\n", pos, pid);
+		log_info(logger, "La posicion: %d no pertenece al rango de memoria del pid: %d", pos + 1, pid);
 		paquete.header = cargar_header(0, FALLO_DE_SEGMENTO_ASIGNAR, FM9);
 		EnviarPaquete(socketFD, &paquete);
 		log_header(logger, &paquete, "ASIGNAR Falló\nConfirmacion a DAM enviada");
 	}
 }
 
-void asignarSEG(int pid, char* path, int pos, char* dato, int socketFD) {
-	int posReal = pos - 1; //dado que la linea 1 de un archivo, se persiste la posicion 0
+void asignarSEG(int pid, int seg, int pos, char* dato, int socketFD) {
+//	int posReal = pos - 1; //dado que la linea 1 de un archivo, se persiste la posicion 0
 	Paquete paquete;
 	ProcesoArchivo* proceso = obtenerProcesoId(pid);
-	SegmentoArchivoSEG* segmento = obtenerSegmentoSEG(proceso->segmentos, path);
+	SegmentoArchivoSEG* segmento = list_get(proceso->segmentos, seg);
 	//la posicion solicitada le pertenece?
-	if((segmento->inicio + posReal) < segmento->fin) {
-		list_replace(segmento->lineas, posReal, dato);
-		strcpy(memoria[segmento->inicio + posReal], dato);
-		log_info(logger, "Asignar de pid: %d del dato: %s en la posicion: %d realizado con exito", pid, dato, pos);
+	if((segmento->inicio + pos) < segmento->fin) {
+		list_replace(segmento->lineas, pos, dato);
+		strcpy(memoria[segmento->inicio + pos], dato);
+		log_info(logger, "El dato a ASGINAR se encuentra en el segmento %d, linea %d ", seg, pos);
+		log_info(logger, "La DF resuelta es posicion de inicio de segmento %d + offset %d -> linea %d", segmento->inicio, pos, (segmento->inicio + pos));
 		paquete.header = cargar_header(0, ASIGNAR, FM9);
 		EnviarPaquete(socketFD, &paquete);
-		log_header(logger, &paquete, "ASIGNAR exitoso\nConfirmacion a DAM enviada");
+		log_header(logger, &paquete, "Asignar de pid: %d del dato: %s en la linea: %d realizado con exito", pid, dato, pos + 1);
 	} else {
-		log_info(logger, "la posicion: %d no pertenece al rango de memoria del pid: %d\n", pos, pid);
+		log_info(logger, "La posicion: %d no pertenece al rango de memoria del pid: %d\n", pos + 1, pid);
 		paquete.header = cargar_header(0, FALLO_DE_SEGMENTO_ASIGNAR, FM9);
 		EnviarPaquete(socketFD, &paquete);
 		log_header(logger, &paquete, "ASIGNAR Falló\nConfirmacion a DAM enviada");
@@ -386,10 +386,10 @@ void asignarSEG(int pid, char* path, int pos, char* dato, int socketFD) {
 //////////////////////// ↑↑↑ PRIMITIVA ASIGNAR ↑↑↑ //////////////////////////////////////////
 
 //////////////////////// ↓↓↓ PRIMITIVA FLUSH ↓↓↓ ////////////////////////////////////////////
-void flushSEG(char* path, int pid, int socketFD) {
+void flushSEG(int seg, int pid, int socketFD) {
 	Paquete* paquete = malloc(sizeof(Paquete));
 	ProcesoArchivo* proceso = obtenerProcesoId(pid);
-	SegmentoArchivoSEG* segmento = obtenerSegmentoSEG(proceso->segmentos, path);
+	SegmentoArchivoSEG* segmento = list_get(proceso->segmentos, seg);
 	char* texto = malloc(MAX_LINEA * list_size(segmento->lineas));
 	int posicionPtr = 0;
 	int lineas = 0;
@@ -412,31 +412,33 @@ void flushSEG(char* path, int pid, int socketFD) {
 	log_info(logger, "Texto a enviar a DAM:\n%s", texto);
 	int text_size = 0;
 	int path_size = 0;
-	void* path_serial = string_serializar(path, &path_size);
+	void* path_serial = string_serializar(segmento->idArchivo, &path_size);
 	void* texto_serial = string_serializar(texto, &text_size);
 	paquete->Payload = malloc(text_size+path_size);
 	memcpy(paquete->Payload, path_serial, path_size);
 	memcpy(paquete->Payload + path_size, texto_serial, text_size);
 	paquete->header = cargar_header(path_size+text_size, GUARDAR_DATOS, FM9);
 	EnviarPaquete(socketFD, paquete);
-	log_header(logger, paquete, "FLUSH al archivo %s realizado con exito\nConfirmacion a DAM enviada", path);
+	log_header(logger, paquete, "FLUSH al archivo %s realizado con exito\nConfirmacion a DAM enviada", segmento->idArchivo);
+	free(path_serial);
+	free(text_size);
 	free(paquete->Payload);
 	free(paquete);
 }
 
-void flushSPA(char* path, int pid, int socketFD) {
+void flushSPA(int seg, int pid, int socketFD) {
 	Paquete* paquete = malloc(sizeof(Paquete));
 	ProcesoArchivo* proceso = obtenerProcesoId(pid);
-	SegmentoArchivoSPA* segmento = obtenerSegmentoSPA(proceso->segmentos, path);
+	SegmentoArchivoSPA* segmento = list_get(proceso->segmentos, seg);
 	char* texto = malloc(MAX_LINEA * (segmento->cantidadPaginas * lineasPorFrame));
 	int lineas = 0;
 	int posicionPtr = 0;
 	for(int x = 0; x < segmento->cantidadPaginas; x++) {
 		Pagina* pagina = list_get(segmento->paginas, x);
 		Frame* frame = list_get(framesMemoria, pagina->numeroFrame);
-		int inicioPagina = pagina->inicio;
+		int inicioPagina = frame->inicio;
 		int contador = 0;
-		while(lineas < segmento->cantidadLineas && inicioPagina <= pagina->fin) {
+		while(lineas < segmento->cantidadLineas && inicioPagina <= frame->fin) {
 			if(!strcmp(list_get(frame->lineas, contador), "lineaVacia")) {
 				strcpy(texto, "");
 			} else	strcpy(texto, list_get(frame->lineas, contador));
@@ -457,14 +459,16 @@ void flushSPA(char* path, int pid, int socketFD) {
 	log_info(logger, "Texto a enviar a DAM:\n%s", texto);
 	int text_size = 0;
 	int path_size = 0;
-	void* path_serial = string_serializar(path, &path_size);
+	void* path_serial = string_serializar(segmento->idArchivo, &path_size);
 	void* texto_serial = string_serializar(texto, &text_size);
 	paquete->Payload = malloc(path_size + text_size);
 	memcpy(paquete->Payload, path_serial, text_size);
 	memcpy(paquete->Payload + text_size, texto_serial, path_size);
 	paquete->header = cargar_header(path_size + text_size, GUARDAR_DATOS, FM9);
 	EnviarPaquete(socketFD, paquete);
-	log_header(logger, paquete, "FLUSH al archivo %s realizado con exito\nConfirmacion a DAM enviada", path);
+	log_header(logger, paquete, "FLUSH al archivo %s realizado con exito\nConfirmacion a DAM enviada", segmento->idArchivo);
+	free(path_serial);
+	free(texto_serial);
 	free(paquete->Payload);
 	free(paquete);
 }
@@ -509,7 +513,7 @@ void accion(void *socket) {
 
 void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 	u_int32_t pid = 0;
-	int tam_pid = sizeof(u_int32_t);
+	int desplazamiento = 0;
 	switch (paquete->header.tipoMensaje) {
 
 		case ESHANDSHAKE: {
@@ -524,10 +528,10 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 		}
 
 		case ABRIR: {
-			memcpy(&pid, paquete->Payload, tam_pid);
-			int tam_desplazado = tam_pid;
-			char *path = string_deserializar(paquete->Payload, &tam_desplazado);
-			char *archivo = string_deserializar(paquete->Payload, &tam_desplazado);
+			memcpy(&pid, paquete->Payload, INTSIZE);
+			desplazamiento += INTSIZE;
+			char *path = string_deserializar(paquete->Payload, &desplazamiento);
+			char *archivo = string_deserializar(paquete->Payload, &desplazamiento);
 			log_info(logger, "Paquete recibido con\npid: %d\npath: %s\narchivo: %s",
 					pid, path, archivo);
 			free(paquete->Payload);
@@ -545,21 +549,15 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 		}
 
 		case FLUSH: {
-			//el payload viene con el path
-			int desplazamiento = 0;
-			Posicion *posicion = deserializar_posicion(paquete->Payload, &desplazamiento);
-			log_posicion(logger, posicion, "Me llego Direccion Logica para flush");
-			char *path = string_deserializar(paquete->Payload, &desplazamiento);
+			Posicion* posicion = deserializar_posicion(paquete->Payload, &desplazamiento);
+			log_posicion(logger, posicion, "Recibo DL para flush");
 			free(paquete->Payload);
-
 			if(!strcmp(MODO, "SEG")) {
-				log_info(logger, "Flush de pid: %d al archivo %s con DL: segmento %d + offset %d", pid, abierto->path, abierto->segmento, 0);		
-				flushSEG(path, socketFD);
+				flushSEG(posicion->segmento, posicion->pid, socketFD);
 			} else if(!strcmp(MODO, "TPI")) {
 
 			} else if(!strcmp(MODO, "SPA")) {
-				log_info(logger, "Flush de pid: %d al archivo %s con DL: segmento %d + pagina %d + offset %d", pid, abierto->path, abierto->segmento, 0, 0);		
-				flushSPA(path, socketFD);
+				flushSPA(posicion->segmento, posicion->pid, socketFD);
 			}
 			break;
 		}
@@ -574,14 +572,43 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 			ProcesoArchivo* proceso = obtenerProcesoId(pid);
 			log_info(logger, "Se comienza a liberar los archivos del pid %d", pid);
 			if(!strcmp(MODO, "SEG")) {
-				list_iterate(proceso->segmentos, LAMBDA(void _(SegmentoArchivoSEG* segmento) {liberarArchivoSEG(pid, segmento->idArchivo, socketFD);}));
+				//destruyo todos los segmentos del pid
+				list_destroy_and_destroy_elements(proceso->segmentos,
+						LAMBDA(void _(SegmentoArchivoSEG* ss) {
+							free(ss->idArchivo);
+							liberarMemoriaDesdeHasta(ss->inicio, ss->fin);;
+							list_destroy(ss->lineas);
+							free(ss);}));
+				//destruyo al pid de la lista de pid de la memoria
+				list_remove_and_destroy_by_condition(procesos,
+						LAMBDA(bool _(ProcesoArchivo* proceso) {return proceso->idProceso == pid;}),
+						free);
 			} else if(!strcmp(MODO, "TPI")) {
 
 			} else if(!strcmp(MODO, "SPA")) {
-				list_iterate(proceso->segmentos, LAMBDA(void _(SegmentoArchivoSPA* segmento) {liberarArchivoSPA(pid, segmento->idArchivo, socketFD);}));
+				for(int x = 0; x < list_size(proceso->segmentos); x++) {
+					SegmentoArchivoSPA* segmento = list_get(proceso->segmentos, x);
+					for(int y = 0; y < segmento->cantidadPaginas; y++) {
+						Pagina* pagina = list_get(segmento->paginas, x);
+						Frame* frame = list_get(framesMemoria, pagina->numeroFrame);
+						frame->disponible = 1;
+						liberarMemoriaDesdeHasta(frame->inicio, frame->fin);
+					}
+				}
+				//destruyo todos los segmentos del pid
+				list_destroy_and_destroy_elements(proceso->segmentos,
+						LAMBDA(void _(SegmentoArchivoSPA* ss) {
+							free(ss->idArchivo);
+							list_destroy(ss->paginas);
+							free(ss)
+							;}));
+				//destruyo al pid de la lista de pid de la memoria
+				list_remove_and_destroy_by_condition(procesos,
+						LAMBDA(bool _(ProcesoArchivo* proceso) {return proceso->idProceso == pid;}),
+						free);
 			}
 			EnviarPaquete(socketFD, paqueteNuevo);
-			log_info(logger, "FINALIZAR exitoso del pid: %d y archivos asociados\nConfirmacion a CPU enviada", pid);
+			log_header(logger, paqueteNuevo, "FINALIZAR exitoso del pid: %d y archivos asociados\nConfirmacion a CPU enviada", pid);
 			free(paquete->Payload);
 			free(paqueteNuevo->Payload);
 			free(paqueteNuevo);
@@ -602,19 +629,15 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 		}
 
 		case NUEVA_PRIMITIVA: {
-			//el payload debe ser: int(pid)+int(pc)
-			Posicion *posicion = deserializar_posicion(paquete->Payload, &desplazamiento);
-			log_posicion(logger, posicion, "Me llego Direccion Logica para buscar nueva primitiva");
+			Posicion* posicion = deserializar_posicion(paquete->Payload, &desplazamiento);
+			log_posicion(logger, posicion, "Recibo DL para buscar nueva primitiva");
 			char *linea;
-			log_header(logger, paquete, "Recibo NUEVA_PRIMITIVA de CPU %d", socketFD);
 			if(!strcmp(MODO, "SEG")) {
-				linea = lineaDeUnaPosicionSEG(pid, pc);
-				log_info(logger, "DL recibida por pid %d: segmento: %d + offset: %d\n", pid, archivo->segmento, pc);
+				linea = lineaDeUnaPosicionSEG(posicion->pid, posicion->offset);
 			} else if(!strcmp(MODO, "TPI")) {
 				//
 			} else if(!strcmp(MODO, "SPA")) {
-				linea = lineaDeUnaPosicionSPA(pid, pc);
-				log_info(logger, "DL recibida por pid %d: %d es,\n segmento: %d + pagina: %d + offset: %d\n", pid, archivo->segmento, archivo->pagina, pc);
+				linea = lineaDeUnaPosicionSPA(posicion->pid, posicion->offset);
 			}
 			EnviarDatosTipo(socketFD, FM9, linea, strlen(linea)+1, LINEA_PEDIDA);
 			log_info(logger, "Linea %s enviada correctamente al CPU %d", linea, socketFD);
@@ -623,20 +646,15 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 		}
 
 		case ASIGNAR: {
-			//el payload debe ser int+char\0+int+char\0
 			Posicion *posicion = deserializar_posicion(paquete->Payload, &desplazamiento);
 			char *dato = string_deserializar(paquete->Payload, &desplazamiento);
-			log_posicion(logger, posicion, "Me llego Direccion Logica para asignar %s", dato);				
-
-			lockearArchivo(archivo->path);
+			log_posicion(logger, posicion, "Recibo DL para asignar el dato: %s", dato);
 			if(!strcmp(MODO, "SEG")) {
-				log_info(logger, "Llegada de DL: segmento %d + offset %d para ASGINAR", archivo->segmento, pos);
-				asignarSEG(pid, archivo->path, pos, dato, socketFD);
+				asignarSEG(posicion->pid, posicion->segmento, posicion->offset, dato, socketFD);
 			} else if(!strcmp(MODO, "TPI")) {
 
 			} else if(!strcmp(MODO, "SPA")) {
-				log_info(logger, "Llegada de DL: segmento %d + pagina %d + offset %d para ASGINAR", archivo->segmento, archivo->pagina, pos);
-				asignarSPA(pid, archivo->path, pos, dato, socketFD);
+				asignarSPA(posicion->pid, posicion->segmento, posicion->offset, dato, socketFD);
 			}
 			free(paquete->Payload);
 			free(dato);
@@ -646,19 +664,18 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 		case CLOSE: {
 			Tipo tipoMensaje = 0;
 			Posicion *posicion = deserializar_posicion(paquete->Payload, &desplazamiento);
-			log_posicion(logger, posicion, "Me llego Direccion Logica para close");	
+			log_posicion(logger, posicion, "Recibo DL para close");
 			if(!strcmp(MODO, "SEG")) {
-				tipoMensaje = liberarArchivoSEG(pid, archivo->path, socketFD);
+				tipoMensaje = liberarArchivoSEG(posicion->pid, posicion->segmento, socketFD);
 			} else if(!strcmp(MODO, "TPI")) {
 
 			} else if(!strcmp(MODO, "SPA")) {
-				tipoMensaje = liberarArchivoSPA(pid, archivo->path, socketFD);
+				tipoMensaje = liberarArchivoSPA(posicion->pid, posicion->segmento, socketFD);
 			}
 			Paquete respuesta;
 			respuesta.header = cargar_header(0, tipoMensaje, FM9);
 			EnviarPaquete(socketFD, &respuesta);
 			log_info(logger, "CLOSE de %s realizado correctamente\nConfirmacion a CPU enviada");
-			liberar_archivo_abierto(archivo);
 			free(paquete->Payload);
 			break;
 		}
@@ -725,12 +742,6 @@ void enviar_abrio_a_dam(int socketFD, u_int32_t pid, char *fid, char *file) {
 	desplazamiento += desplazamiento_archivo;
 
 	abrio.header = cargar_header(desplazamiento, ABRIR, FM9);
-	bool envio = EnviarPaquete(socketFD, &abrio);
-
-//	if(envio)
-//		log_info(logger, "Envío de archivo abierto al Diego exitoso\npaquete: %s", (char *)abrio.Payload);
-//	else
-//		log_info(logger, "Envío de archivo abierto al Diego fallo");
 
 	free(archivo_serializado);
 	free(abrio.Payload);
