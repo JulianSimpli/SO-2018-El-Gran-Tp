@@ -545,27 +545,28 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 		}
 
 		case FLUSH: {
-			memcpy(&pid, paquete->Payload, INTSIZE);
-			paquete->Payload += INTSIZE;
-			int d = 0;
-			ArchivoAbierto* abierto = DTB_leer_struct_archivo(paquete->Payload, &d);
-			paquete->Payload -= INTSIZE;
+			//el payload viene con el path
+			int desplazamiento = 0;
+			Posicion *posicion = deserializar_posicion(paquete->Payload, &desplazamiento);
+			log_posicion(logger, posicion, "Me llego Direccion Logica para flush");
+			char *path = string_deserializar(paquete->Payload, &desplazamiento);
 			free(paquete->Payload);
+
 			if(!strcmp(MODO, "SEG")) {
-				log_info(logger, "Operacion FLUSH en proceso de pid: %d al archivo %s con DL: segmento %d + offset %d", pid, abierto->path, abierto->segmento, 0);
-				flushSEG(abierto->path, pid, socketFD);
+				log_info(logger, "Flush de pid: %d al archivo %s con DL: segmento %d + offset %d", pid, abierto->path, abierto->segmento, 0);		
+				flushSEG(path, socketFD);
 			} else if(!strcmp(MODO, "TPI")) {
 
 			} else if(!strcmp(MODO, "SPA")) {
-				log_info(logger, "Operacion FLUSH en proceso de pid: %d al archivo %s con DL: segmento %d + pagina %d + offset %d", pid, abierto->path, abierto->segmento, 0, 0);
-				flushSPA(abierto->path, pid, socketFD);
+				log_info(logger, "Flush de pid: %d al archivo %s con DL: segmento %d + pagina %d + offset %d", pid, abierto->path, abierto->segmento, 0, 0);		
+				flushSPA(path, socketFD);
 			}
 			break;
 		}
 
 		case FINALIZAR: {
-			memcpy(&pid, paquete->Payload, tam_pid);
-			log_info(logger, "Recibo FINALIZAR para el pid %d", pid);
+			Posicion *posicion = deserializar_posicion(paquete->Payload, &desplazamiento);
+			log_info(logger, "Recibo FINALIZAR para el pid %d", posicion->pid);
 			Paquete* paqueteNuevo = malloc(sizeof(Paquete));
 			paqueteNuevo->Payload = malloc(INTSIZE);
 			paqueteNuevo->header = cargar_header(INTSIZE, SUCCESS, FM9);
@@ -592,6 +593,7 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 	u_int32_t pid = 0;
 	int tam_pid = sizeof(u_int32_t);
+	int desplazamiento = 0;
 	switch (paquete->header.tipoMensaje) {
 		case ESHANDSHAKE: {
 			EnviarHandshake(socketFD, FM9);
@@ -600,14 +602,9 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 		}
 
 		case NUEVA_PRIMITIVA: {
-			int pc;
-			memcpy(&pid, paquete->Payload, tam_pid);
-			paquete->Payload += tam_pid;
-			memcpy(&pc, paquete->Payload, tam_pid);
-			paquete->Payload += tam_pid;
-			int d = 0;
-			ArchivoAbierto* archivo = DTB_leer_struct_archivo(paquete->Payload, &d);
-			paquete->Payload -=  2 * INTSIZE;
+			//el payload debe ser: int(pid)+int(pc)
+			Posicion *posicion = deserializar_posicion(paquete->Payload, &desplazamiento);
+			log_posicion(logger, posicion, "Me llego Direccion Logica para buscar nueva primitiva");
 			char *linea;
 			log_header(logger, paquete, "Recibo NUEVA_PRIMITIVA de CPU %d", socketFD);
 			if(!strcmp(MODO, "SEG")) {
@@ -626,14 +623,12 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 		}
 
 		case ASIGNAR: {
-			u_int32_t pos, d = 0;
-			memcpy(&pid, paquete->Payload, INTSIZE);
-			paquete->Payload += INTSIZE;
-			memcpy(&pos, paquete->Payload, INTSIZE);
-			paquete->Payload += INTSIZE;
-			ArchivoAbierto* archivo = DTB_leer_struct_archivo(paquete->Payload, &d);
-			char* dato = string_deserializar(paquete->Payload, &d);
-			paquete->Payload -= 2 * INTSIZE;
+			//el payload debe ser int+char\0+int+char\0
+			Posicion *posicion = deserializar_posicion(paquete->Payload, &desplazamiento);
+			char *dato = string_deserializar(paquete->Payload, &desplazamiento);
+			log_posicion(logger, posicion, "Me llego Direccion Logica para asignar %s", dato);				
+
+			lockearArchivo(archivo->path);
 			if(!strcmp(MODO, "SEG")) {
 				log_info(logger, "Llegada de DL: segmento %d + offset %d para ASGINAR", archivo->segmento, pos);
 				asignarSEG(pid, archivo->path, pos, dato, socketFD);
@@ -644,18 +639,14 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 				asignarSPA(pid, archivo->path, pos, dato, socketFD);
 			}
 			free(paquete->Payload);
-			liberar_archivo_abierto(archivo);
 			free(dato);
 			break;
 		}
 
 		case CLOSE: {
 			Tipo tipoMensaje = 0;
-			int desplazamiento = 0;
-			memcpy(&pid, paquete->Payload, INTSIZE);
-			desplazamiento += INTSIZE;
-			ArchivoAbierto *archivo = DTB_leer_struct_archivo(paquete->Payload, &desplazamiento);
-			log_info(logger, "CLOSE de pid %d al archivo %d en proceso", pid, archivo->path);
+			Posicion *posicion = deserializar_posicion(paquete->Payload, &desplazamiento);
+			log_posicion(logger, posicion, "Me llego Direccion Logica para close");	
 			if(!strcmp(MODO, "SEG")) {
 				tipoMensaje = liberarArchivoSEG(pid, archivo->path, socketFD);
 			} else if(!strcmp(MODO, "TPI")) {
@@ -693,7 +684,7 @@ int numeroDeSegmento(int pid, char* path) {
 				break;
 			}
 		}
-	} else {
+	} else if(!strcmp(MODO, "SPA")) {
 		for(int x = 0; list_size(proceso->segmentos); x++) {
 			SegmentoArchivoSPA* segmento = list_get(proceso->segmentos, x);
 			if(!strcmp((segmento->idArchivo), path)) {
@@ -701,7 +692,9 @@ int numeroDeSegmento(int pid, char* path) {
 				break;
 			}
 		}
-	}
+	} else
+		posicion = 0;
+
 	return posicion;
 }
 
@@ -720,7 +713,7 @@ void enviar_abrio_a_dam(int socketFD, u_int32_t pid, char *fid, char *file) {
 	ArchivoAbierto archivo;
 	archivo.path = string_duplicate(fid);
 	archivo.cantLineas = contar_lineas(file);
-	archivo.segmento = numeroDeSegmento (pid, fid); // Aca iria el segmento donde esta cargado
+	archivo.segmento = numeroDeSegmento(pid, fid); // Aca iria el segmento donde esta cargado
 	archivo.pagina = numeroDePagina(pid, fid); // Aca iria la pagina donde esta cargado
 	void *archivo_serializado = DTB_serializar_archivo(&archivo, &desplazamiento_archivo);
 

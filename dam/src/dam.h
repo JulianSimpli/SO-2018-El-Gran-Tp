@@ -16,6 +16,8 @@
 #include <commons/process.h>
 #include "../../Bibliotecas/sockets.h"
 #include "../../Bibliotecas/dtb.h"
+#include "../../Bibliotecas/helper.h"
+#include "../../Bibliotecas/loggers.h"
 
 // Definimos algunas variables globales
 t_config *config;

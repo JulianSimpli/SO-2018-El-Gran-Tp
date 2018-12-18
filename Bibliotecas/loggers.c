@@ -67,6 +67,22 @@ void log_archivo(t_log *logger, ArchivoAbierto *archivo, const char *_contexto, 
     log_debug(logger, "Archivo->pagina: %d", archivo->pagina);
 }
 
+void log_posicion(t_log *logger, Posicion *posicion, const char *_contexto, ...)
+{
+    va_list arguments;
+    va_start(arguments, _contexto);
+    char *contexto = string_from_vformat(_contexto, arguments);
+    log_info(logger, "%s", contexto);
+
+    va_end(arguments);	
+    free(contexto);
+
+	log_debug(logger, "posicion->pid: %d", posicion->pid);
+	log_debug(logger, "posicion->segmento: %d", posicion->segmento);
+	log_debug(logger, "posicion->pagina: %d", posicion->pagina);
+	log_debug(logger, "posicion->offset: %d", posicion->offset);
+}
+
 void loggear_contexto(t_log *logger, const char *_contexto, ...)
 {
     va_list arguments;

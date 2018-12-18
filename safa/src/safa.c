@@ -1,10 +1,4 @@
 #include "safa.h"
-#include "planificador.h"
-#include <sys/inotify.h>
-#include <commons/string.h>
-#include <string.h>
-#include <readline/readline.h>
-#include <readline/history.h>
 
 int transfer_size = 0;
 
@@ -96,19 +90,19 @@ void consola()
 		linea = (char *)readline(">> ");
 		if (linea)
 			add_history(linea);
-		char **lineaSpliteada = string_split(linea, " ");
-		if (lineaSpliteada[0] == NULL)
+		char **parametros = string_split(linea, " ");
+		if (parametros[0] == NULL)
 		{
-			free(lineaSpliteada);
+			free(parametros);
 			continue;
 		}
-		parseo_consola(lineaSpliteada[0], lineaSpliteada[1]);
+		parseo_consola(parametros[0], parametros[1]);
 		free(linea);
-		if (lineaSpliteada[0])
-			free(lineaSpliteada[0]);
-		if (lineaSpliteada[1])
-			free(lineaSpliteada[1]);
-		free(lineaSpliteada);
+		int i;
+		for(i = 0; parametros[i] != NULL; i++)
+			free(parametros[i]);
+
+		free(parametros);
 	}
 }
 
@@ -570,6 +564,14 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
 		log_info(logger, "GDT %d cerro %s", dtb->gdtPID, cerrado->path);
 
+		void actualizar_segmentos(void *_archivo)
+		{
+			ArchivoAbierto *archivo = (ArchivoAbierto *)_archivo;
+			if(archivo->segmento > cerrado->segmento)
+				archivo->segmento--;
+		}
+
+		list_iterate(dtb->archivosAbiertos, actualizar_segmentos);
 		list_remove_and_destroy_by_condition(dtb->archivosAbiertos, LAMBDA (bool _(void *_archivo) {return coincide_archivo(_archivo, cerrado->path); }), liberar_archivo_abierto);			
 		break;
 	}

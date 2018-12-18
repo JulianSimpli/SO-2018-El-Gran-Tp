@@ -20,8 +20,6 @@
 
 
 //Logger y config globales
-t_log *logger;
-t_config *config;
 
 //Use this for simple validation of the mdj config file keys
 int keys = 3;

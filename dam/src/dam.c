@@ -434,7 +434,7 @@ void enviar_guardar_datos(Paquete *paquete)
 	desplazamiento += tam_file;
 
 	enviar_paquete(socket_mdj, &guardar_mdj);
-	log_debug(logger, "Envie guardar_datos a mdj con un payload de %d", guardar_mdj.header.tamPayload);
+	log_header(logger, &guardar_mdj, "Envie guardar datos a MDJ");
 	log_debug(logger, "Payload:\nPath: %s\nbytes_offset: %d\nbuffer_size: %d\nFile:\n%s",
 		  path, offset, len, file);
 
@@ -532,10 +532,10 @@ void abrir(Paquete *paquete)
 
 void flush(Paquete *paquete)
 {
-	int desplazamiento = 0, pid = 0;
-	memcpy(&pid, paquete->Payload + desplazamiento, INTSIZE);
-	desplazamiento += INTSIZE;
-
+	int desplazamiento = 0;
+	int pid = 0;
+	memcpy(&pid, paquete->Payload, INTSIZE);
+	desplazamiento += 4 * INTSIZE;
 	char *path = string_deserializar(paquete->Payload, &desplazamiento);
 
 	log_debug(logger, "Envio a FM9");
@@ -545,7 +545,7 @@ void flush(Paquete *paquete)
 
 	Paquete respuesta_fm9;
 	recibir_paquete(socket_fm9, &respuesta_fm9);
-	log_debug(logger, "Recibi el path y el archivo entero y pesa %d", respuesta_fm9.header.tamPayload);
+	log_header(logger, &respuesta_fm9, "Recibi respuesta a flush GDT %d de %s", pid, path);
 
 	log_debug(logger, "Tipo msje FM9:%d", respuesta_fm9.header.tipoMensaje);
 
@@ -575,6 +575,7 @@ void flush(Paquete *paquete)
 	}
 
 	enviar_success(DTB_SUCCESS, pid);
+	free(path);
 }
 
 void crear_archivo(Paquete *paquete)

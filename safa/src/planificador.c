@@ -777,16 +777,18 @@ void enviar_finalizar_dam(u_int32_t pid)
 	int d = 0;
 	DTB *dtb = dtb_buscar_en_todos_lados(pid, &info_dtb, &actual);
 	ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
-	void *serializado = DTB_serializar_archivo(escriptorio, &d);
-	paquete->header = cargar_header(INTSIZE + d, FINALIZAR, SAFA);
+	Posicion *posicion = generar_posicion(dtb, escriptorio, 1);
+	int tam_pos = 0;
+	void *posicion_serializada = serializar_posicion(posicion, &tam_pos);
+	paquete->header = cargar_header(tam_pos, FINALIZAR, SAFA);
 	paquete->Payload = malloc(paquete->header.tamPayload);
-	memcpy(paquete->Payload, &pid, INTSIZE);
-	memcpy(paquete->Payload + INTSIZE, serializado, d);
+	memcpy(paquete->Payload, &posicion_serializada, tam_pos);
 	EnviarPaquete(socket_diego, paquete);
 	log_header(logger, paquete, "Envie finalizar GDT %d a Diego", dtb->gdtPID);
 	free(paquete->Payload);
 	free(paquete);
-	free(serializado);
+	free(posicion_serializada);
+	free(posicion);
 
 	printf("Le mande a dam que finalice GDT %d\n", pid);
 }

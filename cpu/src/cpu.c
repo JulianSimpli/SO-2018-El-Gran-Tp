@@ -82,6 +82,10 @@ int ejecutar(char *linea, DTB *dtb)
 			break;
 		}
 	}
+	for(i = 0; parameters[i] != NULL; i++)
+		free(parameters[i]);
+	
+	free(parameters);
 
 	if (!existe)
 		_exit_with_error(-1, "No existe la primitiva", NULL);
@@ -169,37 +173,30 @@ char *pedir_primitiva(DTB *dtb)
 {
 	Paquete *paquete = malloc(sizeof(Paquete));
 	ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
-	int len_int = INTSIZE * 2;
-	int desplazamiento = 0;
-	int size_archivo = 0;
-	void *serializado = DTB_serializar_archivo(escriptorio, &size_archivo);
+	Posicion *posicion = generar_posicion(dtb, escriptorio, 0);
+	log_posicion(logger, posicion, "Genero direccion logica para pedir primitiva a FM9");
+	
+	Paquete primitiva_pedida;
+	int tam_posicion = 0;
+	primitiva_pedida.Payload = serializar_posicion(posicion, &tam_posicion);
+	primitiva_pedida.header = cargar_header(tam_posicion, NUEVA_PRIMITIVA, CPU);
 
-	paquete->Payload = malloc(len_int + size_archivo);
-
-	memcpy(paquete->Payload, &dtb->gdtPID, INTSIZE);
-	desplazamiento += INTSIZE;
-	memcpy(paquete->Payload + desplazamiento, &dtb->PC, INTSIZE);
-	desplazamiento += INTSIZE;
-	memcpy(paquete->Payload + desplazamiento, serializado, size_archivo);
-	desplazamiento += size_archivo;
-
-	paquete->header = cargar_header(desplazamiento, NUEVA_PRIMITIVA, CPU);
-
-	int ret = EnviarPaquete(socket_fm9, paquete);
+	int ret = EnviarPaquete(socket_fm9, &primitiva_pedida);
 	if (ret != -1)
 	{
-		log_header(logger, paquete, "Le pedi primitiva a FM9");
-		Paquete *primitiva_recibida = malloc(sizeof(Paquete));
-		RecibirPaqueteCliente(socket_fm9, primitiva_recibida);
-		log_header(logger, primitiva_recibida, "Me llego la primitiva");
-		if (primitiva_recibida->header.tipoMensaje == ERROR)
+		log_header(logger, &primitiva_pedida, "Le pedi primitiva a FM9");
+		Paquete primitiva_recibida;
+		RecibirPaqueteCliente(socket_fm9, &primitiva_recibida);
+		log_header(logger, &primitiva_recibida, "Me llego la primitiva");
+		if (primitiva_recibida.header.tipoMensaje == ERROR)
 			return "Fallo";
-		char *primitiva = malloc(primitiva_recibida->header.tamPayload);
-		memcpy(primitiva, primitiva_recibida->Payload, primitiva_recibida->header.tamPayload);
-		free(primitiva_recibida->Payload);
-		free(primitiva_recibida);
+		char *primitiva = malloc(primitiva_recibida.header.tamPayload);
+		memcpy(primitiva, primitiva_recibida.Payload, primitiva_recibida.header.tamPayload);
+		free(primitiva_pedida.Payload);
+		free(primitiva_recibida.Payload);
 		return primitiva;
 	}
+	free(primitiva_pedida.Payload);
 }
 
 int interpretar_safa(Paquete *paquete)
@@ -475,36 +472,25 @@ int ejecutar_asignar(char **parametros, DTB *dtb)
 		return enviar_pid_y_pc(dtb, ABORTARA);
 		//Error 20001: El archivo no se encuentra abierto
 
+	Posicion *posicion = generar_posicion(dtb, archivo_encontrado, linea);
+	log_posicion(logger, posicion, "Genero Direccion Logica para asignar");
+
 	Paquete *datos_a_fm9 = malloc(sizeof(Paquete));
+	int tam_posicion = 0;
+	int tam_dato = 0;
+	void *posicion_serializada = serializar_posicion(posicion, &tam_posicion);
+	void *dato_serializado = string_serializar(dato, &tam_dato);
 
-	int desplazamiento = 0;
-	int len_int = INTSIZE * 2; //pid y linea
-	int size_archivo = 0;
-	int size_dato = 0;
-	void *arch_serializado = DTB_serializar_archivo(archivo_encontrado, &size_archivo);
-	void *dato_serializado = string_serializar(dato, &size_dato);
-
-	datos_a_fm9->Payload = malloc(len_int + size_archivo + size_dato);
-
-	memcpy(datos_a_fm9->Payload, &dtb->gdtPID, INTSIZE);
-	desplazamiento += INTSIZE;
-	memcpy(datos_a_fm9->Payload + desplazamiento, &linea, INTSIZE);
-	desplazamiento += INTSIZE;
-	memcpy(datos_a_fm9->Payload + desplazamiento, arch_serializado, size_archivo);
-	desplazamiento += size_archivo;
-	memcpy(datos_a_fm9->Payload + desplazamiento, dato_serializado, size_dato);
-	desplazamiento += size_dato;
-
-	//mando a FM9 el pid, la linea (offset), la estructura archivo abierto y el dato
-
-	datos_a_fm9->header = cargar_header(desplazamiento, ASIGNAR, CPU);
-
+	datos_a_fm9->header = cargar_header(tam_posicion + tam_dato, ASIGNAR, CPU);
+	datos_a_fm9->Payload = malloc(datos_a_fm9->header.tamPayload);
+	memcpy(datos_a_fm9->Payload, posicion_serializada, tam_posicion);
+	memcpy(datos_a_fm9->Payload + tam_posicion, dato_serializado, tam_dato);
 	EnviarPaquete(socket_fm9, datos_a_fm9);
 	log_header(logger, datos_a_fm9, "Envie asignar a FM9 de GDT %d", dtb->gdtPID);
-	free(arch_serializado);
-	free(path);
+
+	free(posicion_serializada);
+	free(posicion);
 	free(dato_serializado);
-	free(dato);
 	free(datos_a_fm9->Payload);
 	free(datos_a_fm9);
 
@@ -514,7 +500,6 @@ int ejecutar_asignar(char **parametros, DTB *dtb)
 
 	if (asigno_fm9.header.tipoMensaje != ASIGNAR)
 		return enviar_pid_y_pc(dtb, asigno_fm9.header.tipoMensaje);
-
 
 	return 0;
 }
@@ -586,24 +571,33 @@ int ejecutar_flush(char **parametros, DTB *dtb)
 
 	//mensaje al DAM
 	int desplazamiento = 0;
-	void *archivo_serializado = DTB_serializar_archivo(archivo_encontrado, &desplazamiento);
-	Paquete *flush_a_dam = malloc(sizeof(Paquete));
-	flush_a_dam->header.emisor = CPU;
-	flush_a_dam->header.tipoMensaje = FLUSH;
-	flush_a_dam->header.tamPayload = INTSIZE + desplazamiento;
-	flush_a_dam->Payload = malloc(flush_a_dam->header.tamPayload);
+	int tam_posicion = 0;
+	int tam_path = 0;
+	Posicion *posicion = generar_posicion(dtb, archivo_encontrado, 1);
+	log_posicion(logger, posicion, "Genero Direccion Logica para flush");
 
-	memcpy(flush_a_dam->Payload, &dtb->gdtPID, INTSIZE);
-	memcpy(flush_a_dam->Payload + INTSIZE, archivo_serializado, desplazamiento);
+	void *posicion_serializada = serializar_posicion(posicion, &tam_posicion);
+	void *path_serializado = string_serializar(path, &tam_path);
+
+	Paquete *flush_a_dam = malloc(sizeof(Paquete));
+	flush_a_dam->header = cargar_header(tam_posicion + tam_path, FLUSH, CPU);
+	memcpy(flush_a_dam->Payload, posicion_serializada, tam_posicion);
+	memcpy(flush_a_dam->Payload + tam_posicion, path_serializado, tam_path);
+
 	EnviarPaquete(socket_dam, flush_a_dam);
 	log_header(logger, flush_a_dam, "Envie flush a Diego de GDT %d a archivo %s", dtb->gdtPID, path);
+
+	free(flush_a_dam->Payload);
+	free(flush_a_dam);
+	free(posicion_serializada);
+	free(posicion);
+	free(path_serializado);
+	free(path);
 
 	//mensaje a SAFA
 	dtb->entrada_salidas++;
 	bloqueate_safa(dtb);
 
-	free(flush_a_dam->Payload);
-	free(flush_a_dam);
 	return 1;
 }
 
@@ -616,24 +610,18 @@ int ejecutar_close(char **parametros, DTB *dtb)
 	if (archivo_encontrado == NULL)
 		return enviar_pid_y_pc(dtb, ABORTARC); //Error 40001: El archivo no se encuentra abierto
 
+	Posicion *posicion = generar_posicion(dtb, archivo_encontrado, 1);
+	log_posicion(logger, posicion, "Genero Direccion Logica de lo que quiero cerrar");
+
 	Paquete *liberar_memoria = malloc(sizeof(Paquete));
-
-	int size_archivo = 0;
-	int desplazamiento = 0;
-	void *arch_serializado = DTB_serializar_archivo(archivo_encontrado, &size_archivo);
-
-	liberar_memoria->Payload = malloc(INTSIZE + size_archivo);
-	memcpy(liberar_memoria->Payload, &dtb->gdtPID, INTSIZE);
-	desplazamiento += INTSIZE;
-	memcpy(liberar_memoria->Payload + desplazamiento, arch_serializado, size_archivo);
-	desplazamiento += size_archivo;
-
-	//mando a FM9 el pid y la estructura archivo abierto serializada
-
-	liberar_memoria->header = cargar_header(desplazamiento, CLOSE, CPU);
-
+	int tam_posicion = 0;
+	liberar_memoria->Payload = serializar_posicion(posicion, &tam_posicion);
+	liberar_memoria->header = cargar_header(tam_posicion, CLOSE, CPU);
 	EnviarPaquete(socket_fm9, liberar_memoria);
 	log_header(logger, liberar_memoria, "Envie a FM9 que GDT %d quiere cerrar %s", dtb->gdtPID, path);
+	free(liberar_memoria->Payload);
+	free(liberar_memoria);
+	free(posicion);
 
 	Paquete archivo_cerrado;
 	RecibirPaqueteCliente(socket_fm9, &archivo_cerrado);
@@ -643,7 +631,7 @@ int ejecutar_close(char **parametros, DTB *dtb)
 	{
 		Paquete error_close;
 		int tam_pid_y_pc = 0;
-		error_close.Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC + 1, &tam_pid_y_pc);
+		error_close.Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
 		error_close.header = cargar_header(tam_pid_y_pc, archivo_cerrado.header.tipoMensaje, CPU);
 		EnviarPaquete(socket_safa, &error_close);
 		log_header(logger, &error_close, "Envie a SAFA que GDT %d tuvo Fallo de Segmento al intentar cerrar %s", dtb->gdtPID, path);
@@ -653,10 +641,19 @@ int ejecutar_close(char **parametros, DTB *dtb)
 		return 1;
 	}
 
-	EnviarPaquete(socket_safa, liberar_memoria);
-	log_header(logger, liberar_memoria, "Envie a SAFA que GDT %d cerro %s", dtb->gdtPID, path);
-	free(liberar_memoria->Payload);
-	free(liberar_memoria);
+	Paquete cerra_safa;
+	int tam_archivo = 0;
+	void *serial_archivo = DTB_serializar_archivo(archivo_encontrado, &tam_archivo);
+
+	cerra_safa.header = cargar_header(INTSIZE + tam_archivo, CLOSE, CPU);
+	cerra_safa.Payload = malloc(cerra_safa.header.tamPayload);
+	memcpy(cerra_safa.Payload, &dtb->gdtPID, INTSIZE);
+	memcpy(cerra_safa.Payload + INTSIZE, serial_archivo, tam_archivo);
+	EnviarPaquete(socket_safa, &cerra_safa);
+	log_header(logger, &cerra_safa, "Envie a SAFA que GDT %d cerro %s", dtb->gdtPID, path);
+	free(cerra_safa.Payload);
+	free(serial_archivo);
+
 	return 0;
 	/*
 	Verificará que el archivo solicitado esté abierto por el G.DT. 

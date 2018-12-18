@@ -1,5 +1,5 @@
 TARGET = dam
-LIBS = -lcommons -lreadline ../../Bibliotecas/sockets.c ../../Bibliotecas/dtb.c ../../Bibliotecas/helper.c
+LIBS = -lcommons -lreadline ../../Bibliotecas/sockets.c ../../Bibliotecas/dtb.c ../../Bibliotecas/helper.c ../../Bibliotecas/loggers.c
 
 
 program:

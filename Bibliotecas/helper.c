@@ -1,5 +1,4 @@
 #include "helper.h"
-#include <string.h>
 
 char* integer_to_string(char*string,int x) {
 	string = malloc(10);
@@ -65,6 +64,55 @@ void deserializar_pid_y_pc(void *payload, u_int32_t *pid, u_int32_t *pc, int *de
 	memcpy(pc, payload + *desplazamiento, tamanio);
 	*desplazamiento += tamanio;
 	log_debug(logger, "Deserialice: PID: %d y PC: %d", *pid, *pc);
+}
+
+void *serializar_posicion(Posicion *posicion, int *tam_posicion)
+{
+	void *payload = malloc(INTSIZE * 4);
+	int desplazamiento = 0;
+
+	memcpy(payload + desplazamiento, &posicion->pid, INTSIZE);
+	desplazamiento += INTSIZE;
+	memcpy(payload + desplazamiento, &posicion->segmento, INTSIZE);
+	desplazamiento += INTSIZE;
+	memcpy(payload + desplazamiento, &posicion->pagina, INTSIZE);
+	desplazamiento += INTSIZE;
+	memcpy(payload + desplazamiento, &posicion->offset, INTSIZE);
+	desplazamiento += INTSIZE;
+
+	*tam_posicion = desplazamiento;
+	return payload;
+}
+
+Posicion *deserializar_posicion(void *payload, int *desplazamiento)
+{
+	Posicion *posicion = malloc(sizeof(Posicion));
+
+	memcpy(&posicion->pid, payload + *desplazamiento, INTSIZE);
+	*desplazamiento += INTSIZE;
+	memcpy(&posicion->segmento, payload + *desplazamiento, INTSIZE);
+	*desplazamiento += INTSIZE;
+	memcpy(&posicion->pagina, payload + *desplazamiento, INTSIZE);
+	*desplazamiento += INTSIZE;
+	memcpy(&posicion->offset, payload + *desplazamiento, INTSIZE);
+	*desplazamiento += INTSIZE;
+
+	return posicion;
+}
+
+Posicion *generar_posicion(DTB *dtb, ArchivoAbierto *archivo, u_int32_t offset)
+{
+	Posicion *posicion = malloc(sizeof(Posicion));
+
+	posicion->pid = dtb->gdtPID;
+	posicion->segmento = archivo->segmento;
+	posicion->pagina = archivo->pagina;
+	if(offset)
+		posicion->offset = offset - 1;
+	else
+		posicion->offset = dtb->PC - 1;
+	
+	return posicion;
 }
 
 //funciones de exit

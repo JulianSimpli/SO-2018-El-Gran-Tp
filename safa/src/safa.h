@@ -3,6 +3,10 @@
 
 #include "planificador.h"
 #include <sys/inotify.h>
+#include <commons/string.h>
+#include <string.h>
+#include <readline/readline.h>
+#include <readline/history.h>
 
 //Declaracion de constantes
 #define EJECUTAR "ejecutar"
