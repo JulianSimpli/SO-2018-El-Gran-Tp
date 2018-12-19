@@ -102,7 +102,7 @@ char* lineaDeUnaPosicionSPA(int pid, int pc) {
 		Pagina* pagina = list_get(segmento->paginas, calculoDePagina);
 		Frame* frame = list_get(framesMemoria, pagina->numeroFrame);
 		log_info(logger, "calculo de pagina: %d\tcalculo de linea: %d", calculoDePagina, calculoDeLinea);
-		log_info(logger, "La DF es: frame %d + offset %d -> linea: %d", pagina->numeroFrame, calculoDeLinea, (frame->inicio + calculoDeLinea));
+		log_info(logger, "La DF es: frame %d + offset %d -> Linea: %d", pagina->numeroFrame, calculoDeLinea, (frame->inicio + calculoDeLinea + 1));
 		return ((char*) list_get(frame->lineas, calculoDeLinea));
 	} else {
 		//segmentation fault
@@ -115,7 +115,7 @@ char* lineaDeUnaPosicionSEG(int pid, int pc) {
 	ProcesoArchivo* unProceso = obtenerProcesoId(pid);
 	SegmentoArchivoSEG* unSegmento = list_get(unProceso->segmentos, 0);
 	if(pc <= unSegmento->fin) {
-		log_info(logger, "La DF es: posicion de inicio de segmento %d + offset %d -> linea: %d", unSegmento->inicio, pc, (unSegmento->inicio + pc));
+		log_info(logger, "La DF es: posicion de inicio de segmento %d + offset %d -> Linea: %d", unSegmento->inicio, pc, (unSegmento->inicio + pc + 1));
 		return ((char*) list_get(unSegmento->lineas, pc));
 	} else
 		//segmentation fault
@@ -192,7 +192,7 @@ void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo, int sock
 				list_add(unSegmentoArchivoSEG->lineas, arrayLineas[x]); //ojo punteros
 			}
 			unSegmentoArchivoSEG->inicio = inicioDeLinea;
-			unSegmentoArchivoSEG->fin = cantidadDeLineas - 1; // No falta sumar inicioDeLinea?
+			unSegmentoArchivoSEG->fin = inicioDeLinea + cantidadDeLineas - 1;
 			list_add(procesoArchivo->segmentos, unSegmentoArchivoSEG);
 			list_add(procesos, procesoArchivo);
 			for(int x = 0; x < cantidadDeLineas; x++) {
@@ -259,7 +259,7 @@ void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo, int socketFD) 
 				Pagina* pagina = malloc(sizeof(Pagina));
 				Frame* frame = (Frame*) list_get(framesMemoria, nroFrameLibre);
 				int inicioFrame = frame->inicio;
-				while(lineas < (cantidadDeLineas) && inicioFrame <= frame->fin) {
+				while(lineas < cantidadDeLineas && inicioFrame <= frame->fin) {
 					list_add(frame->lineas, arrayLineas[lineas]);
 					strcpy(memoria[inicioFrame], arrayLineas[lineas]);
 					inicioFrame++;
@@ -269,7 +269,7 @@ void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo, int socketFD) 
 				pagina->numeroFrame = nroFrameLibre;
 				list_add(segmento->paginas, pagina);
 			}
-			segmento->cantidadLineas = (cantidadDeLineas);
+			segmento->cantidadLineas = cantidadDeLineas;
 			list_add(procesoNuevo->segmentos, segmento);
 			list_add(procesos, procesoNuevo);
 		}
@@ -297,12 +297,13 @@ int liberarArchivoSPA(int pid, int seg, int socket) {
 	Frame* frameCero = list_get(framesMemoria, paginaCero->numeroFrame);
 	log_info(logger, "Archivo a liberar: %s", segmento->idArchivo);
 	//obtengo las paginas que posee el segmento del archivo a liberar
-	log_info(logger, "La DF resuelta es: frame %d + offset %d -> linea %d", paginaCero->numeroFrame, 0, (frameCero->inicio + 0));
+	log_info(logger, "La DF resuelta es: frame %d + offset %d -> Linea %d", paginaCero->numeroFrame, 0, (frameCero->inicio + 0 + 1));
 	log_info(logger, "El pid %d posee %d segmentos", pid, list_size(proceso->segmentos));
 	for(int x = 0; x < segmento->cantidadPaginas; x++) {
 		Pagina* pagina = list_get(segmento->paginas, x);
 		Frame* frame = list_get(framesMemoria, pagina->numeroFrame);
 		frame->disponible = 1;
+		list_clean(frame->lineas);
 		liberarMemoriaDesdeHasta(frame->inicio, frame->fin);
 	}
 	list_remove_and_destroy_element(proceso->segmentos, seg, LAMBDA(void _(SegmentoArchivoSPA* ss) {
@@ -319,7 +320,7 @@ int liberarArchivoSEG(int pid, int seg, int socket) {
 	ProcesoArchivo* proceso = obtenerProcesoId(pid);
 	SegmentoArchivoSEG* segmento = list_get(proceso->segmentos, seg);
 	log_info(logger, "Archivo a liberar: %s", segmento->idArchivo);
-	log_info(logger, "La DF resuelta es: inicio de segmento %d + offset %d -> linea %d", segmento->inicio, 0, (segmento->inicio + 0));
+	log_info(logger, "La DF resuelta es: inicio de segmento %d + offset %d -> Linea %d", segmento->inicio, 0, (segmento->inicio + 0 + 1));
 	log_info(logger, "El pid %d posee %d segmentos", pid, list_size(proceso->segmentos));
 	liberarMemoriaDesdeHasta(segmento->inicio, segmento->fin);
 	list_remove_and_destroy_element(proceso->segmentos, seg,
@@ -352,7 +353,7 @@ void asignarSPA(int pid, int seg, int pos, char* dato, int socketFD) {
 		char *linea = list_get(frame->lineas, calculoDeLinea);
 		strcpy(linea, dato);
 		strcpy(memoria[frame->inicio + calculoDeLinea], dato);
-		log_info(logger, "La DF resuelta es frame %d + offset %d -> linea %d", pag->numeroFrame, pos, (frame->inicio + pos));
+		log_info(logger, "La DF resuelta es frame %d + offset %d -> Linea %d", pag->numeroFrame, pos, (frame->inicio + pos + 1));
 		paquete.header = cargar_header(0, ASIGNAR, FM9);
 		EnviarPaquete(socketFD, &paquete);
 		log_header(logger, &paquete, "Asignar de pid: %d del dato: %s en la linea: %d realizado con exito\nConfirmacion a DAM enviada", pid, dato, pos + 1);
@@ -375,7 +376,7 @@ void asignarSEG(int pid, int seg, int pos, char* dato, int socketFD) {
 		strcpy(linea, dato);
 		strcpy(memoria[segmento->inicio + pos], dato);
 		log_info(logger, "El dato a ASIGNAR se encuentra en el segmento %d, linea %d ", seg, pos);
-		log_info(logger, "La DF resuelta es posicion de inicio de segmento %d + offset %d -> linea %d", segmento->inicio, pos, (segmento->inicio + pos));
+		log_info(logger, "La DF resuelta es posicion de inicio de segmento %d + offset %d -> Linea %d", segmento->inicio, pos, (segmento->inicio + pos + 1));
 		paquete.header = cargar_header(0, ASIGNAR, FM9);
 		EnviarPaquete(socketFD, &paquete);
 		log_header(logger, &paquete, "Asignar de pid: %d del dato: %s en la linea: %d realizado con exito", pid, dato, pos + 1);
@@ -414,7 +415,7 @@ void flushSEG(int seg, int pid, int socketFD) {
 	texto = texto-posicionPtr;
 	texto = realloc(texto, strlen(texto)+1);
 	log_info(logger, "Texto a enviar a DAM:\n%s", texto);
-	
+
 	enviar_flush_a_dam(socketFD, segmento->idArchivo, texto);
 }
 
@@ -464,10 +465,10 @@ void enviar_flush_a_dam(int socket, char *path, char *file)
 	paquete->Payload = malloc(paquete->header.tamPayload);
 	memcpy(paquete->Payload, path_serial, path_size);
 	memcpy(paquete->Payload + path_size, file_serial, file_size);
-	
+
 	EnviarPaquete(socket, paquete);
 	log_header(logger, paquete, "FLUSH al archivo %s realizado con exito\nConfirmacion a DAM enviada", path);
-	
+
 	free(path_serial);
 	free(file_serial);
 	free(paquete->Payload);
@@ -574,7 +575,6 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 			ProcesoArchivo* proceso = obtenerProcesoId(posicion->pid);
 			log_info(logger, "Se comienza a liberar los archivos del pid %d", posicion->pid);
 			if(!strcmp(MODO, "SEG")) {
-				logProcesoSEG(posicion->pid);
 				//destruyo todos los segmentos del pid
 				list_clean_and_destroy_elements(proceso->segmentos,
 						LAMBDA(void _(SegmentoArchivoSEG* ss) {
@@ -606,7 +606,7 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 							list_destroy(ss->paginas);
 							free(ss)
 							;}));
-				log_debug(logger, "Se destruyeron todos los segmentos del pid %d", posicion->pid);				
+				log_debug(logger, "Se destruyeron todos los segmentos del pid %d", posicion->pid);
 				//destruyo al pid de la lista de pid de la memoria
 				list_remove_and_destroy_by_condition(procesos,
 						LAMBDA(bool _(ProcesoArchivo* proceso) {return proceso->idProceso == posicion->pid;}),
@@ -905,8 +905,15 @@ void logProcesoSPA(int pid) {
 					x, segmento->cantidadPaginas, segmento->cantidadLineas);
 			for(int y = 0; y < list_size(segmento->paginas); y++) {
 				Pagina* pagina = list_get(segmento->paginas, y);
-				log_info(logger, "Contenido de pagina %d: Frame numero %d",
-						y, pagina->numeroFrame);
+				Frame* frame = list_get(framesMemoria, pagina->numeroFrame);
+				log_info(logger, "Contenido de pagina %d: Frame numero %d", y, pagina->numeroFrame);
+				log_info(logger, "Contenido de Frame %d:", pagina->numeroFrame);
+				for(int z = 0; z < lineasPorFrame; z++) {
+					if(y >= list_size(frame->lineas))
+						log_info(logger, "elemento: %d con dato: NaN", z);
+					else
+						log_info(logger, "elemento: %d con dato: %s", z, (char*) list_get(frame->lineas, z));
+				}
 			}
 		}
 	} else log_info(logger, "El pid %d no posee archivos abiertos", pid);
