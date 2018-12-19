@@ -1,4 +1,5 @@
 #include "sockets.h"
+#include "loggers.h"
 #include <commons/string.h>
 #include <string.h>
 #include <readline/readline.h>
@@ -26,7 +27,7 @@ void ServidorConcurrente(char* ip, int puerto, Emisor nombre, t_list** listaDeHi
 			perror("accept");
 			continue;
 		}
-//		printf("\nNueva conexion de %s en " "socket %d\n", inet_ntoa(their_addr.sin_addr), new_fd);
+		printf("\nNueva conexion de %s en " "socket %d\n", inet_ntoa(their_addr.sin_addr), new_fd);
 		structHilo* itemNuevo = malloc(sizeof(structHilo));
 		itemNuevo->socket = new_fd;
 		pthread_create(&(itemNuevo->hilo), NULL, (void*)accionHilo, &new_fd);
@@ -268,16 +269,18 @@ int RecibirPaqueteCliente(int socketFD, Paquete* paquete) {
 int recibir_paquete(int socket, Paquete *paquete)
 {
 	recibir_partes(socket, &paquete->header, TAMANIOHEADER);
-	log_debug(logger, "Recibi el header");
+	log_header(logger, paquete, "Recibir paquete por partes:");
 
 	if (paquete->header.tamPayload == 0)
 		return TAMANIOHEADER;
 
 	paquete->Payload = malloc(paquete->header.tamPayload);
-	log_debug(logger, "Recibo el payload de tamanio %i", paquete->header.tamPayload);
 	recibir_partes(socket, paquete->Payload, paquete->header.tamPayload);
+	
+	int recibido = TAMANIOHEADER + paquete->header.tamPayload;
+	log_debug(logger, "Recibi %d bytes", recibido);
 
-	return TAMANIOHEADER + paquete->header.tamPayload;
+	return recibido;
 }
 
 void recibir_partes(int socket, void *buffer, int cant_a_recibir)
@@ -292,7 +295,6 @@ void recibir_partes(int socket, void *buffer, int cant_a_recibir)
 			len = cant_a_recibir;
 
 		recibido = recv(socket, buffer + total_recibido, len, 0);
-		log_debug(logger, "%i/%i", recibido, cant_a_recibir);
 
 		//man recv en el caso de -1 es error pero tambien lo matamos
 		if (recibido <= 0)

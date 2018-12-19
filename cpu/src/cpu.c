@@ -196,6 +196,7 @@ char *pedir_primitiva(DTB *dtb)
 		free(primitiva_recibida.Payload);
 		return primitiva;
 	}
+
 	free(primitiva_pedida.Payload);
 }
 

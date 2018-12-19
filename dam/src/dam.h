@@ -14,10 +14,9 @@
 #include <errno.h>
 #include <pthread.h>
 #include <commons/process.h>
+#include "../../Bibliotecas/loggers.h"
 #include "../../Bibliotecas/sockets.h"
 #include "../../Bibliotecas/dtb.h"
-#include "../../Bibliotecas/helper.h"
-#include "../../Bibliotecas/loggers.h"
 
 // Definimos algunas variables globales
 t_config *config;
@@ -163,6 +162,7 @@ void enviar_paquete(int socket, Paquete *paquete)
 	int enviar = transfer_size;
 		
 	int enviado = send(socket, &paquete->header, TAMANIOHEADER, 0);
+	log_header(logger, paquete, "Envie header:");
 
 	if (enviado == -1)
 		_exit_with_error(socket, "No pudo enviar el header", paquete);
@@ -184,8 +184,8 @@ void enviar_paquete(int socket, Paquete *paquete)
 			_exit_with_error(socket, "No pudo enviar el paquete", paquete);
 
 		desplazamiento += enviado;
-		log_debug(logger, "Envie %i bytes, voy %i/%i", enviado, desplazamiento, total);
 	}
+	log_debug(logger, "Envie %i bytes", total);
 }
 
 #endif /* DAM_H_ */
