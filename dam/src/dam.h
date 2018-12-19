@@ -167,7 +167,7 @@ void enviar_paquete(int socket, Paquete *paquete)
 	if (enviado == -1)
 		_exit_with_error(socket, "No pudo enviar el header", paquete);
 
-	sleep(1);
+	usleep(1*1000);
 
 	void *buffer = malloc(paquete->header.tamPayload);
 	memcpy(buffer, paquete->Payload, paquete->header.tamPayload);

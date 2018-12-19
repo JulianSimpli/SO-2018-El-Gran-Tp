@@ -275,7 +275,7 @@ void manejar_desconexion_cpu(int socket)
 		log_info(logger, "Se desconecto la ultima cpu del sistema. Esperando 30 segundos por la conexion de otras.");
 		printf("Se desconecto la ultima cpu del sistema.\n"
 				"Si no se conecta otra en 30 segundos, el sistema finalizara\n");
-		sleep(30);
+		usleep(30*1000);
 		if(list_is_empty(lista_cpu))
 		{
 			log_info(logger, "Sistema terminado correctamente tras la desconexion de todas las CPUs");
@@ -478,7 +478,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 	{
 		liberar_cpu(socketFD);
 		memcpy(&pid, paquete->Payload, INTSIZE);
-		sleep(1);
+		usleep(1*1000);
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, DUMMY);
 		log_info(logger, "Se ejecuto el dummy de GDT %d", dtb->gdtPID);
 		dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, dtb->PC, DTB_BLOQUEADO, socketFD);
@@ -830,7 +830,7 @@ void event_watcher()
 		inotify_rm_watch(fd_config, watch_descriptor);
 		close(fd_config);
 
-		sleep(1);
+		usleep(1*1000);
 
 		obtener_valores_archivo_configuracion();
 		printf("Los nuevos valores del archivo SAFA.cfg son: \n");

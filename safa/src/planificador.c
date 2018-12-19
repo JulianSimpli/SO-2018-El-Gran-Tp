@@ -91,7 +91,7 @@ void planificador_corto_plazo()
 		else
 		{
 			log_debug(logger, "No se conoce el algoritmo. Cambielo desde SAFA.config");
-			sleep(10);
+			usleep(10*1000);
 		}
 	}
 }

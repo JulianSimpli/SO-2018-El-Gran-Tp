@@ -77,7 +77,7 @@ int ejecutar(char *linea, DTB *dtb)
 			existe = 1;
 			log_info(logger, primitivas[i].doc);
 			//llama a la funcion que tiene guardado esa primitiva en la estructura
-			sleep(retardo);
+			usleep(retardo*1000);
 			flag = primitivas[i].func(parameters, dtb);
 			break;
 		}
@@ -456,7 +456,7 @@ int ejecutar_abrir(char **parameters, DTB *dtb)
 
 int ejecutar_concentrar(char **parametros, DTB *dtb)
 {
-	sleep(retardo);
+	usleep(retardo*1000);
 	return 0;
 }
 

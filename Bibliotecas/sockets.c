@@ -54,7 +54,7 @@ int ConectarAServidor(int puertoAConectar, char* ipAConectar, Emisor servidor, E
 	memset(&(direccion.sin_zero), '\0', 8);
 
 	while (connect(socketFD, (struct sockaddr *) &direccion, sizeof(struct sockaddr))<0)
-		sleep(1); //Espera un segundo y se vuelve a tratar de conectar.
+		usleep(1*1000); //Espera un segundo y se vuelve a tratar de conectar.
 	EnviarHandshake(socketFD, cliente);
 	RecibirElHandshake(socketFD, servidor);
 	return socketFD;
@@ -73,7 +73,7 @@ int ConectarAServidorCpu(int puertoAConectar, char* ipAConectar, Emisor servidor
 	memset(&(direccion.sin_zero), '\0', 8);
 
 	while (connect(socketFD, (struct sockaddr *) &direccion, sizeof(struct sockaddr))<0)
-		sleep(1); //Espera un segundo y se vuelve a tratar de conectar.
+		usleep(1*1000); //Espera un segundo y se vuelve a tratar de conectar.
 	EnviarElHandshake(socketFD, cliente);
 	RecibirElHandshake(socketFD, servidor);
 	return socketFD;

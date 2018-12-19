@@ -154,7 +154,7 @@ void handshake_safa()
 
 	enviar_handshake(socket_safa);
 
-	sleep(2);
+	usleep(2*1000);
 
 	Paquete paquete;
 	recibir_paquete(socket_safa, &paquete);

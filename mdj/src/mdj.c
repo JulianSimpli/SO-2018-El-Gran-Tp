@@ -149,7 +149,7 @@ void interpretar_paquete(Paquete *paquete)
 {
 	int accion = paquete->header.tipoMensaje;
 	sem_wait(&sem_io);
-	sleep(retardo);
+	usleep(retardo*1000);
 
 	switch (accion)
 	{
@@ -306,7 +306,7 @@ int validar_archivo(char *search_file, char *current_path)
 			{
 				int position = strlen(route) + 1;
 				char *ruta_parcial = string_substring_from(search_file, position);
-				log_debug(logger, "Tengo que seguir buscanto: %s", ruta_parcial);
+				log_debug(logger, "Tengo que seguir buscando: %s", ruta_parcial);
 				strcpy(current, current_path);
 				strcat(current, "/");
 				strcat(current, ent->d_name);
