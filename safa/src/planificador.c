@@ -778,19 +778,18 @@ void enviar_finalizar_dam(u_int32_t pid)
 	DTB *dtb = dtb_buscar_en_todos_lados(pid, &info_dtb, &actual);
 	ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
 	Posicion *posicion = generar_posicion(dtb, escriptorio, 0);
+	log_posicion(logger, posicion, "Posicion a finalizar");
 	int tam_pos = 0;
 	void *posicion_serializada = serializar_posicion(posicion, &tam_pos);
 	paquete->header = cargar_header(tam_pos, FINALIZAR, SAFA);
 	paquete->Payload = malloc(paquete->header.tamPayload);
-	memcpy(paquete->Payload, &posicion_serializada, tam_pos);
+	memcpy(paquete->Payload, posicion_serializada, tam_pos);
 	EnviarPaquete(socket_diego, paquete);
-	log_header(logger, paquete, "Envie finalizar GDT %d a Diego", dtb->gdtPID);
-	free(paquete->Payload);
-	free(paquete);
+	log_header(logger, paquete, "Envie finalizar GDT %d a Diego", posicion->pid);
 	free(posicion_serializada);
 	free(posicion);
-
-	printf("Le mande a dam que finalice GDT %d\n", pid);
+	free(paquete->Payload);
+	free(paquete);
 }
 
 void enviar_finalizar_cpu(u_int32_t pid, int socket_cpu)

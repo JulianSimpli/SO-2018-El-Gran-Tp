@@ -15,6 +15,7 @@
 #include "../../Bibliotecas/sockets.h"
 #include "../../Bibliotecas/helper.h"
 #include "../../Bibliotecas/dtb.h"
+#include "../../Bibliotecas/loggers.h"
 
 typedef struct {
 	char* idArchivo; //path del archivo

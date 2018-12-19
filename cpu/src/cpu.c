@@ -654,6 +654,13 @@ int ejecutar_close(char **parametros, DTB *dtb)
 	free(cerra_safa.Payload);
 	free(serial_archivo);
 
+	bool _coincide_archivo(void *_archivo)
+	{
+		return coincide_archivo((ArchivoAbierto *)_archivo, path);
+	}
+
+	list_remove_and_destroy_by_condition(dtb->archivosAbiertos, _coincide_archivo, liberar_archivo_abierto);
+
 	return 0;
 	/*
 	Verificará que el archivo solicitado esté abierto por el G.DT. 

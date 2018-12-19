@@ -476,6 +476,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 	{
 		liberar_cpu(socketFD);
 		memcpy(&pid, paquete->Payload, INTSIZE);
+		sleep(1);
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, DUMMY);
 		log_info(logger, "Se ejecuto el dummy de GDT %d", dtb->gdtPID);
 		dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, dtb->PC, DTB_BLOQUEADO, socketFD);

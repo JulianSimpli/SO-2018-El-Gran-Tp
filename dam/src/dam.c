@@ -170,7 +170,9 @@ void *interpretar_mensajes_de_safa(void *args)
 	while (1)
 	{
 		recibir_paquete(socket_safa, &paquete);
-		log_debug(logger, "Me piden finalizar");
+		int tam_posicion = 0;
+		Posicion *posicion = deserializar_posicion(paquete.Payload, &tam_posicion);
+		log_posicion(logger, posicion, "Recibo posicion a finalizar");
 
 		if (paquete.header.tipoMensaje != FINALIZAR)
 			_exit_with_error(socket_safa, "No pude interpretar el mensaje", paquete.Payload);

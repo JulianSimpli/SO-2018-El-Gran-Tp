@@ -201,7 +201,6 @@ void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo, int sock
 		}
 		log_info(logger, "Archivo %s cargado correctamente", path);
 		enviar_abrio_a_dam(socketFD, idProceso, path, archivo);
-		log_info(logger, "ABRIR de %s realizado correctamente\nConfirmacion a DAM enviada", path);
 	} else {
 		log_info(logger, "No hay espacio suficiente para cargar %s", path);
 		Paquete paquete;
@@ -512,7 +511,6 @@ void accion(void *socket) {
 }
 
 void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
-	u_int32_t pid = 0;
 	int desplazamiento = 0;
 	switch (paquete->header.tipoMensaje) {
 
@@ -528,6 +526,7 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 		}
 
 		case ABRIR: {
+			int pid = 0;
 			memcpy(&pid, paquete->Payload, INTSIZE);
 			desplazamiento += INTSIZE;
 			char *path = string_deserializar(paquete->Payload, &desplazamiento);
@@ -565,24 +564,27 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 		case FINALIZAR: {
 			Posicion *posicion = deserializar_posicion(paquete->Payload, &desplazamiento);
 			log_info(logger, "Recibo FINALIZAR para el pid %d", posicion->pid);
+			logProcesoSEG(posicion->pid);
 			Paquete* paqueteNuevo = malloc(sizeof(Paquete));
 			paqueteNuevo->Payload = malloc(INTSIZE);
 			paqueteNuevo->header = cargar_header(INTSIZE, SUCCESS, FM9);
-			memcpy(paqueteNuevo->Payload, &pid, INTSIZE);
-			ProcesoArchivo* proceso = obtenerProcesoId(pid);
-			log_info(logger, "Se comienza a liberar los archivos del pid %d", pid);
+			memcpy(paqueteNuevo->Payload, &posicion->pid, INTSIZE);
+			ProcesoArchivo* proceso = obtenerProcesoId(posicion->pid);
+			log_info(logger, "Se comienza a liberar los archivos del pid %d", posicion->pid);
 			if(!strcmp(MODO, "SEG")) {
 				//destruyo todos los segmentos del pid
-				list_destroy_and_destroy_elements(proceso->segmentos,
+				list_clean_and_destroy_elements(proceso->segmentos,
 						LAMBDA(void _(SegmentoArchivoSEG* ss) {
 							free(ss->idArchivo);
 							liberarMemoriaDesdeHasta(ss->inicio, ss->fin);;
 							list_destroy(ss->lineas);
 							free(ss);}));
+				log_debug(logger, "Se destruyeron todos los segmentos del pid %d", posicion->pid);
 				//destruyo al pid de la lista de pid de la memoria
-				list_remove_and_destroy_by_condition(procesos,
-						LAMBDA(bool _(ProcesoArchivo* proceso) {return proceso->idProceso == pid;}),
-						free);
+				list_remove_by_condition(procesos,
+						LAMBDA(bool _(ProcesoArchivo* _proceso) {return _proceso->idProceso == posicion->pid;}));
+				free(proceso);
+				log_debug(logger, "Se destruyo el pid %d", posicion->pid);
 			} else if(!strcmp(MODO, "TPI")) {
 
 			} else if(!strcmp(MODO, "SPA")) {
@@ -604,11 +606,11 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 							;}));
 				//destruyo al pid de la lista de pid de la memoria
 				list_remove_and_destroy_by_condition(procesos,
-						LAMBDA(bool _(ProcesoArchivo* proceso) {return proceso->idProceso == pid;}),
+						LAMBDA(bool _(ProcesoArchivo* proceso) {return proceso->idProceso == posicion->pid;}),
 						free);
 			}
 			EnviarPaquete(socketFD, paqueteNuevo);
-			log_header(logger, paqueteNuevo, "FINALIZAR exitoso del pid: %d y archivos asociados\nConfirmacion a CPU enviada", pid);
+			log_header(logger, paqueteNuevo, "FINALIZAR exitoso del pid: %d y archivos asociados\nConfirmacion a CPU enviada", posicion->pid);
 			free(paquete->Payload);
 			free(paqueteNuevo->Payload);
 			free(paqueteNuevo);
@@ -675,7 +677,7 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 			Paquete respuesta;
 			respuesta.header = cargar_header(0, tipoMensaje, FM9);
 			EnviarPaquete(socketFD, &respuesta);
-			log_info(logger, "CLOSE de %s realizado correctamente\nConfirmacion a CPU enviada");
+			log_header(logger, &respuesta, "CLOSE realizado correctamente\nConfirmacion a CPU enviada");
 			free(paquete->Payload);
 			break;
 		}
@@ -742,6 +744,8 @@ void enviar_abrio_a_dam(int socketFD, u_int32_t pid, char *fid, char *file) {
 	desplazamiento += desplazamiento_archivo;
 
 	abrio.header = cargar_header(desplazamiento, ABRIR, FM9);
+	EnviarPaquete(socketFD, &abrio);
+	log_header(logger, &abrio, "ABRIR de %s realizado correctamente\nConfirmacion a DAM enviada", fid);
 
 	free(archivo_serializado);
 	free(abrio.Payload);
@@ -754,7 +758,12 @@ void consola() {
 		if(linea)
 			add_history(linea);
 		char** dump = (char**) string_split(linea, " ");
+
 		if(!strcmp(dump[0], "dump")) {
+			if(dump[1] == NULL) {
+				log_info(logger, "Expected dump <id>");
+				continue;
+			}
 			int idDump = atoi(dump[1]);
 			if(!strcmp(MODO, "SEG"))
 				logProcesoSEG(idDump);
@@ -870,8 +879,8 @@ void logProcesoSEG(int pid) {
 	if(proceso && list_size(proceso->segmentos)) {
 		for(int x = 0; x < list_size(proceso->segmentos); x++){
 			SegmentoArchivoSEG* segmento = list_get(proceso->segmentos, x);
-			log_info(logger, "Segmento numero: %d\nInicio en memoria real: %d\nFin en memoria real: %d\nCantidad de lineas: %d\nDatos en lineas:",
-					x, segmento->inicio, segmento->fin, list_size(segmento->lineas));
+			log_info(logger, "Segmento numero: %d\nPath: %s\nInicio en memoria real: %d\nFin en memoria real: %d\nCantidad de lineas: %d\nDatos en lineas:",
+					x, segmento->idArchivo, segmento->inicio, segmento->fin, list_size(segmento->lineas));
 			for(int y = 0; y < list_size(segmento->lineas); y++) {
 				log_info(logger, "%s", list_get(segmento->lineas, y));
 			}
