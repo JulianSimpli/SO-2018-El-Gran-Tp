@@ -192,7 +192,7 @@ void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo, int sock
 				list_add(unSegmentoArchivoSEG->lineas, arrayLineas[x]); //ojo punteros
 			}
 			unSegmentoArchivoSEG->inicio = inicioDeLinea;
-			unSegmentoArchivoSEG->fin = cantidadDeLineas - 1;
+			unSegmentoArchivoSEG->fin = cantidadDeLineas - 1; // No falta sumar inicioDeLinea?
 			list_add(procesoArchivo->segmentos, unSegmentoArchivoSEG);
 			list_add(procesos, procesoArchivo);
 			for(int x = 0; x < cantidadDeLineas; x++) {
@@ -340,7 +340,7 @@ void asignarSPA(int pid, int seg, int pos, char* dato, int socketFD) {
 	ProcesoArchivo* proceso = obtenerProcesoId(pid);
 	SegmentoArchivoSPA* segmento = list_get(proceso->segmentos, seg);
 	//esta dentro de su rango de memoria?
-	int calculoDePagina = ceil((float) pos/(float) lineasPorFrame);
+	int calculoDePagina = pos / lineasPorFrame;
 	if(calculoDePagina < segmento->cantidadPaginas && pos < segmento->cantidadLineas) {
 		//tengo el numero de pagina y la linea donde se ubica la posicion recibida
 		Pagina* pag = list_get(segmento->paginas, calculoDePagina);
@@ -349,7 +349,8 @@ void asignarSPA(int pid, int seg, int pos, char* dato, int socketFD) {
 		calculoDePagina, seg, calculoDeLinea);
 		//busco el frame en memoria principal por linea de inicio
 		Frame* frame = list_get(framesMemoria, pag->numeroFrame);
-		list_replace(frame->lineas, calculoDeLinea, dato);
+		char *linea = list_get(frame->lineas, calculoDeLinea);
+		strcpy(linea, dato);
 		strcpy(memoria[frame->inicio + calculoDeLinea], dato);
 		log_info(logger, "La DF resuelta es frame %d + offset %d -> linea %d", pag->numeroFrame, pos, (frame->inicio + pos));
 		paquete.header = cargar_header(0, ASIGNAR, FM9);
@@ -370,9 +371,10 @@ void asignarSEG(int pid, int seg, int pos, char* dato, int socketFD) {
 	SegmentoArchivoSEG* segmento = list_get(proceso->segmentos, seg);
 	//la posicion solicitada le pertenece?
 	if((segmento->inicio + pos) < segmento->fin) {
-		list_replace(segmento->lineas, pos, dato);
+		char *linea = list_get(segmento->lineas, pos);
+		strcpy(linea, dato);
 		strcpy(memoria[segmento->inicio + pos], dato);
-		log_info(logger, "El dato a ASGINAR se encuentra en el segmento %d, linea %d ", seg, pos);
+		log_info(logger, "El dato a ASIGNAR se encuentra en el segmento %d, linea %d ", seg, pos);
 		log_info(logger, "La DF resuelta es posicion de inicio de segmento %d + offset %d -> linea %d", segmento->inicio, pos, (segmento->inicio + pos));
 		paquete.header = cargar_header(0, ASIGNAR, FM9);
 		EnviarPaquete(socketFD, &paquete);
@@ -388,7 +390,6 @@ void asignarSEG(int pid, int seg, int pos, char* dato, int socketFD) {
 
 //////////////////////// ↓↓↓ PRIMITIVA FLUSH ↓↓↓ ////////////////////////////////////////////
 void flushSEG(int seg, int pid, int socketFD) {
-	Paquete* paquete = malloc(sizeof(Paquete));
 	ProcesoArchivo* proceso = obtenerProcesoId(pid);
 	SegmentoArchivoSEG* segmento = list_get(proceso->segmentos, seg);
 	char* texto = malloc(MAX_LINEA * list_size(segmento->lineas));
@@ -396,12 +397,14 @@ void flushSEG(int seg, int pid, int socketFD) {
 	int lineas = 0;
 	for(int x = segmento->inicio; x < segmento->inicio + list_size(segmento->lineas); x++) {
 		//transformo la lista de lineas en un char* concatenado por \n
-		if(!strcmp(list_get(segmento->lineas, lineas), "lineaVacia")) {
+		if(!strcmp(list_get(segmento->lineas, lineas), "lineaVacia"))
 			strcpy(texto, "");
-		} else	strcpy(texto, list_get(segmento->lineas, lineas));
+		else
+			strcpy(texto, list_get(segmento->lineas, lineas));
 		size_t longitud = strlen(texto);
 		*(texto + longitud) = '\n';
 		*(texto + longitud + 1) = '\0';
+		log_info(logger, "Cargado en buffer: %s", texto);
 		texto += longitud + 1;
 		posicionPtr += longitud + 1;
 		lineas++;
@@ -411,24 +414,11 @@ void flushSEG(int seg, int pid, int socketFD) {
 	texto = texto-posicionPtr;
 	texto = realloc(texto, strlen(texto)+1);
 	log_info(logger, "Texto a enviar a DAM:\n%s", texto);
-	int text_size = 0;
-	int path_size = 0;
-	void* path_serial = string_serializar(segmento->idArchivo, &path_size);
-	void* texto_serial = string_serializar(texto, &text_size);
-	paquete->Payload = malloc(text_size+path_size);
-	memcpy(paquete->Payload, path_serial, path_size);
-	memcpy(paquete->Payload + path_size, texto_serial, text_size);
-	paquete->header = cargar_header(path_size+text_size, GUARDAR_DATOS, FM9);
-	EnviarPaquete(socketFD, paquete);
-	log_header(logger, paquete, "FLUSH al archivo %s realizado con exito\nConfirmacion a DAM enviada", segmento->idArchivo);
-	free(path_serial);
-	free(text_size);
-	free(paquete->Payload);
-	free(paquete);
+	
+	enviar_flush_a_dam(socketFD, segmento->idArchivo, texto);
 }
 
 void flushSPA(int seg, int pid, int socketFD) {
-	Paquete* paquete = malloc(sizeof(Paquete));
 	ProcesoArchivo* proceso = obtenerProcesoId(pid);
 	SegmentoArchivoSPA* segmento = list_get(proceso->segmentos, seg);
 	char* texto = malloc(MAX_LINEA * (segmento->cantidadPaginas * lineasPorFrame));
@@ -458,21 +448,32 @@ void flushSPA(int seg, int pid, int socketFD) {
 	texto = texto-posicionPtr;
 	texto = realloc(texto, strlen(texto)+1);
 	log_info(logger, "Texto a enviar a DAM:\n%s", texto);
-	int text_size = 0;
+
+	enviar_flush_a_dam(socketFD, segmento->idArchivo, texto);
+}
+
+void enviar_flush_a_dam(int socket, char *path, char *file)
+{
+	int file_size = 0;
 	int path_size = 0;
-	void* path_serial = string_serializar(segmento->idArchivo, &path_size);
-	void* texto_serial = string_serializar(texto, &text_size);
-	paquete->Payload = malloc(path_size + text_size);
-	memcpy(paquete->Payload, path_serial, text_size);
-	memcpy(paquete->Payload + text_size, texto_serial, path_size);
-	paquete->header = cargar_header(path_size + text_size, GUARDAR_DATOS, FM9);
-	EnviarPaquete(socketFD, paquete);
-	log_header(logger, paquete, "FLUSH al archivo %s realizado con exito\nConfirmacion a DAM enviada", segmento->idArchivo);
+	void* path_serial = string_serializar(path, &path_size);
+	void* file_serial = string_serializar(file, &file_size);
+
+	Paquete* paquete = malloc(sizeof(Paquete));
+	paquete->header = cargar_header(path_size + file_size, GUARDAR_DATOS, FM9);
+	paquete->Payload = malloc(paquete->header.tamPayload);
+	memcpy(paquete->Payload, path_serial, path_size);
+	memcpy(paquete->Payload + path_size, file_serial, file_size);
+	
+	EnviarPaquete(socket, paquete);
+	log_header(logger, paquete, "FLUSH al archivo %s realizado con exito\nConfirmacion a DAM enviada", path);
+	
 	free(path_serial);
-	free(texto_serial);
+	free(file_serial);
 	free(paquete->Payload);
 	free(paquete);
 }
+
 //////////////////////// ↑↑↑  PRIMITIVA FLUSH ↑↑↑  //////////////////////////////////////////
 
 void accion(void *socket) {

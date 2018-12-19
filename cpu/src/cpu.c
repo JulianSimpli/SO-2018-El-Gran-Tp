@@ -82,10 +82,11 @@ int ejecutar(char *linea, DTB *dtb)
 			break;
 		}
 	}
+
 	for(i = 0; parameters[i] != NULL; i++)
 		free(parameters[i]);
-	
 	free(parameters);
+	log_debug(logger, "libere parametros parseados");
 
 	if (!existe)
 		_exit_with_error(-1, "No existe la primitiva", NULL);
@@ -594,7 +595,6 @@ int ejecutar_flush(char **parametros, DTB *dtb)
 	free(posicion_serializada);
 	free(posicion);
 	free(path_serializado);
-	free(path);
 
 	//mensaje a SAFA
 	dtb->entrada_salidas++;

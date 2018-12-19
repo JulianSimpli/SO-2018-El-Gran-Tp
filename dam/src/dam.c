@@ -358,7 +358,8 @@ void *interpretar_mensajes_de_cpu(void *arg)
 	while (1)
 	{
 		recibir_paquete(socket, &paquete);
-
+		log_header(logger, &paquete, "Recibi pedido de cpu");
+		
 		switch (paquete.header.tipoMensaje)
 		{
 		case ESDTBDUMMY:

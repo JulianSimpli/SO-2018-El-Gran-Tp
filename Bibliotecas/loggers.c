@@ -21,7 +21,10 @@ void log_header(t_log *logger, Paquete *paquete, const char *_contexto, ...)
     // Hasta que es para loggear contexto
 
     log_debug(logger, "Header.tamPayload: %d", paquete->header.tamPayload);
-    log_debug(logger, "Header.tipoMensaje: %s", devolver_tipo(paquete->header.tipoMensaje));
+    char *tipoMensaje = devolver_tipo(paquete->header.tipoMensaje);
+    log_debug(logger, "Header.tipoMensaje: %s", tipoMensaje);
+    if(!strcmp(tipoMensaje,  "No reconoci el tipoMensaje"))
+        return;
     log_debug(logger, "Header.emisor: %s", Emisores[paquete->header.emisor]);
 }
 

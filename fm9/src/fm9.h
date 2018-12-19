@@ -64,6 +64,7 @@ void flushSPA(int seg, int pid, int socketFD);
 int numeroDePagina(int pid, char* path);
 
 //funciones de conexiones
+void enviar_flush_a_dam(int socketFD, char *path, char *archivo);
 void enviar_abrio_a_dam(int socketFD, u_int32_t pid, char* fid, char* file);
 void manejar_paquetes_CPU(Paquete* paquete, int socketFD);
 void manejar_paquetes_diego(Paquete* paquete, int socketFD);
