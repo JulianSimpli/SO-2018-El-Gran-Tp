@@ -10,7 +10,7 @@ t_list* framesMemoria;
 t_list* procesos;
 t_list* tpinvertida;
 
-sem_t abrir;
+sem_t escrituraAMemoria;
 
 bool end;
 
@@ -34,7 +34,7 @@ void obtenerValoresArchivoConfiguracion() {
 
 void inicializarMemoriaLineas() {
 	transfer_size = 0;
-	sem_init(&abrir, 0, 1);
+	sem_init(&escrituraAMemoria, 0, 1);
 	procesos = list_create();
 	lineasTotales = TAMANIO/MAX_LINEA;
 	memoria = (char**) malloc(lineasTotales * sizeof(char*));
@@ -76,14 +76,6 @@ bool existePID(int pid) {
 
 ProcesoArchivo* obtenerProcesoId(int pid) {
 	return list_find(procesos, LAMBDA(bool _(ProcesoArchivo* p) {return p->idProceso == pid;}));
-}
-
-SegmentoArchivoSEG* obtenerSegmentoSEG(t_list* lista, char* path) {
-	return list_find(lista, LAMBDA(bool _(SegmentoArchivoSEG* s) {return !strcmp(s->idArchivo, path);}));
-}
-
-SegmentoArchivoSPA* obtenerSegmentoSPA(t_list* lista, char* path) {
-	return list_find(lista, LAMBDA(bool _(SegmentoArchivoSPA* s) {return !strcmp(s->idArchivo, path);}));
 }
 //////////////////////////////////// ↑↑↑ AUX ↑↑↑ /////////////////////////////////////////
 
@@ -159,6 +151,7 @@ void cargarArchivoAMemoriaTPI(int idProceso, char* path, char* archivo, int sock
 void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo, int socketFD) {
 	int cantidadDeLineas = 0;
 	char** arrayLineas = cargarArray(archivo, &cantidadDeLineas); //armo un array de punteros char
+	sem_wait(&escrituraAMemoria);
 	int inicioDeLinea = lineasLibresConsecutivasMemoria(cantidadDeLineas);
 	if (inicioDeLinea >= 0) {
 		log_info(logger, "Hay espacio suficiente para cargar %s", path);
@@ -202,6 +195,7 @@ void cargarArchivoAMemoriaSEG(int idProceso, char* path, char* archivo, int sock
 		}
 		log_info(logger, "Archivo %s cargado correctamente", path);
 		enviar_abrio_a_dam(socketFD, idProceso, path, archivo);
+		sem_post(&escrituraAMemoria);
 	} else {
 		log_info(logger, "No hay espacio suficiente para cargar %s", path);
 		Paquete paquete;
@@ -539,7 +533,6 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 					pid, path, archivo);
 			free(paquete->Payload);
 			log_info(logger, "El archivo a cargar es: %s por el pid: %d", path, pid);
-			sem_wait(&abrir);
 			if(!strcmp(MODO, "SEG")) {
 				cargarArchivoAMemoriaSEG(pid, path, archivo, socketFD);
 			} else if(!strcmp(MODO, "TPI")) {
@@ -547,7 +540,6 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 			} else if(!strcmp(MODO, "SPA")) {
 				cargarArchivoAMemoriaSPA(pid, path, archivo, socketFD);
 			}
-			sem_post(&abrir);
 			break;
 		}
 
@@ -671,6 +663,7 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 			Tipo tipoMensaje = 0;
 			Posicion *posicion = deserializar_posicion(paquete->Payload, &desplazamiento);
 			log_posicion(logger, posicion, "Recibo DL para close");
+			sem_wait(&escrituraAMemoria);
 			if(!strcmp(MODO, "SEG")) {
 				tipoMensaje = liberarArchivoSEG(posicion->pid, posicion->segmento, socketFD);
 			} else if(!strcmp(MODO, "TPI")) {
@@ -678,6 +671,7 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 			} else if(!strcmp(MODO, "SPA")) {
 				tipoMensaje = liberarArchivoSPA(posicion->pid, posicion->segmento, socketFD);
 			}
+			sem_post(&escrituraAMemoria);
 			Paquete respuesta;
 			respuesta.header = cargar_header(0, tipoMensaje, FM9);
 			EnviarPaquete(socketFD, &respuesta);
