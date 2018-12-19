@@ -332,6 +332,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 	}
 	case DUMMY_FAIL_CARGA:
 	{
+		sem_post(&sem_multiprogramacion);
 		memcpy(&pid, paquete->Payload, tam_pid);
 		DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
 		log_error(logger, "Fallo la carga en memoria del GDT %d", dtb->gdtPID);
@@ -341,6 +342,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 	}
 	case DUMMY_FAIL_NO_EXISTE:
 	{
+		sem_post(&sem_multiprogramacion);
 		memcpy(&pid, paquete->Payload, tam_pid);
 		DTB *dtb = dtb_encuentra(lista_nuevos, pid, GDT);
 		ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);

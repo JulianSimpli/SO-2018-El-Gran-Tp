@@ -581,6 +581,7 @@ int ejecutar_flush(char **parametros, DTB *dtb)
 
 	Paquete *flush_a_dam = malloc(sizeof(Paquete));
 	flush_a_dam->header = cargar_header(tam_posicion + tam_path, FLUSH, CPU);
+	flush_a_dam->Payload = malloc(flush_a_dam->header.tamPayload);
 	memcpy(flush_a_dam->Payload, posicion_serializada, tam_posicion);
 	memcpy(flush_a_dam->Payload + tam_posicion, path_serializado, tam_path);
 
