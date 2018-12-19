@@ -56,6 +56,7 @@ void *atender_peticion(void *args)
 	log_debug(logger, "Tamanio %d", paquete->header.tamPayload);
 	//esto deberia usar semaforos porque ahora admite peticiones concurrentes y pueden querer escribir dos procesos el mismo arhivo
 	interpretar_paquete(paquete);
+	free(paquete->Payload);
 }
 
 void leer_config(char *path)
@@ -149,7 +150,7 @@ void interpretar_paquete(Paquete *paquete)
 {
 	int accion = paquete->header.tipoMensaje;
 	sem_wait(&sem_io);
-	usleep(retardo*1000);
+	usleep(retardo * 1000);
 
 	switch (accion)
 	{
@@ -170,13 +171,13 @@ void interpretar_paquete(Paquete *paquete)
 			break;
 		}
 
-		if (path[0] != '/') 
+		if (path[0] != '/')
 		{
 			log_debug(logger, "La ruta es relativa y le tengo que agregar /");
 			ruta = malloc(strlen(path) + 2);
 			ruta[0] = '/';
 			strcat(ruta, path);
-		} 
+		}
 
 		int tamanio = obtener_size_escriptorio(ruta);
 
@@ -187,6 +188,9 @@ void interpretar_paquete(Paquete *paquete)
 		respuesta.Payload = malloc(INTSIZE);
 		memcpy(respuesta.Payload, &tamanio, INTSIZE);
 		EnviarPaquete(socket_dam, &respuesta);
+		free(path);
+		free(search_file);
+		free(respuesta.Payload);
 		break;
 	case CREAR_ARCHIVO:
 		log_info(logger, "Crear archivo");
@@ -281,12 +285,13 @@ int validar_archivo(char *search_file, char *current_path)
 	char *route = directorios[0];
 	char *ruta = route;
 
-	if (search_file[0] != '/') {
+	if (search_file[0] != '/')
+	{
 		ruta = malloc(strlen(route) + 2);
 		ruta[0] = '/';
 		strcat(ruta, route);
-	} 
-	
+	}
+
 	dir = opendir(current_path);
 	if (dir == NULL)
 	{
@@ -296,7 +301,7 @@ int validar_archivo(char *search_file, char *current_path)
 
 	log_info(logger, "Entre al dir: %s", current_path);
 	log_info(logger, "Busco: %s", route);
-	
+
 	while ((ent = readdir(dir)) != NULL)
 	{
 		//Verificar con strcmp si ya existe
@@ -359,16 +364,17 @@ void crear_archivo(Paquete *paquete)
 	strcpy(directorio_actual, file_path);
 	char **directorios = string_split(ruta, "/");
 
-	int accesos= contar_ocurrencias(ruta, '/');
+	int accesos = contar_ocurrencias(ruta, '/');
 	log_debug(logger, "accesos %d", accesos);
 
-	if (accesos == 0) {
+	if (accesos == 0)
+	{
 		log_debug(logger, "La ruta es relativa y le tengo que agregar /");
 		route = malloc(strlen(ruta) + 2);
 		route[0] = '/';
 		strcat(route, ruta);
-	} 
-	
+	}
+
 	log_debug(logger, "%s", route);
 
 	for (int i = 0; i < accesos - 1; i++)
@@ -392,7 +398,8 @@ void crear_archivo(Paquete *paquete)
 	t_list *bloques_libres = get_space(bytes_a_crear);
 
 	//Valida que tenga espacio suficiente
-	if (list_size(bloques_libres) == 0) {
+	if (list_size(bloques_libres) == 0)
+	{
 		enviar_error(ESPACIO_INSUFICIENTE_CREAR);
 		return;
 	}
@@ -401,7 +408,8 @@ void crear_archivo(Paquete *paquete)
 	//Va decrementando la cantidad de lineas que le resten escribir con \n necesarios en c/u
 	int retorno = crear_bloques(bloques_libres, bytes_a_crear);
 
-	if (retorno != 0) {
+	if (retorno != 0)
+	{
 		enviar_error(ESPACIO_INSUFICIENTE_CREAR);
 		return;
 	}
@@ -415,7 +423,8 @@ void crear_archivo(Paquete *paquete)
 	log_debug(logger, "Va guardar la metadata del archivo %s", nuevo_archivo.nombre);
 	int resultado = guardar_metadata(&nuevo_archivo);
 
-	if (resultado != 0) {
+	if (resultado != 0)
+	{
 		enviar_error(ESPACIO_INSUFICIENTE_CREAR);
 		return;
 	}
@@ -424,6 +433,9 @@ void crear_archivo(Paquete *paquete)
 	respuesta.header = cargar_header(0, SUCCESS, MDJ);
 	EnviarPaquete(socket_dam, &respuesta);
 	free(nuevo_archivo.nombre);
+	free(ruta);
+	free(directorio_actual);
+	list_destroy(nuevo_archivo.bloques);
 }
 
 char *ruta_absoluta(char *ruta)
@@ -482,13 +494,14 @@ void obtener_datos(Paquete *paquete)
 
 		log_debug(logger, "Leo %d", leer);
 		char *aux = malloc(leer);
-		fread(aux,1,leer,bloque_abierto);
+		fread(aux, 1, leer, bloque_abierto);
 		memcpy(buffer + leido, aux, leer);
 		fclose(bloque_abierto);
 		bytes_a_devolver -= leer;
 		log_debug(logger, "Bytes que me faltan devolver: %d", bytes_a_devolver);
 		leido += leer;
 		free(aux);
+		free(ubicacion);
 	}
 
 	buffer[final] = '\0';
@@ -509,19 +522,21 @@ void obtener_datos(Paquete *paquete)
 	config_destroy(metadata);
 	free(respuesta.Payload);
 	free(buffer);
+	free(ruta);
+	free(path);
 }
 
 int create_block_file(char *path, int cantidad_bytes)
 {
-    FILE *f = fopen(path, "wb+");
+	FILE *f = fopen(path, "wb+");
 
-    if (f == NULL)
-        return 1;
+	if (f == NULL)
+		return 1;
 
-    char *write = string_repeat('\n', cantidad_bytes);
-    fwrite(write, cantidad_bytes, 1, f);
-    fclose(f);
-    return 0;
+	char *write = string_repeat('\n', cantidad_bytes);
+	fwrite(write, cantidad_bytes, 1, f);
+	fclose(f);
+	return 0;
 }
 
 void guardar_datos(Paquete *paquete)
@@ -560,6 +575,7 @@ void guardar_datos(Paquete *paquete)
 	char *tam = malloc(10);
 	sprintf(tam, "%d", buffer_size);
 	config_set_value(metadata, "TAMANIO", tam);
+	free(tam);
 
 	for (int i = bloque_inicial; buffer_size > 0 && i <= cantidad_bloques_del_path; i++)
 	{
@@ -581,6 +597,8 @@ void guardar_datos(Paquete *paquete)
 		buffer_size -= escribir;
 		log_debug(logger, "Me faltan escribir: %d bytes", buffer_size);
 		fclose(bloque_abierto);
+		free(ubicacion);
+		free(datos_a_guardar);
 	}
 
 	log_debug(logger, "Me faltan escribir: %d bytes", buffer_size);
@@ -607,7 +625,7 @@ void guardar_datos(Paquete *paquete)
 
 		char *bloques_string = convertir_bloques_a_string(archivo);
 
-		log_info(logger,"Bloques para metadata %s",bloques_string);
+		log_info(logger, "Bloques para metadata %s", bloques_string);
 
 		config_set_value(metadata, "BLOQUES", bloques_string);
 
@@ -632,8 +650,10 @@ void guardar_datos(Paquete *paquete)
 				buffer_size -= escribir;
 			}
 			fclose(bloque_abierto);
+			free(ubicacion);
 		}
-
+		list_destroy(bloques_viejos);
+		list_destroy(nuevos_bloques);
 		//escribir hasta terminar
 	}
 	//datos_a_guardar
@@ -648,4 +668,7 @@ void guardar_datos(Paquete *paquete)
 	//TODO: Ir consumiendo el buffer segun tamanio de bloque
 	//TODO: Crear paquete OK
 	EnviarPaquete(socket_dam, &respuesta);
+	free(ruta);
+	free(datos_a_guardar);
+	config_destroy(metadata);
 }
