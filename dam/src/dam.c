@@ -181,8 +181,9 @@ void *interpretar_mensajes_de_safa(void *args)
 
 		log_debug(logger, "Envio finalizar a fm9");
 		enviar_paquete(socket_fm9, &paquete);
-
+		sem_wait(&sem_fm9);
 		recibir_paquete(socket_fm9, &respuesta);
+		sem_post(&sem_fm9);
 
 		log_debug(logger, "tipo mensaje %d", respuesta.header.tipoMensaje);
 		if (respuesta.header.tipoMensaje != SUCCESS)
@@ -212,6 +213,7 @@ void inicializar_log(char *program)
 void inicializar_semaforos()
 {
 	sem_init(&sem_mdj, 0, 1);
+	sem_init(&sem_fm9, 0, 1);
 }
 
 void inicializar(char **argv)
@@ -307,7 +309,8 @@ int cargar_a_memoria(u_int32_t pid, char *path, char *file, Paquete *respuesta)
 	cargar.header = cargar_header(desplazamiento, ABRIR, ELDIEGO);
 	log_debug(logger, "Total a enviar: %d", desplazamiento);
 	enviar_paquete(socket_fm9, &cargar);
-
+	
+	sem_wait(&sem_fm9);
 	log_debug(logger, "Pedido de carga a memoria a FM9 enviado");
 	free(serial_path);
 	free(serial_file);
@@ -315,6 +318,7 @@ int cargar_a_memoria(u_int32_t pid, char *path, char *file, Paquete *respuesta)
 
 	recibir_paquete(socket_fm9, respuesta); // Ahora se queda en este recv. Hay que armar el paquete fm9->dam
 	//EnviarDatosTipo(te envia un paquete con el payload en 0 y tiene que enviar la respuesta con el archivo abierto)
+	sem_post(&sem_fm9);
 	log_debug(logger, "FM9 respondio el pedido de carga a memoria");
 	return respuesta->header.tipoMensaje != ESPACIO_INSUFICIENTE_ABRIR;
 }
@@ -545,9 +549,11 @@ void flush(Paquete *paquete)
 	paquete->header = cargar_header(paquete->header.tamPayload, FLUSH, ELDIEGO);
 
 	enviar_paquete(socket_fm9, paquete);
-
+	
+	sem_wait(&sem_fm9);
 	Paquete respuesta_fm9;
 	recibir_paquete(socket_fm9, &respuesta_fm9);
+	sem_post(&sem_fm9);
 	log_header(logger, &respuesta_fm9, "Recibi respuesta a flush GDT %d de %s", pid, path);
 
 	log_debug(logger, "Tipo msje FM9:%d", respuesta_fm9.header.tipoMensaje);

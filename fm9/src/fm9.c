@@ -269,7 +269,6 @@ void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo, int socketFD) 
 		}
 		log_info(logger, "Archivo %s cargado correctamente", path);
 		enviar_abrio_a_dam(socketFD, pid, path, archivo);
-		logMemoria();
 	} else {
 		log_info(logger, "No hay frames suficientes para cargar %s", path);
 		Paquete paquete;
@@ -283,6 +282,7 @@ void cargarArchivoAMemoriaSPA(int pid, char* path, char* archivo, int socketFD) 
 
 ////////////////////////////// ↓↓↓  PRIMITIVA CLOSE ↓↓↓  //////////////////////////////////////////////
 int liberarArchivoSPA(int pid, int seg, int socket) {
+	sem_wait(&escrituraAMemoria);
 	Tipo tipoMensaje = 0;
 	//traigo el segmento y las paginas que ocupa
 	ProcesoArchivo* proceso = obtenerProcesoId(pid);
@@ -292,7 +292,8 @@ int liberarArchivoSPA(int pid, int seg, int socket) {
 	log_info(logger, "Archivo a liberar: %s", segmento->idArchivo);
 	//obtengo las paginas que posee el segmento del archivo a liberar
 	log_info(logger, "La DF resuelta es: frame %d + offset %d -> Linea %d", paginaCero->numeroFrame, 0, (frameCero->inicio + 0 + 1));
-	log_info(logger, "El pid %d posee %d segmentos", pid, list_size(proceso->segmentos));
+	log_info(logger, "Logueo contenido perteneciente al pid %d antes de finalizar. Cantidad de segmentos: %d", pid, list_size(proceso->segmentos));
+	logProcesoSPA(pid);
 	for(int x = 0; x < segmento->cantidadPaginas; x++) {
 		Pagina* pagina = list_get(segmento->paginas, x);
 		Frame* frame = list_get(framesMemoria, pagina->numeroFrame);
@@ -306,16 +307,19 @@ int liberarArchivoSPA(int pid, int seg, int socket) {
 					free(ss);}));
 	log_info(logger, "Ahora el pid %d posee %d segmentos", pid, list_size(proceso->segmentos));
 	tipoMensaje = CLOSE;
+	sem_post(&escrituraAMemoria);
 	return tipoMensaje;
 }
 
 int liberarArchivoSEG(int pid, int seg, int socket) {
+	sem_wait(&escrituraAMemoria);
 	Tipo tipoMensaje = 0;
 	ProcesoArchivo* proceso = obtenerProcesoId(pid);
 	SegmentoArchivoSEG* segmento = list_get(proceso->segmentos, seg);
 	log_info(logger, "Archivo a liberar: %s", segmento->idArchivo);
 	log_info(logger, "La DF resuelta es: inicio de segmento %d + offset %d -> Linea %d", segmento->inicio, 0, (segmento->inicio + 0 + 1));
-	log_info(logger, "El pid %d posee %d segmentos", pid, list_size(proceso->segmentos));
+	log_info(logger, "Logueo contenido perteneciente al pid %d antes de finalizar. Cantidad de segmentos: %d", pid, list_size(proceso->segmentos));
+	logProcesoSEG(pid);
 	liberarMemoriaDesdeHasta(segmento->inicio, segmento->fin);
 	list_remove_and_destroy_element(proceso->segmentos, seg,
 			LAMBDA(void _(SegmentoArchivoSEG* ss) {
@@ -324,6 +328,7 @@ int liberarArchivoSEG(int pid, int seg, int socket) {
 					free(ss);}));
 	log_info(logger, "Ahora el pid %d posee %d segmentos", pid, list_size(proceso->segmentos));
 	tipoMensaje = CLOSE;
+	sem_post(&escrituraAMemoria);
 	return tipoMensaje;
 }
 //////////////////////////////// ↑↑↑  PRIMITIVA CLOSE ↑↑↑  //////////////////////////////////////////
@@ -399,7 +404,6 @@ void flushSEG(int seg, int pid, int socketFD) {
 		size_t longitud = strlen(texto);
 		*(texto + longitud) = '\n';
 		*(texto + longitud + 1) = '\0';
-		log_info(logger, "Cargado en buffer: %s", texto);
 		texto += longitud + 1;
 		posicionPtr += longitud + 1;
 		lineas++;
@@ -529,17 +533,21 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 			desplazamiento += INTSIZE;
 			char *path = string_deserializar(paquete->Payload, &desplazamiento);
 			char *archivo = string_deserializar(paquete->Payload, &desplazamiento);
-			log_info(logger, "Paquete recibido con\npid: %d\npath: %s\narchivo: %s",
+			log_info(logger, "Paquete recibido con\npid: %d\npath: %s\narchivo:\n%s",
 					pid, path, archivo);
 			free(paquete->Payload);
 			log_info(logger, "El archivo a cargar es: %s por el pid: %d", path, pid);
 			if(!strcmp(MODO, "SEG")) {
 				cargarArchivoAMemoriaSEG(pid, path, archivo, socketFD);
+				logProcesoSEG(pid);
 			} else if(!strcmp(MODO, "TPI")) {
 
 			} else if(!strcmp(MODO, "SPA")) {
 				cargarArchivoAMemoriaSPA(pid, path, archivo, socketFD);
+				logProcesoSPA(pid);
+				logEstadoFrames();
 			}
+			logMemoria();
 			break;
 		}
 
@@ -578,6 +586,10 @@ void manejar_paquetes_diego(Paquete* paquete, int socketFD) {
 				list_remove_by_condition(procesos,
 						LAMBDA(bool _(ProcesoArchivo* _proceso) {return _proceso->idProceso == posicion->pid;}));
 				free(proceso);
+				log_info(logger, "LOGUEO ESTADO PROCESO %d LUEGO DE FINALIZAR", posicion->pid);
+				logProcesoSEG(posicion->pid);
+				log_info(logger, "LOGUEO MEMORIA LUEGO DE FINALIZAR %d", posicion->pid);
+				logMemoria();
 			} else if(!strcmp(MODO, "TPI")) {
 
 			} else if(!strcmp(MODO, "SPA")) {
@@ -663,15 +675,16 @@ void manejar_paquetes_CPU(Paquete* paquete, int socketFD) {
 			Tipo tipoMensaje = 0;
 			Posicion *posicion = deserializar_posicion(paquete->Payload, &desplazamiento);
 			log_posicion(logger, posicion, "Recibo DL para close");
-			sem_wait(&escrituraAMemoria);
 			if(!strcmp(MODO, "SEG")) {
 				tipoMensaje = liberarArchivoSEG(posicion->pid, posicion->segmento, socketFD);
+				logProcesoSEG(posicion->pid);
 			} else if(!strcmp(MODO, "TPI")) {
 
 			} else if(!strcmp(MODO, "SPA")) {
 				tipoMensaje = liberarArchivoSPA(posicion->pid, posicion->segmento, socketFD);
+				logProcesoSPA(posicion->pid);
 			}
-			sem_post(&escrituraAMemoria);
+			logMemoria();
 			Paquete respuesta;
 			respuesta.header = cargar_header(0, tipoMensaje, FM9);
 			EnviarPaquete(socketFD, &respuesta);
