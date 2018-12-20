@@ -1,8 +1,10 @@
 #!/bin/bash
 
+USUARIO=utnso
+
 IP_CPU=192.168.1.148
-IP_DIEGO=192.168.1.129
-IP_FM9=192.168.1.129
+IP_DIEGO=192.168.1.148
+IP_FM9=192.168.1.148
 IP_MDJ=192.168.1.148
 IP_SAFA=192.168.1.148
 
@@ -13,18 +15,14 @@ DIR_FM9=$DIR/fm9/src/FM9.config
 DIR_MDJ=$DIR/mdj/src/MDJ.config
 DIR_SAFA=$DIR/safa/src/SAFA.config
 
-cd ../
-git clone https://github.com/sisoputnfrba/so-commons-library
-cd so-commons-library
+git clone https://github.com/sisoputnfrba/so-commons-library /home/utnso/so-commons-library
+cd /home/utnso/so-commons-library
 git pull
 sudo make install
 echo "Reviso que esten en la carpeta correspondiente"
 ls /usr/include/commons
-echo "Descargo el file system de ejemplo"
-cd ../
-git clone https://github.com/sisoputnfrba/fifa-examples
 
-cd tp-2018-2c-Nene-Malloc
+cd $DIR
 
 echo 'CPU.config'
 sed -i "s/IP_SAFA=\([0-9\.]*\)/IP_SAFA=$IP_SAFA/" $DIR_CPU
@@ -46,8 +44,54 @@ sed -i "s/IP=\([0-9\.]*\)/IP=$IP_MDJ/" $DIR_MDJ
 echo 'FM9.config'
 sed -i "s/IP_FM9=\([0-9\.]*\)/IP_FM9=$IP_FM9/" $DIR_FM9
 
-scp -R safa utnso@$IP_SAFA:/home/utnso/
-scp -R dam utnso@$IP_DIEGO:/home/utnso/
-scp -R cpu utnso@$IP_CPU:/home/utnso/
-scp -R mdj utnso@$IP_MDJ:/home/utnso/
-scp -R fm9 utnso@$IP_FM9:/home/utnso/
+echo "A todos les copio las commons y los sh de pruebas"
+
+echo "Copio SAFA"
+scp pruebas_* $USUARIO@$IP_SAFA:/home/utnso/
+scp -r ../so-commons-library $USUARIO@$IP_SAFA:/home/utnso/
+scp -r safa $USUARIO@$IP_SAFA:/home/utnso/
+
+ssh $USUARIO@$IP_SAFA
+	cd /home/utnso/so-commons-library && 
+	sudo make install &&
+	mkdir $DIR &&
+	move /home/utnso/safa $DIR
+
+echo "Copio FM9"
+scp pruebas_* $USUARIO@$IP_FM9:/home/utnso/
+scp -r ../so-commons-library $USUARIO@$IP_FM9:/home/utnso/
+scp -r fm9 $USUARIO@$IP_FM9:/home/utnso/
+
+ssh $USUARIO@$IP_FM9
+	cd /home/utnso/so-commons-library && 
+	sudo make install &&
+	mkdir $DIR &&
+	move /home/utnso/fm9 $DIR
+
+echo "Copio DAM"
+scp pruebas_* $USUARIO@$IP_DIEGO:/home/utnso/
+scp -r ../so-commons-library $USUARIO@$IP_DIEGO:/home/utnso/
+scp -r dam $USUARIO@$IP_DIEGO:/home/utnso/
+
+ssh $USUARIO@$IP_DIEGO
+	cd /home/utnso/so-commons-library && 
+	sudo make install &&
+	mkdir $DIR &&
+	move /home/utnso/dam $DIR
+
+echo "Copio MDJ"
+scp pruebas_* $USUARIO@$IP_MDJ:/home/utnso/
+scp -r ../so-commons-library $USUARIO@$IP_MDJ:/home/utnso/
+scp -r mdj $USUARIO@$IP_MDJ:/home/utnso/
+
+ssh $USUARIO@$IP_MDJ
+	cd /home/utnso/so-commons-library && 
+	sudo make install &&
+       	git clone https://github.com/sisoputnfrba/fifa-examples /home/utnso/fifa-examples &&
+	mkdir $DIR &&
+	move /home/utnso/mdj $DIR
+
+echo "Copio CPUs"
+scp -r cpu $USUARIO@$IP_SAFA:$DIR
+scp -r cpu $USUARIO@$IP_DIEGO:$DIR
+scp -r cpu $USUARIO@$IP_FM9:$DIR
