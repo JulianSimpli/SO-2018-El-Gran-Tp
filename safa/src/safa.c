@@ -363,7 +363,6 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		if(!info_dtb->tiempo_respuesta)
 		{
 		info_dtb->tiempo_fin = medir_tiempo();
-		log_debug(logger, "Tiempo fin: %f", info_dtb->tiempo_fin);
 		info_dtb->tiempo_respuesta = calcular_RT(info_dtb->tiempo_ini, info_dtb->tiempo_fin);
 		log_debug(logger, "Tiempo respuesta: %f", info_dtb->tiempo_respuesta);
 		}
@@ -398,7 +397,6 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		if(!info_dtb->tiempo_respuesta)
 		{	
 		info_dtb->tiempo_fin = medir_tiempo();
-		log_debug(logger, "Tiempo fin: %f", info_dtb->tiempo_fin);
 		info_dtb->tiempo_respuesta = calcular_RT(info_dtb->tiempo_ini, info_dtb->tiempo_fin);
 		log_debug(logger, "Tiempo respuesta: %f", info_dtb->tiempo_respuesta);
 		}
@@ -668,21 +666,12 @@ void actualizar_sentencias_en_no_finalizados(u_int32_t sentencias_ejecutadas)
 	{
 		DTB_info *info_dtb = (DTB_info *)_info_dtb;
 		info_dtb->sentencias_hasta_finalizar += (double) sentencias_ejecutadas;
+		log_debug(logger, "sentencias ejecutadas: %f", sentencias_ejecutadas);
+		log_debug(logger, "GDT %d: sentencias_hasta_finalizar: %f", info_dtb->gdtPID, info_dtb->sentencias_hasta_finalizar);
 	}
-	void log_sentencias_pre(void *_info_dtb3)
-	{
-		DTB_info *info_dtb3 = (DTB_info *)_info_dtb3;
-		log_debug(logger, "SE VA A ACTUALIZAR GDT %d: info_dtb->sentencias_hasta_finalizar: %d", info_dtb3->gdtPID, info_dtb3->sentencias_hasta_finalizar);
-	}
-	void log_sentencias(void *_info_dtb2)
-	{
-		DTB_info *info_dtb2 = (DTB_info *)_info_dtb2;
-		log_debug(logger, "SE ACTUALIZO GDT %d: info_dtb->sentencias_hasta_finalizar: %d", info_dtb2->gdtPID, info_dtb2->sentencias_hasta_finalizar);
-	}
+
 	t_list *info_no_fin = list_filter(lista_info_dtb, es_no_finalizado);
-	list_iterate(info_no_fin, log_sentencias_pre);
 	list_iterate(info_no_fin, _sumar_sentencias_en_no_finalizados);
-	list_iterate(info_no_fin, log_sentencias);
 	list_destroy(info_no_fin);
 }
 
@@ -693,21 +682,9 @@ void actualizar_sentencias_en_nuevos(u_int32_t sentencias_ejecutadas)
 		DTB_info *info_dtb = (DTB_info *)_info_dtb;
 		info_dtb->sentencias_en_nuevo += (double) sentencias_ejecutadas;
 	}
-	void log_sentencias_pre(void *_info_dtb3)
-	{
-		DTB_info *info_dtb3 = (DTB_info *)_info_dtb3;
-		log_debug(logger, "SE VA A ACTUALIZAR GDT %d: info_dtb->sentencias_en_nuevo: %d", info_dtb3->gdtPID, info_dtb3->sentencias_en_nuevo);
-	}
-	void log_sentencias(void *_info_dtb2)
-	{
-		DTB_info *info_dtb2 = (DTB_info *)_info_dtb2;
-		log_debug(logger, "SE ACTUALIZO GDT %d: info_dtb->sentencias_en_nuevo: %d", info_dtb2->gdtPID, info_dtb2->sentencias_en_nuevo);
-	}
 
 	t_list *info_nuevos = list_filter(lista_info_dtb, es_nuevo);
-	list_iterate(info_nuevos, log_sentencias_pre);
 	list_iterate(info_nuevos, _sumar_sentencias_en_nuevo);
-	list_iterate(info_nuevos, log_sentencias);
 	list_destroy(info_nuevos);
 }
 
