@@ -1,12 +1,13 @@
 #include "planificador.h"
 #include <commons/collections/list.h>
 
-u_int32_t numero_pid = 0,
-		  procesos_finalizados = 0, cantidad_procesos_ejecutados = 0,
+u_int32_t numero_pid = 0;
+
+double procesos_finalizados = 0, cantidad_procesos_ejecutados = 0,
 		  sentencias_globales_del_diego = 0, sentencias_totales = 0;
 int procesos_a_esperar = 0;
 double trt = 0; //total response time
-float average_rt=0; //average response time
+double average_rt=0; //average response time
 
 char *Estados[5] = {"Nuevo", "Listo", "Ejecutando", "Bloqueado", "Finalizado"};
 
@@ -298,7 +299,10 @@ DTB *dtb_actualizar(DTB *dtb, t_list *source, t_list *dest, u_int32_t pc, Estado
 		case DTB_LISTO:
 		{
 			sem_post(&sem_listos);
-			log_info(logger, "GDT %d %s->%s", dtb->gdtPID, Estados[info_dtb->estado], Estados[estado]);
+			if(info_dtb->quantum_faltante)
+				log_info(logger, "GDT %d %s->Listo Prioridad", dtb->gdtPID, Estados[info_dtb->estado]);
+			else
+				log_info(logger, "GDT %d %s->%s", dtb->gdtPID, Estados[info_dtb->estado], Estados[estado]);
 			break;	
 		}
 		default:
@@ -735,38 +739,34 @@ void loggear_finalizacion(DTB *dtb, DTB_info *info_dtb)
 			 (info_dtb->kill) ? "Si" : "No",
 			 Estados[info_dtb->estado]);
 
-	FILE *logger_file = fopen("/home/utnso/tp-2018-2c-Nene-Malloc/safa/src/logs/DTB_finalizados.log", "a");
-
 	if (dtb->PC > 1)
 	{
 		if (info_dtb->socket_cpu)
-			fprintf(logger_file, "Ultima cpu usada: %d\n", info_dtb->socket_cpu);
+			log_info(logger_fin, "Ultima cpu usada: %d", info_dtb->socket_cpu);
 
-		fprintf(logger_file, "Sentencias de E/S: %d\n", dtb->entrada_salidas);
+		log_info(logger_fin, "Sentencias de E/S: %d", dtb->entrada_salidas);
 	}
 	else if (dtb->PC == 1 && !info_dtb->kill)
-		fprintf(logger_file, "El proceso nunca pudo ser cargado en memoria");
+		log_info(logger_fin, "El proceso nunca pudo ser cargado en memoria");
 
-	fprintf(logger_file, "Archivos abiertos: %d\n", list_size(dtb->archivosAbiertos));
+	log_info(logger_fin, "Archivos abiertos: %d", list_size(dtb->archivosAbiertos));
 	for (int i = 0; i < list_size(dtb->archivosAbiertos); i++)
 	{
 		ArchivoAbierto *archivo;
 		archivo = list_get(dtb->archivosAbiertos, i);
 		if (i == 0)
-			fprintf(logger_file, "Path Escriptorio: %s\n", archivo->path);
+			log_info(logger_fin, "Path Escriptorio: %s", archivo->path);
 		else
-			fprintf(logger_file, "Archivo n° %i: %s\n", i, archivo->path);
+			log_info(logger_fin, "Archivo n° %i: %s", i, archivo->path);
 	}
 
-	fprintf(logger_file, "Recursos retenidos: %d\n", list_size(info_dtb->recursos_asignados));
+	log_info(logger_fin, "Recursos retenidos: %d", list_size(info_dtb->recursos_asignados));
 	for (int i = 0; i < list_size(info_dtb->recursos_asignados); i++)
 	{
 		t_recurso_asignado *recurso;
 		recurso = list_get(info_dtb->recursos_asignados, i);
-		fprintf(logger_file, "Recurso retenido n° %i: %s\n", i, recurso->recurso->id);
+		log_info(logger_fin, "Recurso retenido n° %i: %s", i, recurso->recurso->id);
 	}
-
-	fclose(logger_file);
 }
 
 void enviar_finalizar_dam(u_int32_t pid)
@@ -907,7 +907,7 @@ clock_t medir_tiempo ()
 	return t_inst;
 }
 
-float calcular_RT(clock_t t_ini_rcv, clock_t t_fin_rcv)
+double calcular_RT(clock_t t_ini_rcv, clock_t t_fin_rcv)
 {
 	cantidad_procesos_ejecutados++;
 	double rt; //response time
@@ -933,8 +933,8 @@ void gdt_metricas(u_int32_t pid)
 	metricas();
 	DTB_info *info_dtb = info_asociada_a_pid(pid);
 	printf("Estadisticas del GDT %d\n", pid);
-	printf("Espero en nuevo %d sentencias\n", info_dtb->sentencias_en_nuevo);
-	printf("Uso a  \"El diego\" %d veces", info_dtb->sentencias_al_diego);
+	printf("Espero en nuevo %f sentencias\n", info_dtb->sentencias_en_nuevo);
+	printf("Uso a  \"El diego\" %f veces", info_dtb->sentencias_al_diego);
 	printf("El ultimo tiempo de respuesta de %f", info_dtb->tiempo_respuesta);
 }
 
@@ -943,53 +943,49 @@ void metricas()
 	printf("Estadisticas de la fecha\n");
 	if (numero_pid)
 	{
-		float sentencias_promedio_diego = calcular_sentencias_promedio_diego();
-		printf("Sentencias ejecutadas promedio del sistema que usaron a \"El Diego\": %f", sentencias_promedio_diego);
+		double sentencias_promedio_diego = calcular_sentencias_promedio_diego();
+		printf("Sentencias ejecutadas promedio del sistema que usaron a \"El Diego\": %f\n", sentencias_promedio_diego);
 	}
 	else
-		printf("Todavia no empezo el campeonato\n");
+		printf("Todavia no empezo el campeonato (no hay procesos en el sistema)\n");
 	if (procesos_finalizados)
 	{
-		float sentencias_promedio_hasta_finalizar = calcular_sentencias_promedio_hasta_finalizar();
-		printf("Sentencias ejecutadas promedio del sistema para que un dtb termine en la cola de EXIT: %f", sentencias_promedio_hasta_finalizar);
+		double sentencias_promedio_hasta_finalizar = calcular_sentencias_promedio_hasta_finalizar();
+		printf("Sentencias ejecutadas promedio del sistema para que un dtb termine en la cola de EXIT: %f\n", sentencias_promedio_hasta_finalizar);
 	}
 	else
 		printf("Ningun GDT finalizo hasta el momento\n");
 	if (sentencias_totales)
 	{
-		float porcentaje_al_diego = sentencias_globales_del_diego / sentencias_totales;
-		printf("Porcentaje de las sentencias ejecutadas promedio que fueron a \"El Diego\": %f", porcentaje_al_diego);
+		double porcentaje_al_diego = sentencias_globales_del_diego / sentencias_totales;
+		printf("Porcentaje de las sentencias ejecutadas promedio que fueron a \"El Diego\": %f\n", porcentaje_al_diego);
 	}
 	else
-		printf("Ninguna sentencia fue ejecutada hasta el momento");
+		printf("Ninguna sentencia fue ejecutada hasta el momento\n");
 	printf("Tiempo de respuesta promedio del sistema: %f milisegundos\n", average_rt);
 }
 
-float calcular_sentencias_promedio_diego()
+double calcular_sentencias_promedio_diego()
 {
-	int _sumar_sentencias_al_diego(void *_acum, void *_info_dtb)
+	double _sumar_sentencias_al_diego(void *_acum, void *_info_dtb)
 	{
-		int acum = (intptr_t)_acum;
-		DTB_info *info_dtb = (DTB_info *)_info_dtb;
-		return acum + info_dtb->sentencias_al_diego;
+		return (double) ((intptr_t)_acum + ((DTB_info *)_info_dtb)->sentencias_al_diego);
 	}
-	int sentencias_totales = (intptr_t)list_fold(lista_info_dtb, 0, (void *)_sumar_sentencias_al_diego);
+	double sentencias_totales = (double) ((intptr_t)list_fold(lista_info_dtb, 0, (void *)_sumar_sentencias_al_diego));
 
 	return sentencias_totales / numero_pid;
 }
 
-float calcular_sentencias_promedio_hasta_finalizar()
+double calcular_sentencias_promedio_hasta_finalizar()
 {
-	int _sumar_sentencias_hasta_finalizar(void *_acum, void *_info_dtb)
+	double _sumar_sentencias_hasta_finalizar(void *_acum, void *_info_dtb)
 	{
-		int acum = (intptr_t)_acum;
-		DTB_info *info_dtb = (DTB_info *)_info_dtb;
-		return acum + info_dtb->sentencias_hasta_finalizar;
+		return (double) ((intptr_t)_acum + ((DTB_info *)_info_dtb)->sentencias_hasta_finalizar);
 	}
 	t_list *finalizados = list_filter(lista_info_dtb, ya_finalizo);
 	if (finalizados == NULL)
 		return 0;
-	int sentencias_hasta_finalizar = (intptr_t)list_fold(finalizados, 0, (void *)_sumar_sentencias_hasta_finalizar);
+	double sentencias_hasta_finalizar = (double) ((intptr_t)list_fold(finalizados, 0, (void *)_sumar_sentencias_hasta_finalizar));
 
 	return sentencias_hasta_finalizar / procesos_finalizados;
 }

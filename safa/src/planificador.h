@@ -20,13 +20,13 @@ typedef struct DTB_info {
 	int socket_cpu;
 	clock_t tiempo_ini;
 	clock_t tiempo_fin;
-	float tiempo_respuesta;
+	double tiempo_respuesta;
 	bool kill;
 	t_list *recursos_asignados;
 	u_int32_t quantum_faltante;
-	u_int32_t sentencias_en_nuevo;
-	u_int32_t sentencias_al_diego;
-	u_int32_t sentencias_hasta_finalizar;
+	double sentencias_en_nuevo;
+	double sentencias_al_diego;
+	double sentencias_hasta_finalizar;
 } DTB_info;
 
 typedef struct {
@@ -63,12 +63,13 @@ t_list *lista_recursos_global;
 
 t_log* logger_fin;
 
-u_int32_t numero_pid, procesos_finalizados;
-u_int32_t sentencias_globales_del_diego, sentencias_totales;
+u_int32_t numero_pid;
+double procesos_finalizados, cantidad_procesos_ejecutados, sentencias_globales_del_diego, sentencias_totales;
 int procesos_a_esperar;
 
 u_int32_t MULTIPROGRAMACION, RETARDO_PLANIF; //La carga la config y SAFA al inicializarse
 char *ALGORITMO_PLANIFICACION;
+
 int socket_diego;
 pthread_t hilo_consola, hilo_plp, hilo_pcp;
 
@@ -162,11 +163,11 @@ void recurso_asignar_a_pid(t_recurso *recurso, u_int32_t pid);
 //Metricas
 void gdt_metricas(u_int32_t pid);
 void metricas();
-float calcular_sentencias_promedio_diego();
-float calcular_sentencias_promedio_hasta_finalizar();
+double calcular_sentencias_promedio_diego();
+double calcular_sentencias_promedio_hasta_finalizar();
 bool ya_finalizo(void *_info_dtb);
 clock_t medir_tiempo ();
-float calcular_RT(clock_t t_ini_rcv, clock_t t_fin_rcv);
+double calcular_RT(clock_t t_ini_rcv, clock_t t_fin_rcv);
 
 
 //Liberar memoria

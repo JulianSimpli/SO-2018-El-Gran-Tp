@@ -158,8 +158,8 @@ int ejecutar_algoritmo(Paquete *paquete)
 			log_debug(logger, "DTB %d termino su quantum de %d", dtb->gdtPID, quantum_local);
 		//armar el paquete para mandar a safa, que dependiendo de si es RR o VRR, envía quantum restante
 		//si es RR, manda DTB_EJECUTO
-		//si es VRR, manda QUANTUM_FALTANTE
-		if (!strcmp(algoritmo, "VRR"))
+		//si es VRR y salio por bloqueados, manda QUANTUM_FALTANTE
+		if (!strcmp(algoritmo, "VRR") && flag)
 			return enviar_pid_y_pc(dtb, QUANTUM_FALTANTE);
 	}
 

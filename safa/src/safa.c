@@ -396,7 +396,11 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		if(verificar_si_murio(dtb, lista_bloqueados, pid, dtb->PC))
 			break;
 		
-		dtb_actualizar(dtb, lista_bloqueados, lista_listos, dtb->PC, DTB_LISTO, info_dtb->socket_cpu);
+		if(info_dtb->quantum_faltante)
+ 			dtb_actualizar(dtb, lista_bloqueados, lista_prioridad, dtb->PC, DTB_LISTO, info_dtb->socket_cpu);
+ 		else
+ 			dtb_actualizar(dtb, lista_bloqueados, lista_listos, dtb->PC, DTB_LISTO, info_dtb->socket_cpu);
+
 		break;
 	}
 	case DTB_FINALIZAR:
@@ -510,6 +514,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 
 		DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
 		info_dtb->quantum_faltante = QUANTUM - (pc - dtb->PC);
+		log_debug(logger, "PID %d\tQuantum Faltante = %d", dtb->gdtPID, info_dtb->quantum_faltante);
 		dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, pc, DTB_BLOQUEADO, socketFD);
 		break;
 	}
