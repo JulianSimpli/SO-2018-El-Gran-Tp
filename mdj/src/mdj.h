@@ -188,7 +188,7 @@ void com_cat(char **parametros)
     fclose(f);
     cadena_a_devolver[size] = '\0';
     printf("CAT\n");
-    printf("El contenido del archivos es: \n %s", cadena_a_devolver);
+    printf("El contenido del archivo es: \n%s", cadena_a_devolver);
 }
 
 void com_cd(char **parametros)

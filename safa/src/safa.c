@@ -480,9 +480,9 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 	}
 	case DUMMY_BLOQUEA:
 	{
+		log_debug(logger, "ENTRO A DUMMY BLOQUEA");
 		liberar_cpu(socketFD);
 		memcpy(&pid, paquete->Payload, INTSIZE);
-		sleep(1);
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, DUMMY);
 		log_info(logger, "Se ejecuto el dummy de GDT %d", dtb->gdtPID);
 		dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, dtb->PC, DTB_BLOQUEADO, socketFD);
@@ -493,7 +493,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		liberar_cpu(socketFD);
 		deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
 
-		log_debug(logger, "PID %d", pid);
+		log_debug(logger, "Bloquea PID %d", pid);
 
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 		memcpy(&dtb->entrada_salidas, paquete->Payload + desplazamiento, INTSIZE);
@@ -570,7 +570,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 		DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
-		log_info(logger, "GDT %d cerro %s", dtb->gdtPID, cerrado->path);
+		log_archivo(logger, cerrado, "GDT %d cerro:", dtb->gdtPID);
 
 		void actualizar_segmentos(void *_archivo)
 		{
@@ -580,7 +580,10 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		}
 
 		list_iterate(dtb->archivosAbiertos, actualizar_segmentos);
-		list_remove_and_destroy_by_condition(dtb->archivosAbiertos, LAMBDA (bool _(void *_archivo) {return coincide_archivo(_archivo, cerrado->path); }), liberar_archivo_abierto);			
+		list_remove_and_destroy_by_condition(dtb->archivosAbiertos,
+						LAMBDA (bool _(void *_archivo)
+						{ return coincide_archivo(_archivo, cerrado->path); }),
+						liberar_archivo_abierto);			
 		break;
 	}
 	default:

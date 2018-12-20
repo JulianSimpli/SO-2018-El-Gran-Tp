@@ -100,9 +100,8 @@ int ejecutar_algoritmo(Paquete *paquete)
 	DTB *dtb = DTB_deserializar(paquete->Payload);
 	log_debug(logger, "Deserialice el dtb");
 	log_debug(logger, "pid %d", dtb->gdtPID);
-	Paquete *nuevo_paquete = malloc(sizeof(Paquete));
-	int tam_pid_y_pc = 0;
 	ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
+	log_archivo(logger, escriptorio, "El escriptorio es:");
 	int cantidad_lineas = escriptorio->cantLineas;
 	int flag = 1;
 	if (!strcmp(algoritmo, "FIFO"))
@@ -257,8 +256,6 @@ void handshake_safa()
 	cargar_config_safa(paquete);
 
 	log_info(logger, "Se concreto el handshake con SAFA, empiezo a recibir mensajes");
-	log_debug(logger, "Quantum: %d", quantum);
-	log_debug(logger, "Algoritmo de planificacion: %s", algoritmo);
 }
 
 void handshake_dam()
@@ -296,6 +293,8 @@ void cargar_config_safa(Paquete *paquete)
 	algoritmo = malloc(len + 1);
 	memcpy(algoritmo, paquete->Payload + sizeof(u_int32_t) * 2, len);
 	algoritmo[len] = '\0';
+	log_debug(logger, "Quantum: %d", quantum);
+	log_debug(logger, "Algoritmo de planificacion: %s", algoritmo);
 }
 
 void handshake(int socket, int emisor)
