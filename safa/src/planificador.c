@@ -735,7 +735,7 @@ void loggear_finalizacion(DTB *dtb, DTB_info *info_dtb)
 			 (info_dtb->kill) ? "Si" : "No",
 			 Estados[info_dtb->estado]);
 
-	FILE *logger_file = fopen("/home/utnso/workspace/tp-2018-2c-Nene-Malloc/safa/src/logs/DTB_finalizados.log", "a");
+	FILE *logger_file = fopen("/home/utnso/tp-2018-2c-Nene-Malloc/safa/src/logs/DTB_finalizados.log", "a");
 
 	if (dtb->PC > 1)
 	{

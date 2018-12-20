@@ -669,6 +669,5 @@ void guardar_datos(Paquete *paquete)
 	//TODO: Crear paquete OK
 	EnviarPaquete(socket_dam, &respuesta);
 	free(ruta);
-	free(datos_a_guardar);
 	config_destroy(metadata);
 }

@@ -224,8 +224,8 @@ void accion(void *socket)
 	}
 	// Si sale del while hubo error o desconexion
 	manejar_desconexion(socketFD);
-	if (paquete.Payload != NULL && paquete.header.tamPayload > 0)
-		free(paquete.Payload);
+	//if (paquete.Payload != NULL && paquete.header.tamPayload > 0)
+	//	free(paquete.Payload);
 
 	close(socketFD);
 }
@@ -478,7 +478,7 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 	{
 		liberar_cpu(socketFD);
 		memcpy(&pid, paquete->Payload, INTSIZE);
-		usleep(1*1000);
+		sleep(1);
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, DUMMY);
 		log_info(logger, "Se ejecuto el dummy de GDT %d", dtb->gdtPID);
 		dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, dtb->PC, DTB_BLOQUEADO, socketFD);
