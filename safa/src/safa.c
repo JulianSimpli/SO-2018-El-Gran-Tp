@@ -43,6 +43,7 @@ void inicializar_variables() {
 	sem_init(&sem_multiprogramacion, 0, MULTIPROGRAMACION);
 	sem_init(&sem_listos, 0, 0);
 	sem_init(&sem_metricas, 0, 1);
+	sem_init(&sem_dummy, 0, 1);
 
 	int a = 0;
 	sem_getvalue(&sem_multiprogramacion, &a);
@@ -364,7 +365,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		{
 		info_dtb->tiempo_fin = medir_tiempo();
 		info_dtb->tiempo_respuesta = calcular_RT(info_dtb->tiempo_ini, info_dtb->tiempo_fin);
-		log_debug(logger, "Tiempo respuesta: %f", info_dtb->tiempo_respuesta);
+		log_debug(logger, "Tiempo respuesta: %.2f", info_dtb->tiempo_respuesta);
 		}
 
 		if(dtb->PC == escriptorio->cantLineas)
@@ -398,7 +399,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		{	
 		info_dtb->tiempo_fin = medir_tiempo();
 		info_dtb->tiempo_respuesta = calcular_RT(info_dtb->tiempo_ini, info_dtb->tiempo_fin);
-		log_debug(logger, "Tiempo respuesta: %f", info_dtb->tiempo_respuesta);
+		log_debug(logger, "Tiempo respuesta: %.2f", info_dtb->tiempo_respuesta);
 		}
 
 		if(dtb->PC == escriptorio->cantLineas)
@@ -495,11 +496,13 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 	case DUMMY_BLOQUEA:
 	{
 		log_debug(logger, "ENTRO A DUMMY BLOQUEA");
+		sem_wait(&sem_dummy);
 		liberar_cpu(socketFD);
 		memcpy(&pid, paquete->Payload, INTSIZE);
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, DUMMY);
 		log_info(logger, "Se ejecuto el dummy de GDT %d", dtb->gdtPID);
 		dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, dtb->PC, DTB_BLOQUEADO, socketFD);
+		sem_post(&sem_dummy);
 		break;
 	}
 	case DTB_BLOQUEAR:
@@ -666,8 +669,7 @@ void actualizar_sentencias_en_no_finalizados(u_int32_t sentencias_ejecutadas)
 	{
 		DTB_info *info_dtb = (DTB_info *)_info_dtb;
 		info_dtb->sentencias_hasta_finalizar += (double) sentencias_ejecutadas;
-		log_debug(logger, "sentencias ejecutadas: %f", sentencias_ejecutadas);
-		log_debug(logger, "GDT %d: sentencias_hasta_finalizar: %f", info_dtb->gdtPID, info_dtb->sentencias_hasta_finalizar);
+		log_debug(logger, "GDT %d: sentencias_hasta_finalizar: %.2f", info_dtb->gdtPID, info_dtb->sentencias_hasta_finalizar);
 	}
 
 	t_list *info_no_fin = list_filter(lista_info_dtb, es_no_finalizado);

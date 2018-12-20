@@ -75,6 +75,7 @@ pthread_t hilo_consola, hilo_plp, hilo_pcp;
 sem_t sem_ejecutar;
 sem_t sem_multiprogramacion;
 sem_t sem_listos;
+sem_t sem_dummy;
 
 //Funciones
 //Hilo planificador largo plazo

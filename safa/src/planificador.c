@@ -156,6 +156,7 @@ void ejecutar_primer_dtb_listo()
 	int tamanio_DTB = 0;
 	paquete->Payload = DTB_serializar(dtb_exec, &tamanio_DTB);
 
+	sem_wait(&sem_dummy);
 	switch (dtb_exec->flagInicializacion)
 	{
 	case DUMMY:
@@ -174,6 +175,7 @@ void ejecutar_primer_dtb_listo()
 	}
 	}
 	dtb_actualizar(dtb_exec, lista_listos, lista_ejecutando, dtb_exec->PC, DTB_EJECUTANDO, cpu_libre->socket);
+	sem_post(&sem_dummy);
 	free(paquete->Payload);
 	free(paquete);
 }
@@ -892,7 +894,6 @@ double calcular_RT(clock_t t_ini_rcv, clock_t t_fin_rcv)
 	t_fin = t_fin_rcv;
 	rt = ((double)(t_fin - t_ini) / CLOCKS_PER_SEC) * 1000;
 	trt += rt;
-	average_rt = trt/ (double) numero_pid;
 	return rt;
 }
 
@@ -941,7 +942,10 @@ void metricas()
 	}
 	else
 		log_info(logger, "Ninguna sentencia fue ejecutada hasta el momento");
-	
+
+	if(numero_pid)
+		average_rt = trt / (double) numero_pid;
+
 	log_info(logger, "Tiempo de respuesta promedio del sistema: %.2f milisegundos", average_rt);
 }
 
