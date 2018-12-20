@@ -3,11 +3,13 @@
 
 u_int32_t numero_pid = 0;
 
-double procesos_finalizados = 0, cantidad_procesos_ejecutados = 0,
-		  sentencias_globales_del_diego = 0, sentencias_totales = 0;
+double procesos_finalizados = 0,
+sentencias_globales_del_diego = 0,
+sentencias_totales = 0,
+trt = 0, // total response time
+average_rt = 0; // average response time
+
 int procesos_a_esperar = 0;
-double trt = 0; //total response time
-double average_rt=0; //average response time
 
 char *Estados[5] = {"Nuevo", "Listo", "Ejecutando", "Bloqueado", "Finalizado"};
 
@@ -169,15 +171,6 @@ void ejecutar_primer_dtb_listo()
 		paquete->header = cargar_header(tamanio_DTB, ESDTB, SAFA);
 		EnviarPaquete(cpu_libre->socket, paquete);
 		log_header(logger, paquete, "GDT %d ejecutando en cpu %d", dtb_exec->gdtPID, cpu_libre->socket);
-
-		DTB_info *info_dtb = info_asociada_a_pid(dtb_exec->gdtPID);
-		if(!info_dtb->tiempo_respuesta)
-		{	
-		info_dtb->tiempo_fin = medir_tiempo();
-		log_debug(logger, "Tiempo fin: %f", info_dtb->tiempo_fin);
-		info_dtb->tiempo_respuesta = calcular_RT(info_dtb->tiempo_ini, info_dtb->tiempo_fin);
-		log_debug(logger, "Tiempo respuesta: %f", info_dtb->tiempo_respuesta);
-		}
 		break;
 	}
 	}
@@ -204,13 +197,7 @@ void ejecutar_primer_dtb_prioridad()
 	paquete->header = cargar_header(tamanio_dtb + sizeof(u_int32_t), ESDTBQUANTUM, SAFA);
 	EnviarPaquete(cpu_libre->socket, paquete);
 	log_header(logger, paquete, "Envie desde la cola prioritaria al GDT %d a la CPU %d", dtb->gdtPID, cpu_libre->socket);
-	if(!info_dtb->tiempo_respuesta)
-	{
-	info_dtb->tiempo_fin = medir_tiempo();
-	log_debug(logger, "Tiempo fin: %f", info_dtb->tiempo_fin);
-	info_dtb->tiempo_respuesta = calcular_RT(info_dtb->tiempo_ini, info_dtb->tiempo_fin);
-	log_debug(logger, "Tiempo respuesta: %f", info_dtb->tiempo_respuesta);
-	}
+
 
 	free(paquete->Payload);
 	free(paquete);
@@ -267,7 +254,6 @@ DTB_info *info_dtb_crear(u_int32_t pid)
 	info_dtb->recursos_asignados = list_create();
 	info_dtb->quantum_faltante = 0;
 	info_dtb->sentencias_en_nuevo = 0;
-	info_dtb->sentencias_al_diego = 0;
 	info_dtb->sentencias_hasta_finalizar = 0;
 	list_add(lista_info_dtb, info_dtb);
 
@@ -728,7 +714,7 @@ void loggear_finalizacion(DTB *dtb, DTB_info *info_dtb)
 {
 	log_info(logger_fin,
 			 "\nEl proceso con PID %d fue finalizado.\n"
-			 "Tiempo de respuesta final: %f milisegundos\n"
+			 "Tiempo de respuesta: %f milisegundos\n"
 			 "Proceso Finalizado por Usuario: %s\n"
 			 "Ultimo Estado: %s",
 			 dtb->gdtPID,
@@ -906,7 +892,6 @@ clock_t medir_tiempo ()
 
 double calcular_RT(clock_t t_ini_rcv, clock_t t_fin_rcv)
 {
-	cantidad_procesos_ejecutados++;
 	double rt; //response time
 	clock_t t_ini;
 	clock_t t_fin;
@@ -915,7 +900,7 @@ double calcular_RT(clock_t t_ini_rcv, clock_t t_fin_rcv)
 	t_fin = t_fin_rcv;
 	rt = ((double)(t_fin - t_ini) / CLOCKS_PER_SEC) * 1000;
 	trt += rt;
-	average_rt = trt/cantidad_procesos_ejecutados;
+	average_rt = trt/ (double) numero_pid;
 	return rt;
 }
 
@@ -928,10 +913,12 @@ double calcular_RT(clock_t t_ini_rcv, clock_t t_fin_rcv)
 void gdt_metricas(u_int32_t pid)
 {
 	metricas();
-	DTB_info *info_dtb = info_asociada_a_pid(pid);
+	DTB_info *info_dtb;
+	t_list *actual;
+	DTB *dtb = dtb_buscar_en_todos_lados(pid, &info_dtb, &actual);
 	log_info(logger, "Estadisticas del GDT %d", pid);
 	log_info(logger, "Espero en nuevo %f sentencias", info_dtb->sentencias_en_nuevo);
-	log_info(logger, "Uso a  \"El diego\" %f veces", info_dtb->sentencias_al_diego);
+	log_info(logger, "Uso a  \"El diego\" %d veces", dtb->entrada_salidas);
 	log_info(logger, "El ultimo tiempo de respuesta de %f", info_dtb->tiempo_respuesta);
 }
 
@@ -940,11 +927,12 @@ void metricas()
 	log_info(logger, "Estadisticas de la fecha");
 	if (numero_pid)
 	{
-		double sentencias_promedio_diego = calcular_sentencias_promedio_diego();
+		double sentencias_promedio_diego = sentencias_globales_del_diego / (double) numero_pid;
 		log_info(logger, "Sentencias ejecutadas promedio del sistema que usaron a \"El Diego\": %f", sentencias_promedio_diego);
 	}
 	else
 		log_info(logger, "Todavia no empezo el campeonato (no hay procesos en el sistema)");
+	
 	if (procesos_finalizados)
 	{
 		double sentencias_promedio_hasta_finalizar = calcular_sentencias_promedio_hasta_finalizar();
@@ -952,39 +940,35 @@ void metricas()
 	}
 	else
 		log_info(logger, "Ningun GDT finalizo hasta el momento");
+	
 	if (sentencias_totales)
 	{
-		double porcentaje_al_diego = sentencias_globales_del_diego / sentencias_totales;
-		log_info(logger, "Porcentaje de las sentencias ejecutadas promedio que fueron a \"El Diego\": %f", porcentaje_al_diego);
+		double porcentaje_al_diego = 100 * (sentencias_globales_del_diego / sentencias_totales);
+		log_info(logger, "Porcentaje de las sentencias ejecutadas promedio que fueron a \"El Diego\": %f %%", porcentaje_al_diego);
 	}
 	else
 		log_info(logger, "Ninguna sentencia fue ejecutada hasta el momento");
+	
 	log_info(logger, "Tiempo de respuesta promedio del sistema: %f milisegundos", average_rt);
-}
-
-double calcular_sentencias_promedio_diego()
-{
-	double _sumar_sentencias_al_diego(void *_acum, void *_info_dtb)
-	{
-		return (double) ((intptr_t)_acum + ((DTB_info *)_info_dtb)->sentencias_al_diego);
-	}
-	double sentencias_totales = (double) ((intptr_t)list_fold(lista_info_dtb, 0, (void *)_sumar_sentencias_al_diego));
-
-	return sentencias_totales / numero_pid;
 }
 
 double calcular_sentencias_promedio_hasta_finalizar()
 {
-	double _sumar_sentencias_hasta_finalizar(void *_acum, void *_info_dtb)
+	double acum = 0;
+	void _sumar_sentencias_hasta_finalizar(void *_info_dtb)
 	{
-		return (double) ((intptr_t)_acum + ((DTB_info *)_info_dtb)->sentencias_hasta_finalizar);
+		acum += ((DTB_info *)_info_dtb)->sentencias_hasta_finalizar;
+		log_debug(logger, "acum es %f", acum);
 	}
+
 	t_list *finalizados = list_filter(lista_info_dtb, ya_finalizo);
+
 	if (finalizados == NULL)
 		return 0;
-	double sentencias_hasta_finalizar = (double) ((intptr_t)list_fold(finalizados, 0, (void *)_sumar_sentencias_hasta_finalizar));
-
-	return sentencias_hasta_finalizar / procesos_finalizados;
+	
+	list_iterate(finalizados, _sumar_sentencias_hasta_finalizar);
+	
+	return acum / procesos_finalizados;
 }
 
 bool ya_finalizo(void *_info_dtb)
@@ -1103,7 +1087,6 @@ void liberar_parte_de_memoria(int procesos_eliminar)
 	}
 }
 
-
 void log_info_dtb(t_log *logger, DTB_info *info_dtb, const char* _contexto, ...)
 {
     va_list arguments;
@@ -1131,7 +1114,6 @@ void log_info_dtb(t_log *logger, DTB_info *info_dtb, const char* _contexto, ...)
         log_debug(logger, "info_dtb->quantum_faltante: %d", info_dtb->quantum_faltante);
     
     log_debug(logger, "info_dtb->sentencias_en_nuevo: %d", info_dtb->sentencias_en_nuevo);
-    log_debug(logger, "info_dtb->sentencias_al_diego: %d", info_dtb->sentencias_al_diego);
     log_debug(logger, "info_dtb->sentencias_hasta_finalizar: %d", info_dtb->sentencias_hasta_finalizar);
 }
 

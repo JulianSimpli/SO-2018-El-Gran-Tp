@@ -15,30 +15,23 @@ void obtener_valores_archivo_configuracion()
 {
 	t_config *arch = config_create("./SAFA.config");
 	IP = string_duplicate(config_get_string_value(arch, "IP"));
-	log_info(logger, "IP: %s", IP);
 	PUERTO = config_get_int_value(arch, "PUERTO");
-	log_info(logger, "Puerto: %d", PUERTO);
 	ALGORITMO_PLANIFICACION = string_duplicate(config_get_string_value(arch, "ALGORITMO"));
-	log_info(logger, "Algoritmo de planificacion: %s", ALGORITMO_PLANIFICACION);
 	QUANTUM = config_get_int_value(arch, "QUANTUM");
-	log_info(logger, "Quantum: %d", QUANTUM);
 	MULTIPROGRAMACION = config_get_int_value(arch, "MULTIPROGRAMACION");
-	log_info(logger, "Grado de multiprogramacion: %d", MULTIPROGRAMACION);
 	RETARDO_PLANIF = config_get_int_value(arch, "RETARDO_PLANIF");
-	log_info(logger, "Retardo de planificacion: %d", RETARDO_PLANIF);
 	config_destroy(arch);
 }
 
 void imprimir_archivo_configuracion()
 {
-	printf("Configuración:\n"
-	       "IP=%s\n"
-	       "PUERTO=%d\n"
-	       "ALGORITMO_PLANIFICACION=%s\n"
-	       "QUANTUM=%d\n"
-	       "MULTIPROGRAMACION=%d\n"
-	       "RETARDO_PLANIF=%d\n",
-	       IP, PUERTO, ALGORITMO_PLANIFICACION, QUANTUM, MULTIPROGRAMACION, RETARDO_PLANIF);
+	log_info(logger, "CONFIGURACION");
+	log_info(logger, "IP: %s", IP);
+	log_info(logger, "Puerto: %d", PUERTO);
+	log_info(logger, "Algoritmo de planificacion: %s", ALGORITMO_PLANIFICACION);
+	log_info(logger, "Quantum: %d", QUANTUM);
+	log_info(logger, "Multiprogramacion: %d", MULTIPROGRAMACION);
+	log_info(logger, "Retardo de planificacion: %dms", RETARDO_PLANIF);
 }
 
 void inicializar_variables() {
@@ -49,6 +42,11 @@ void inicializar_variables() {
 	sem_init(&sem_ejecutar, 0, 0);
 	sem_init(&sem_multiprogramacion, 0, MULTIPROGRAMACION);
 	sem_init(&sem_listos, 0, 0);
+	sem_init(&sem_metricas, 0, 1);
+
+	int a = 0;
+	sem_getvalue(&sem_multiprogramacion, &a);
+	log_info(logger, "sem_multiprogramacion es %d", a);
 }
 
 void crear_listas()
@@ -112,10 +110,10 @@ void parseo_consola(char *operacion, char *primer_parametro)
 	if (string_equals_ignore_case(operacion, EJECUTAR))
 	{
 		if (primer_parametro == NULL)
-			printf("expected ejecutar <path>\n");
+			log_info(logger, "Falto parametro. Esperaba ejecutar <path>");
 		else
 		{
-			printf("Escriptorio a ejecutar es %s\n", primer_parametro);
+			log_info(logger, "EJECUTAR escriptorio %s", primer_parametro);
 			ejecutar(primer_parametro);
 		}
 	}
@@ -124,12 +122,12 @@ void parseo_consola(char *operacion, char *primer_parametro)
 		if (primer_parametro != NULL)
 		{
 			pid = atoi(primer_parametro);
-			printf("Mostrar status de GDT %i\n", pid);
+			log_info(logger, "STATUS de GDT %i", pid);
 			gdt_status(pid);
 		}
 		else
 		{
-			printf("status no trajo parametros. Se mostraran estados de las colas\n");
+			log_info(logger, "STATUS de las colas");
 			status();
 		}
 	}
@@ -137,12 +135,12 @@ void parseo_consola(char *operacion, char *primer_parametro)
 	{
 		if (primer_parametro == NULL)
 		{
-			printf("expected finalizar <pid>\n");
+			log_info(logger, "Falto parametro. Esperaba finalizar <pid>");
 			return;
 		}
 
 		pid = atoi(primer_parametro);
-		printf("pid a finalizar es %i\n", pid);
+		log_info(logger, "FINALIZAR GDT %i", pid);
 		finalizar(pid);
 	}
 	else if (string_equals_ignore_case(operacion, METRICAS))
@@ -150,12 +148,12 @@ void parseo_consola(char *operacion, char *primer_parametro)
 		if (primer_parametro != NULL)
 		{
 			pid = atoi(primer_parametro);
-			printf("Metricas de GDT %d\n", pid);
+			log_info(logger, "METRICAS de GDT %d", pid);
 			gdt_metricas(pid);
 		}
 		else
 		{
-			printf("Se mostraran metricas del sistema\n");
+			log_info(logger, "METRICAS del sistema");
 			metricas();
 		}
 	}
@@ -164,17 +162,17 @@ void parseo_consola(char *operacion, char *primer_parametro)
 		if (primer_parametro != NULL)
 		{
 			int procesos_a_liberar = atoi(primer_parametro);
-			printf("Se van a liberar %d procesos\n", procesos_a_liberar);
+			log_info(logger, "LIBERAR %d GDTs", procesos_a_liberar);
 			liberar_parte_de_memoria(procesos_a_liberar);
 		}
 		else
 		{
-			printf("Se van a liberar todos los procesos de finalizados (%d)\n", list_size(lista_finalizados));
+			log_info(logger, "LIBERAR la cola entera de finalizados (%d GDTs)", list_size(lista_finalizados));
 			liberar_memoria();
 		}
 	}
 	else
-		printf("No se conoce la operacion\n");
+		log_info(logger, "OPERACION DESCONOCIDA");
 }
 
 void accion(void *socket)
@@ -235,7 +233,6 @@ void manejar_desconexion(int socket)
 	if(socket == socket_diego)
 	{
 		log_error(logger, "Desconexion en el socket %d, donde estaba El Diego", socket_diego);
-		printf("Se desconecto El Diego, que hacemo?\n");
 		log_destroy(logger);
 		log_destroy(logger_fin);
 		exit(1);
@@ -249,7 +246,6 @@ void manejar_desconexion(int socket)
 void manejar_desconexion_cpu(int socket)
 {
 	log_error(logger, "Desconexion de la cpu %d", socket);
-	printf("Se desconecto la cpu %d\n", socket);
 
 	bool _dtb_compara_socket(void *_dtb)
 	{
@@ -272,15 +268,19 @@ void manejar_desconexion_cpu(int socket)
 
 	if(list_is_empty(lista_cpu))
 	{
-		log_info(logger, "Se desconecto la ultima cpu del sistema. Esperando 30 segundos por la conexion de otras.");
-		printf("Se desconecto la ultima cpu del sistema.\n"
-				"Si no se conecta otra en 30 segundos, el sistema finalizara\n");
-		usleep(30*1000);
+		log_info(logger, "Se desconecto la ultima cpu del sistema");
+		log_info(logger, "Esperando 30 segundos por la conexion de otra");
+		log_info(logger, "Si no conecta otra, el sistema finalizara");
+		sleep(30);
+
 		if(list_is_empty(lista_cpu))
 		{
 			log_info(logger, "Sistema terminado correctamente tras la desconexion de todas las CPUs");
-			printf("Terminando SAFA.\n"
-					"Hasta la proxima!\n");
+			log_info(logger, "Terminando SAFA");
+
+			log_destroy(logger);
+			log_destroy(logger_fin);
+
 			exit(1);
 		}
 	}
@@ -360,6 +360,14 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
 		log_info(logger, "GDT %d realizo la operacion bloqueante correctamente", dtb->gdtPID);
 
+		if(!info_dtb->tiempo_respuesta)
+		{
+		info_dtb->tiempo_fin = medir_tiempo();
+		log_debug(logger, "Tiempo fin: %f", info_dtb->tiempo_fin);
+		info_dtb->tiempo_respuesta = calcular_RT(info_dtb->tiempo_ini, info_dtb->tiempo_fin);
+		log_debug(logger, "Tiempo respuesta: %f", info_dtb->tiempo_respuesta);
+		}
+
 		if(dtb->PC == escriptorio->cantLineas)
 		{
 			dtb_finalizar(dtb, lista_bloqueados, pid, dtb->PC);
@@ -386,6 +394,14 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		ArchivoAbierto *archivo = DTB_leer_struct_archivo(paquete->Payload, &tam_pid);
 		list_add(dtb->archivosAbiertos, archivo);
 		log_archivo(logger, archivo, "GDT %d abrio %s", dtb->gdtPID, archivo->path);
+		
+		if(!info_dtb->tiempo_respuesta)
+		{	
+		info_dtb->tiempo_fin = medir_tiempo();
+		log_debug(logger, "Tiempo fin: %f", info_dtb->tiempo_fin);
+		info_dtb->tiempo_respuesta = calcular_RT(info_dtb->tiempo_ini, info_dtb->tiempo_fin);
+		log_debug(logger, "Tiempo respuesta: %f", info_dtb->tiempo_respuesta);
+		}
 
 		if(dtb->PC == escriptorio->cantLineas)
 		{
@@ -497,9 +513,11 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 		memcpy(&dtb->entrada_salidas, paquete->Payload + desplazamiento, INTSIZE);
-		actualizar_sentencias_al_diego(dtb);
+		log_debug(logger, "GDT %d actualizo entradas salidas: %d", dtb->gdtPID, dtb->entrada_salidas);
+
 		sentencias_globales_del_diego++;
 		metricas_actualizar(dtb, pc);
+		
 		DTB_info* info_dtb = info_asociada_a_pid(dtb->gdtPID);			
 		dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, pc, DTB_BLOQUEADO, socketFD);
 		break;
@@ -510,6 +528,9 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
 		
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
+		memcpy(&dtb->entrada_salidas, paquete->Payload + desplazamiento, INTSIZE);
+
+		sentencias_globales_del_diego++;
 		metricas_actualizar(dtb, pc);
 
 		DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
@@ -602,8 +623,7 @@ void manejar_errores_cpu(Paquete *paquete)
 	deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
 	DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
 	Tipo tipo = paquete->header.tipoMensaje;
-	if(tipo == ABORTARA || tipo == ABORTARF || tipo == ABORTARC)
-		metricas_actualizar(dtb, pc);
+	metricas_actualizar(dtb, pc);
 	dtb_finalizar(dtb, lista_ejecutando, pid, pc);	
 	
 	switch(tipo)
@@ -631,6 +651,7 @@ void manejar_errores_cpu(Paquete *paquete)
 
 void metricas_actualizar(DTB *dtb, u_int32_t pc)
 {
+	sem_wait(&sem_metricas);
 	log_debug(logger, "pc nuevo: %d - pc viejo: %d", pc, dtb->PC);
 	u_int32_t sentencias_ejecutadas = pc - dtb->PC;
 	log_debug(logger, "GDT %d ejecuto %d sentencias", dtb->gdtPID, sentencias_ejecutadas);
@@ -638,12 +659,7 @@ void metricas_actualizar(DTB *dtb, u_int32_t pc)
 	actualizar_sentencias_en_nuevos(sentencias_ejecutadas);
 	actualizar_sentencias_en_no_finalizados(sentencias_ejecutadas);
 	sentencias_totales += sentencias_ejecutadas;
-}
-
-void actualizar_sentencias_al_diego(DTB *dtb)
-{
-	DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
-	info_dtb->sentencias_al_diego++;
+	sem_post(&sem_metricas);
 }
 
 void actualizar_sentencias_en_no_finalizados(u_int32_t sentencias_ejecutadas)
@@ -651,10 +667,22 @@ void actualizar_sentencias_en_no_finalizados(u_int32_t sentencias_ejecutadas)
 	void _sumar_sentencias_en_no_finalizados(void *_info_dtb)
 	{
 		DTB_info *info_dtb = (DTB_info *)_info_dtb;
-		info_dtb->sentencias_hasta_finalizar += sentencias_ejecutadas;
+		info_dtb->sentencias_hasta_finalizar += (double) sentencias_ejecutadas;
+	}
+	void log_sentencias_pre(void *_info_dtb3)
+	{
+		DTB_info *info_dtb3 = (DTB_info *)_info_dtb3;
+		log_debug(logger, "SE VA A ACTUALIZAR GDT %d: info_dtb->sentencias_hasta_finalizar: %d", info_dtb3->gdtPID, info_dtb3->sentencias_hasta_finalizar);
+	}
+	void log_sentencias(void *_info_dtb2)
+	{
+		DTB_info *info_dtb2 = (DTB_info *)_info_dtb2;
+		log_debug(logger, "SE ACTUALIZO GDT %d: info_dtb->sentencias_hasta_finalizar: %d", info_dtb2->gdtPID, info_dtb2->sentencias_hasta_finalizar);
 	}
 	t_list *info_no_fin = list_filter(lista_info_dtb, es_no_finalizado);
+	list_iterate(info_no_fin, log_sentencias_pre);
 	list_iterate(info_no_fin, _sumar_sentencias_en_no_finalizados);
+	list_iterate(info_no_fin, log_sentencias);
 	list_destroy(info_no_fin);
 }
 
@@ -663,10 +691,23 @@ void actualizar_sentencias_en_nuevos(u_int32_t sentencias_ejecutadas)
 	void _sumar_sentencias_en_nuevo(void *_info_dtb)
 	{
 		DTB_info *info_dtb = (DTB_info *)_info_dtb;
-		info_dtb->sentencias_en_nuevo += sentencias_ejecutadas;
+		info_dtb->sentencias_en_nuevo += (double) sentencias_ejecutadas;
 	}
+	void log_sentencias_pre(void *_info_dtb3)
+	{
+		DTB_info *info_dtb3 = (DTB_info *)_info_dtb3;
+		log_debug(logger, "SE VA A ACTUALIZAR GDT %d: info_dtb->sentencias_en_nuevo: %d", info_dtb3->gdtPID, info_dtb3->sentencias_en_nuevo);
+	}
+	void log_sentencias(void *_info_dtb2)
+	{
+		DTB_info *info_dtb2 = (DTB_info *)_info_dtb2;
+		log_debug(logger, "SE ACTUALIZO GDT %d: info_dtb->sentencias_en_nuevo: %d", info_dtb2->gdtPID, info_dtb2->sentencias_en_nuevo);
+	}
+
 	t_list *info_nuevos = list_filter(lista_info_dtb, es_nuevo);
+	list_iterate(info_nuevos, log_sentencias_pre);
 	list_iterate(info_nuevos, _sumar_sentencias_en_nuevo);
+	list_iterate(info_nuevos, log_sentencias);
 	list_destroy(info_nuevos);
 }
 
@@ -841,12 +882,11 @@ void event_watcher()
 		usleep(1*1000);
 
 		obtener_valores_archivo_configuracion();
-		printf("Los nuevos valores del archivo SAFA.cfg son: \n");
+		log_info(logger, "Los nuevos valores del archivo SAFA.config son: ");
 		imprimir_archivo_configuracion();
 		list_iterate(lista_cpu, enviar_valores_config);
 		
 		int dif = MULTIPROGRAMACION - multip_vieja;
-		printf("dif es %d\n", dif);
 		if(dif < 0)
 			while(dif)
 			{
@@ -858,7 +898,7 @@ void event_watcher()
 				sem_post(&sem_multiprogramacion);
 		int a = 0;
 		sem_getvalue(&sem_multiprogramacion, &a);
-		printf("sem_multiprogramacion es %d\n", a);
+		log_info(logger, "sem_multiprogramacion es %d", a);
 	}
 }
 
@@ -882,9 +922,6 @@ int main(void)
 	imprimir_archivo_configuracion();
 	inicializar_variables();
 	// Prueba de que carga el valor correcto. Se borra despues
-	int a = 0;
-	sem_getvalue(&sem_multiprogramacion, &a);
-	printf("sem_multiprogramacion es %d\n", a);
 
 	pthread_create(&hilo_consola, NULL, (void *)consola, NULL);
 

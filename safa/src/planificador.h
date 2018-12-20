@@ -25,7 +25,6 @@ typedef struct DTB_info {
 	t_list *recursos_asignados;
 	u_int32_t quantum_faltante;
 	double sentencias_en_nuevo;
-	double sentencias_al_diego;
 	double sentencias_hasta_finalizar;
 } DTB_info;
 
@@ -163,7 +162,6 @@ void recurso_asignar_a_pid(t_recurso *recurso, u_int32_t pid);
 //Metricas
 void gdt_metricas(u_int32_t pid);
 void metricas();
-double calcular_sentencias_promedio_diego();
 double calcular_sentencias_promedio_hasta_finalizar();
 bool ya_finalizo(void *_info_dtb);
 clock_t medir_tiempo ();

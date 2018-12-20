@@ -159,7 +159,7 @@ int ejecutar_algoritmo(Paquete *paquete)
 		//si es RR, manda DTB_EJECUTO
 		//si es VRR y salio por bloqueados, manda QUANTUM_FALTANTE
 		if (!strcmp(algoritmo, "VRR") && flag)
-			return enviar_pid_y_pc(dtb, QUANTUM_FALTANTE);
+			return bloqueate_safa(dtb, QUANTUM_FALTANTE);
 	}
 
 	if (!flag)
@@ -441,7 +441,7 @@ int ejecutar_abrir(char **parameters, DTB *dtb)
 	log_header(logger, pedido_a_dam, "Envie al Diego GDT %d abrir %s", dtb->gdtPID, path);
 
 	dtb->entrada_salidas++;
-	bloqueate_safa(dtb);
+	return bloqueate_safa(dtb, DTB_BLOQUEAR);
 
 	//Cuando se realiza esta operatoria, el CPU desaloja al DTB indicando a S-AFA
 	//que el mismo está esperando que El Diego cargue en FM9 el archivo deseado.
@@ -450,8 +450,6 @@ int ejecutar_abrir(char **parameters, DTB *dtb)
 	//Cuando El Diego termine la operatoria de cargarlo en FM9,
 	//avisará a S-AFA los datos requeridos para obtenerlo de FM9
 	//para que pueda desbloquear el G.DT.
-
-	return 1;
 }
 
 int ejecutar_concentrar(char **parametros, DTB *dtb)
@@ -535,10 +533,8 @@ int ejecutar_wait(char **parametros, DTB *dtb)
 
 	//si no se pudo asignar, mando mensaje de bloqueo
 	if (senial_safa == ROJADIRECTA)
-	{
-		bloqueate_safa(dtb);
-		return 1;
-	}
+		return bloqueate_safa(dtb, DTB_BLOQUEAR);
+
 	return 0;
 }
 
@@ -597,9 +593,7 @@ int ejecutar_flush(char **parametros, DTB *dtb)
 
 	//mensaje a SAFA
 	dtb->entrada_salidas++;
-	bloqueate_safa(dtb);
-
-	return 1;
+	return bloqueate_safa(dtb, DTB_BLOQUEAR);
 }
 
 int ejecutar_close(char **parametros, DTB *dtb)
@@ -699,14 +693,13 @@ int ejecutar_crear(char **parametros, DTB *dtb)
 
 	//mensaje a SAFA
 	dtb->entrada_salidas++;
-	bloqueate_safa(dtb);
+	return bloqueate_safa(dtb, DTB_BLOQUEAR);
 
 	/*
 	Se deberá enviar a El Diego el archivo a crear
 	con la cantidad de líneas necesarias. 
 	El CPU desalojará el programa G.DT y S-AFA lo bloqueará.
 	*/
-	return 1;
 }
 
 int ejecutar_borrar(char **parametros, DTB *dtb)
@@ -730,22 +723,21 @@ int ejecutar_borrar(char **parametros, DTB *dtb)
 
 	//mensaje a SAFA
 	dtb->entrada_salidas++;
-	bloqueate_safa(dtb);
+	return bloqueate_safa(dtb, DTB_BLOQUEAR);
 
-	return 1;
 	/*Se deberá enviar a El Diego el archivo a borrar 
 	y se desalojará el programa G.DT para bloquearlo.
 	*/
 }
 
-void bloqueate_safa(DTB *dtb)
+int bloqueate_safa(DTB *dtb, Tipo tipo_mensaje)
 {
-	if (!strcmp(algoritmo, "VRR"))
+	if (!strcmp(algoritmo, "VRR") && tipo_mensaje == DTB_BLOQUEAR)
 	{
-		return;
+		return 1;
 	}
 	Paquete *bloqueate_safa = malloc(sizeof(Paquete));
-	bloqueate_safa->header.tipoMensaje = DTB_BLOQUEAR;
+	bloqueate_safa->header.tipoMensaje = tipo_mensaje;
 	bloqueate_safa->header.emisor = CPU;
 	int tam_pid_y_pc = 0;
 	void *pid_pc_serializados;
@@ -760,6 +752,8 @@ void bloqueate_safa(DTB *dtb)
 	free(pid_pc_serializados);
 	free(bloqueate_safa->Payload);
 	free(bloqueate_safa);
+
+	return 1;
 }
 
 int enviar_pid_y_pc(DTB *dtb, Tipo tipo_mensaje)

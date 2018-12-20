@@ -31,6 +31,7 @@ pthread_t hilo_event_watcher;
 
 sem_t mutex_handshake_diego;
 sem_t mutex_handshake_cpu;
+sem_t sem_metricas;
 
 // Declaracion de funciones
 void crear_loggers();
@@ -53,7 +54,6 @@ bool verificar_si_murio(DTB *dtb, t_list *lista_origen, u_int32_t pid, u_int32_t
 
 // Metricas
 void metricas_actualizar(DTB *dtb, u_int32_t pc);
-void actualizar_sentencias_al_diego(DTB *dtb);
 void actualizar_sentencias_en_no_finalizados(u_int32_t sentencias_ejecutadas);
 void actualizar_sentencias_en_nuevos(u_int32_t sentencias_ejecutadas);
 bool es_no_finalizado(void *_info_dtb);

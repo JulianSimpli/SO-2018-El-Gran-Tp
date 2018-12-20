@@ -40,7 +40,7 @@ void handshake_dam();
 void handshake_fm9();
 int interpretar(char *linea);
 void bloquea_dummy(Paquete *paquete);
-void bloqueate_safa(DTB *dtb);
+int bloqueate_safa(DTB *dtb, Tipo tipo_mensaje);
 int enviar_pid_y_pc(DTB *dtb, Tipo tipo_mensaje);
 void dtb_liberar(DTB *dtb);
 
