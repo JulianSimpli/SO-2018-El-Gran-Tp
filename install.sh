@@ -2,11 +2,11 @@
 
 USUARIO=utnso
 
-IP_CPU=192.168.1.148
-IP_DIEGO=192.168.1.148
-IP_FM9=192.168.1.148
-IP_MDJ=192.168.1.148
-IP_SAFA=192.168.1.148
+IP_CPU=192.168.3.32
+IP_DIEGO=192.168.3.32
+IP_FM9=192.168.3.20
+IP_MDJ=192.168.3.56
+IP_SAFA=192.168.2.104
 
 DIR=/home/utnso/tp-2018-2c-Nene-Malloc
 DIR_CPU=$DIR/cpu/src/CPU.config
@@ -43,7 +43,7 @@ sed -i "s/IP=\([0-9\.]*\)/IP=$IP_MDJ/" $DIR_MDJ
 
 echo 'FM9.config'
 sed -i "s/IP_FM9=\([0-9\.]*\)/IP_FM9=$IP_FM9/" $DIR_FM9
-
+: '
 echo "A todos les copio las commons y los sh de pruebas"
 
 echo "Copio SAFA"
@@ -95,3 +95,4 @@ echo "Copio CPUs"
 scp -r cpu $USUARIO@$IP_SAFA:$DIR
 scp -r cpu $USUARIO@$IP_DIEGO:$DIR
 scp -r cpu $USUARIO@$IP_FM9:$DIR
+	'
