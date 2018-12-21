@@ -47,7 +47,6 @@ void *hilo_safa()
 	{
 		Paquete *paquete = malloc(sizeof(Paquete));
 		sem_wait(&sem_recibir_paquete);
-		log_info(logger, "Soy el hilo %d, espero paquete de safa", process_get_thread_id());
 		int r = RecibirPaqueteCliente(socket_safa, paquete);
 		if (r <= 0)
 			_exit_with_error(socket_safa, "Se desconecto safa", paquete);
@@ -256,6 +255,7 @@ void handshake_safa()
 	cargar_config_safa(paquete);
 
 	log_info(logger, "Se concreto el handshake con SAFA, empiezo a recibir mensajes");
+	log_info(logger,"Soy la CPU para SAFA, socket: %d",socket_safa);
 }
 
 void handshake_dam()

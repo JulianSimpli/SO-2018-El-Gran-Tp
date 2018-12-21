@@ -155,6 +155,11 @@ void com_list(char **parametros)
 void com_cat(char **parametros)
 {
     char *nuevo_path = parametros[1];
+    if (nuevo_path == NULL)
+    {
+        printf("No existe tal archivo o directorio \n");
+        return;
+    }
     char *directorio_actual = malloc(strlen(current_path) + 1);
     //cd tiene que actualizar el directorio actual
     strcpy(directorio_actual, current_path);
@@ -196,6 +201,11 @@ void com_cd(char **parametros)
     printf("CD\n");
     //actualiza la global current_path
     char *path = parametros[1];
+    if (path == NULL)
+    {
+        printf("Requiere un path valido \n");
+        return;
+    }
     if (path[0] == '/')
     {
         current_path = realloc(current_path, strlen(file_path) + strlen(path) + 1);
@@ -214,6 +224,11 @@ void com_md5(char **parametros)
 {
     printf("MD5\n");
     char *path = parametros[1];
+    if (path == NULL)
+    {
+        printf("Requiere un path valido \n");
+        return;
+    }
 
     char *archivo_md5 = ruta_absoluta(path);
     log_debug(logger, "Ruta absoluta del archivo md5: %s", archivo_md5);
@@ -262,7 +277,6 @@ void com_md5(char **parametros)
 
     config_destroy(metadata_md5);
     free(buffer);
-    printf("Este es el MD5: %s", digest);
 }
 
 void com_exit(char *linea)

@@ -25,9 +25,9 @@ void *interpretar_consola(void *args)
 	char *linea;
 	while (1)
 	{
-		char *PS1 = malloc(strlen(current_path) + 2);
+		char *PS1 = malloc(strlen(current_path) + 3);
 		strcpy(PS1, current_path);
-		linea = readline(strcat(PS1, "$"));
+		linea = readline(strcat(PS1, "$ "));
 		if (linea)
 			add_history(linea);
 		interpretar(linea);
@@ -356,7 +356,8 @@ void crear_archivo(Paquete *paquete)
 	struct dirent *ent;
 	int offset = 0;
 	char *ruta = string_deserializar(paquete->Payload, &offset);
-	char *route = ruta;
+	char *route = malloc(strlen(ruta)+1);
+	strcpy(route,ruta);
 	int bytes_a_crear = 0;
 	memcpy(&bytes_a_crear, paquete->Payload + offset, sizeof(u_int32_t));
 
@@ -370,7 +371,7 @@ void crear_archivo(Paquete *paquete)
 	if (accesos == 0)
 	{
 		log_debug(logger, "La ruta es relativa y le tengo que agregar /");
-		route = malloc(strlen(ruta) + 2);
+		route = realloc(route,strlen(ruta) + 2);
 		route[0] = '/';
 		strcat(route, ruta);
 	}
@@ -600,8 +601,6 @@ void guardar_datos(Paquete *paquete)
 		free(ubicacion);
 		free(datos_a_guardar);
 	}
-
-	log_debug(logger, "Me faltan escribir: %d bytes", buffer_size);
 
 	if (buffer_size > 0)
 	{
