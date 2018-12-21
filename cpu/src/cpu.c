@@ -30,7 +30,7 @@ int main(int argc, char **argv)
 	log_debug(logger, "Concrete handshake con dam");
 	handshake_fm9();
 	sem_init(&sem_recibir_paquete, 0, 1);
-	sem_init(&sem_senial, 0, 1);
+	sem_init(&sem_senial, 0, 0);
 	pthread_t p_thread_one;
 	pthread_create(&p_thread_one, NULL, hilo_safa, NULL);
 	pthread_t p_thread_two;
