@@ -9,6 +9,7 @@ int socket_fm9;
 int retardo;
 sem_t sem_recibir_paquete;
 sem_t sem_senial;
+sem_t sem_dummy;
 int transfer_size = 0;
 int senial_safa;
 
@@ -31,6 +32,7 @@ int main(int argc, char **argv)
 	handshake_fm9();
 	sem_init(&sem_recibir_paquete, 0, 1);
 	sem_init(&sem_senial, 0, 0);
+	sem_init(&sem_dummy, 0, 1);
 	pthread_t p_thread_one;
 	pthread_create(&p_thread_one, NULL, hilo_safa, NULL);
 	pthread_t p_thread_two;
@@ -76,13 +78,13 @@ int ejecutar(char *linea, DTB *dtb)
 			existe = 1;
 			log_info(logger, primitivas[i].doc);
 			//llama a la funcion que tiene guardado esa primitiva en la estructura
-			usleep(retardo*1000);
+			usleep(retardo * 1000);
 			flag = primitivas[i].func(parameters, dtb);
 			break;
 		}
 	}
 
-	for(i = 0; parameters[i] != NULL; i++)
+	for (i = 0; parameters[i] != NULL; i++)
 		free(parameters[i]);
 	free(parameters);
 	log_debug(logger, "libere parametros parseados");
@@ -121,14 +123,17 @@ int ejecutar_algoritmo(Paquete *paquete)
 				break;
 			}
 			if (cantidad_lineas == dtb->PC)
-				return enviar_pid_y_pc(dtb, DTB_FINALIZAR); 
+				return enviar_pid_y_pc(dtb, DTB_FINALIZAR);
 		}
 	}
 	else
 	{
 		int quantum_local = quantum;
 		if (paquete->header.tipoMensaje == ESDTBQUANTUM)
+		{
 			memcpy(&quantum_local, paquete->Payload + paquete->header.tamPayload - INTSIZE, INTSIZE);
+			log_debug(logger, "Le quedan %d para terminar su quantum", quantum_local);
+		}
 		int i;
 
 		for (i = 0; i < quantum_local; i++)
@@ -152,12 +157,12 @@ int ejecutar_algoritmo(Paquete *paquete)
 			if (cantidad_lineas == dtb->PC)
 				return enviar_pid_y_pc(dtb, DTB_FINALIZAR);
 		}
-		if(i == quantum_local)
+		if (i == quantum_local)
 			log_debug(logger, "DTB %d termino su quantum de %d", dtb->gdtPID, quantum_local);
 		//armar el paquete para mandar a safa, que dependiendo de si es RR o VRR, envía quantum restante
 		//si es RR, manda DTB_EJECUTO
 		//si es VRR y salio por bloqueados, manda QUANTUM_FALTANTE
-		if (!strcmp(algoritmo, "VRR") && flag)
+		if ((!strcmp(algoritmo, "VRR") || !strcmp(algoritmo, "IOBF")) && flag)
 			return bloqueate_safa(dtb, QUANTUM_FALTANTE);
 	}
 
@@ -174,7 +179,7 @@ char *pedir_primitiva(DTB *dtb)
 	ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
 	Posicion *posicion = generar_posicion(dtb, escriptorio, dtb->PC - 1);
 	log_posicion(logger, posicion, "Genero direccion logica para pedir primitiva a FM9");
-	
+
 	Paquete primitiva_pedida;
 	int tam_posicion = 0;
 	primitiva_pedida.Payload = serializar_posicion(posicion, &tam_posicion);
@@ -205,8 +210,11 @@ int interpretar_safa(Paquete *paquete)
 	switch (paquete->header.tipoMensaje)
 	{
 	case ESDTBDUMMY:
+		cargar_header(paquete->header.tamPayload, paquete->header.tipoMensaje, CPU);
+		sem_wait(&sem_dummy);
 		EnviarPaquete(socket_dam, paquete); //envia el dtb al diego para que este haga el pedido correspondiente a MDJ
 		bloquea_dummy(paquete);
+		sem_post(&sem_dummy);
 		break;
 	case ESDTB:
 		ejecutar_algoritmo(paquete);
@@ -255,7 +263,6 @@ void handshake_safa()
 	cargar_config_safa(paquete);
 
 	log_info(logger, "Se concreto el handshake con SAFA, empiezo a recibir mensajes");
-	log_info(logger,"Soy la CPU para SAFA, socket: %d",socket_safa);
 }
 
 void handshake_dam()
@@ -323,11 +330,13 @@ void inicializar(char **argv)
 	log_info(logger, "Log cargado exitosamente");
 	leer_config(argv[1]);
 	log_info(logger, "Config cargada exitosamente");
+	config_reload();
 }
 
 void config_reload()
 {
-	retardo = config_get_int_value(config, "RETARDO") / 1000;
+	retardo = config_get_int_value(config, "RETARDO");
+	log_debug(logger, "Retardo es: %d", retardo);
 }
 
 int inicializar_socket()
@@ -341,7 +350,7 @@ int connect_to_server(char *ip, char *port)
 	struct addrinfo *server_info;
 
 	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC;     // Permite que la maquina se encargue de verificar si usamos IPv4 o IPv6
+	hints.ai_family = AF_UNSPEC;	 // Permite que la maquina se encargue de verificar si usamos IPv4 o IPv6
 	hints.ai_socktype = SOCK_STREAM; // Indica que usaremos el protocolo TCP
 
 	getaddrinfo(ip, port, &hints, &server_info); // Carga en server_info los datos de la conexion
@@ -454,7 +463,8 @@ int ejecutar_abrir(char **parameters, DTB *dtb)
 
 int ejecutar_concentrar(char **parametros, DTB *dtb)
 {
-	usleep(retardo*1000);
+	log_debug(logger, "Concentrar:  %d", retardo);
+	usleep(retardo * 1000);
 	return 0;
 }
 
@@ -469,7 +479,7 @@ int ejecutar_asignar(char **parametros, DTB *dtb)
 
 	if (archivo_encontrado == NULL)
 		return enviar_pid_y_pc(dtb, ABORTARA);
-		//Error 20001: El archivo no se encuentra abierto
+	//Error 20001: El archivo no se encuentra abierto
 
 	Posicion *posicion = generar_posicion(dtb, archivo_encontrado, linea - 1);
 	log_posicion(logger, posicion, "Genero Direccion Logica para asignar");
@@ -517,7 +527,7 @@ void enviar_pedido_recurso(char *recurso, int pid, int pc, Tipo senial)
 	pedido_recurso.header = cargar_header(len_recurso + INTSIZE * 2, senial, CPU);
 
 	EnviarPaquete(socket_safa, &pedido_recurso);
-	log_header(logger, &pedido_recurso, "El pid %d tiro senial al recurso %s", pid, senial, recurso);
+	log_header(logger, &pedido_recurso, "El pid %d tiro senial %s al recurso %s", pid, devolver_tipo(senial), recurso);
 	free(recurso_serializado);
 	free(pedido_recurso.Payload);
 }
@@ -543,6 +553,7 @@ int ejecutar_signal(char **parametros, DTB *dtb)
 	char *recurso = parametros[1];
 
 	enviar_pedido_recurso(recurso, dtb->gdtPID, dtb->PC, SIGNAL);
+	sem_wait(&sem_senial);
 
 	log_debug(logger, "Queda bloqueado esperando que lo habilite el otro hilo");
 	return 0;
@@ -732,7 +743,7 @@ int ejecutar_borrar(char **parametros, DTB *dtb)
 
 int bloqueate_safa(DTB *dtb, Tipo tipo_mensaje)
 {
-	if (!strcmp(algoritmo, "VRR") && tipo_mensaje == DTB_BLOQUEAR)
+	if ((!strcmp(algoritmo, "VRR") || !strcmp(algoritmo, "IOBF")) && tipo_mensaje == DTB_BLOQUEAR)
 	{
 		return 1;
 	}
@@ -758,17 +769,17 @@ int bloqueate_safa(DTB *dtb, Tipo tipo_mensaje)
 
 int enviar_pid_y_pc(DTB *dtb, Tipo tipo_mensaje)
 {
-		Paquete *paquete = malloc(sizeof(Paquete));
-		int tam_pid_y_pc = 0;
-		paquete->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
-		paquete->header = cargar_header(tam_pid_y_pc, tipo_mensaje, CPU);
-		EnviarPaquete(socket_safa, paquete);
-		log_header(logger, paquete, "Mando PID:%d y PC:%d a Safa", dtb->gdtPID, dtb->PC);
-		free(paquete->Payload);
-		free(paquete);
-		dtb_liberar(dtb);
+	Paquete *paquete = malloc(sizeof(Paquete));
+	int tam_pid_y_pc = 0;
+	paquete->Payload = serializar_pid_y_pc(dtb->gdtPID, dtb->PC, &tam_pid_y_pc);
+	paquete->header = cargar_header(tam_pid_y_pc, tipo_mensaje, CPU);
+	EnviarPaquete(socket_safa, paquete);
+	log_header(logger, paquete, "Mando PID:%d y PC:%d a Safa", dtb->gdtPID, dtb->PC);
+	free(paquete->Payload);
+	free(paquete);
+	dtb_liberar(dtb);
 
-		return 1;
+	return 1;
 }
 
 void dtb_liberar(DTB *dtb)

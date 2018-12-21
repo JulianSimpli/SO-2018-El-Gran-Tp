@@ -176,6 +176,7 @@ void interpretar_paquete(Paquete *paquete)
 			log_debug(logger, "La ruta es relativa y le tengo que agregar /");
 			ruta = malloc(strlen(path) + 2);
 			ruta[0] = '/';
+			//TODO: ver si esta bien
 			strcat(ruta, path);
 		}
 
@@ -283,14 +284,14 @@ int validar_archivo(char *search_file, char *current_path)
 
 	char **directorios = string_split(search_file, "/");
 	char *route = directorios[0];
-	char *ruta = route;
+	// char *ruta = route;
 
-	if (search_file[0] != '/')
-	{
-		ruta = malloc(strlen(route) + 2);
-		ruta[0] = '/';
-		strcat(ruta, route);
-	}
+	// if (search_file[0] != '/')
+	// {
+	// 	ruta = malloc(strlen(route) + 2);
+	// 	ruta[0] = '/';
+	// 	strcat(ruta, route);
+	// }
 
 	dir = opendir(current_path);
 	if (dir == NULL)
@@ -333,6 +334,14 @@ int validar_archivo(char *search_file, char *current_path)
 	}
 	closedir(dir);
 	log_info(logger, "No encontré el archivo %s", search_file);
+	int j = 0;
+	while (directorios[j])
+	{
+		free(directorios[j]);
+		j++;
+	}
+	free(directorios);
+
 	return 0;
 }
 
@@ -421,7 +430,7 @@ void crear_archivo(Paquete *paquete)
 	nuevo_archivo.tamanio = bytes_a_crear;
 
 	//Crea el archivo metadata con la informacion de donde estan los bloques
-	log_debug(logger, "Va guardar la metadata del archivo %s", nuevo_archivo.nombre);
+	log_debug(logger, "Va a guardar la metadata del archivo %s", nuevo_archivo.nombre);
 	int resultado = guardar_metadata(&nuevo_archivo);
 
 	if (resultado != 0)
@@ -435,6 +444,15 @@ void crear_archivo(Paquete *paquete)
 	EnviarPaquete(socket_dam, &respuesta);
 	free(nuevo_archivo.nombre);
 	free(ruta);
+	free(route);
+	//funcion para liberar array directorios
+	int j = 0;
+	while (directorios[j] != NULL)
+	{
+		free(directorios[j]);
+		j++;
+	}
+	free(directorios);
 	free(directorio_actual);
 	list_destroy(nuevo_archivo.bloques);
 }
@@ -521,7 +539,8 @@ void obtener_datos(Paquete *paquete)
 
 	EnviarPaquete(socket_dam, &respuesta);
 	config_destroy(metadata);
-	free(respuesta.Payload);
+	free(serializado);
+	//funcion para liberar bloques ocupados
 	free(buffer);
 	free(ruta);
 	free(path);
