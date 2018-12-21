@@ -356,8 +356,8 @@ void crear_archivo(Paquete *paquete)
 	struct dirent *ent;
 	int offset = 0;
 	char *ruta = string_deserializar(paquete->Payload, &offset);
-	char *route = malloc(strlen(ruta)+1);
-	strcpy(route,ruta);
+	char *route = malloc(strlen(ruta) + 1);
+	strcpy(route, ruta);
 	int bytes_a_crear = 0;
 	memcpy(&bytes_a_crear, paquete->Payload + offset, sizeof(u_int32_t));
 
@@ -371,9 +371,9 @@ void crear_archivo(Paquete *paquete)
 	if (accesos == 0)
 	{
 		log_debug(logger, "La ruta es relativa y le tengo que agregar /");
-		route = realloc(route,strlen(ruta) + 2);
+		route = realloc(route, strlen(ruta) + 2);
 		route[0] = '/';
-		strcat(route, ruta);
+		memcpy(route + 1, ruta, strlen(ruta) + 1);
 	}
 
 	log_debug(logger, "%s", route);
