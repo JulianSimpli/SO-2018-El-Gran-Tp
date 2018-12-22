@@ -186,6 +186,7 @@ void enviar_paquete(int socket, Paquete *paquete)
 			_exit_with_error(socket, "No pudo enviar el paquete", paquete);
 
 		desplazamiento += enviado;
+		//log_debug(logger, "Envie %d/%d", enviar, total);
 	}
 	log_debug(logger, "Envie %i bytes", total);
 }
