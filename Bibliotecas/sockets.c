@@ -302,6 +302,8 @@ void recibir_partes(int socket, void *buffer, int cant_a_recibir)
 			_exit_with_error(socket, "No pudo recibir el paquete", NULL);
 
 		total_recibido += recibido;
+
+		log_info(logger, "Recibi %d. Voy %d/%d", len, total_recibido, cant_a_recibir);
 	}
 
 }

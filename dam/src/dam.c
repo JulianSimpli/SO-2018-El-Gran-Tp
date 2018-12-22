@@ -264,11 +264,11 @@ int pedir_validar(char *path)
 	validar.Payload = malloc(desplazamiento);
 	memcpy(validar.Payload, serializado, desplazamiento);
 
+	sem_wait(&sem_mdj);
 	enviar_paquete(socket_mdj, &validar);
 	free(serializado);
 
 	Paquete respuesta;
-	sem_wait(&sem_mdj);
 	recibir_paquete(socket_mdj, &respuesta);
 	log_debug(logger, "Recibi el tipo de mensaje %d", respuesta.header.tipoMensaje);
 	sem_post(&sem_mdj);
@@ -467,9 +467,8 @@ void es_dtb_dummy(Paquete *paquete)
 		enviar_error(DUMMY_FAIL_NO_EXISTE, dummy->gdtPID);
 		return;
 	}
-
-	enviar_obtener_datos(escriptorio->path, validar);
 	sem_wait(&sem_mdj);
+	enviar_obtener_datos(escriptorio->path, validar);
 
 	Paquete file_mdj;
 	recibir_paquete(socket_mdj, &file_mdj);
@@ -510,9 +509,9 @@ void abrir(Paquete *paquete)
 		return;
 	}
 
+	sem_wait(&sem_mdj);
 	enviar_obtener_datos(path, validar);
 	log_debug(logger, "Le envie el pedido a mdj");
-	sem_wait(&sem_mdj);
 
 	Paquete file_mdj;
 	recibir_paquete(socket_mdj, &file_mdj);
@@ -564,10 +563,10 @@ void flush(Paquete *paquete)
 		return;
 	}
 
+	sem_wait(&sem_mdj);
 	enviar_guardar_datos(&respuesta_fm9);
 
 	Paquete respuesta_mdj;
-	sem_wait(&sem_mdj);
 	recibir_paquete(socket_mdj, &respuesta_mdj);
 	sem_post(&sem_mdj);
 
@@ -616,10 +615,10 @@ void crear_archivo(Paquete *paquete)
 	memcpy(pedido.Payload, paquete->Payload + INTSIZE, len);
 	memcpy(pedido.Payload + len, paquete->Payload + INTSIZE + len, INTSIZE);
 
+	sem_wait(&sem_mdj);
 	enviar_paquete(socket_mdj, &pedido);
 
 	Paquete respuesta_mdj;
-	sem_wait(&sem_mdj);
 	recibir_paquete(socket_mdj, &respuesta_mdj);
 	sem_post(&sem_mdj);
 
@@ -653,10 +652,10 @@ void borrar_archivo(Paquete *paquete)
 	//Reutilizo el paquete payload pero con el offset del pid
 	memcpy(pedido.Payload, paquete->Payload + INTSIZE, len);
 
+	sem_wait(&sem_mdj);
 	enviar_paquete(socket_mdj, &pedido);
 
 	Paquete respuesta_mdj;
-	sem_wait(&sem_mdj);
 	recibir_paquete(socket_mdj, &respuesta_mdj);
 	sem_post(&sem_mdj);
 

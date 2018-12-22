@@ -23,6 +23,7 @@ t_config *config;
 int tamanio_linea;
 sem_t sem_mdj;
 sem_t sem_fm9;
+sem_t sem_safa;
 
 // Comunes de carga
 void leer_config();
