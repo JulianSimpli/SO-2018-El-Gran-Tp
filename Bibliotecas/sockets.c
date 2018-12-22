@@ -214,6 +214,7 @@ int RecibirDatos(void* paquete, int socketFD, uint32_t cantARecibir) {
 	do {
 		recibido = recv(socketFD, datos + totalRecibido, cantARecibir - totalRecibido, 0);
 		totalRecibido += recibido;
+		log_info(logger, "--------------------------------------------------------------------------");
 		log_debug(logger, "Recibi %d/%d", recibido, totalRecibido);
 	} while (totalRecibido != cantARecibir && recibido > 0);
 	memcpy(paquete, datos, cantARecibir);
