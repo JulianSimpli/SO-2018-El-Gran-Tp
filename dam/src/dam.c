@@ -179,9 +179,10 @@ void *interpretar_mensajes_de_safa(void *args)
 
 		paquete.header.emisor = ELDIEGO;
 
-		log_debug(logger, "Envio finalizar a fm9");
-		enviar_paquete(socket_fm9, &paquete);
 		sem_wait(&sem_fm9);
+		enviar_paquete(socket_fm9, &paquete);
+		log_debug(logger, "Envio finalizar a fm9");
+	
 		recibir_paquete(socket_fm9, &respuesta);
 		sem_post(&sem_fm9);
 
@@ -192,7 +193,9 @@ void *interpretar_mensajes_de_safa(void *args)
 		log_debug(logger, "Se pudo liberar la memoria");
 		respuesta.header.emisor = ELDIEGO;
 		respuesta.header.tipoMensaje = DTB_FINALIZAR;
+		sem_wait(&sem_safa);
 		enviar_paquete(socket_safa, &respuesta);
+		sem_post(&sem_safa);
 		log_debug(logger, "Envie finalizar a safa");
 
 		free(paquete.Payload);
@@ -214,6 +217,7 @@ void inicializar_semaforos()
 {
 	sem_init(&sem_mdj, 0, 1);
 	sem_init(&sem_fm9, 0, 1);
+	sem_init(&sem_safa, 0, 1);
 }
 
 void inicializar(char **argv)
@@ -307,10 +311,9 @@ int cargar_a_memoria(u_int32_t pid, char *path, char *file, Paquete *respuesta)
 	desplazamiento += tam_serial_file;
 
 	cargar.header = cargar_header(desplazamiento, ABRIR, ELDIEGO);
+	sem_wait(&sem_fm9);
 	log_debug(logger, "Total a enviar: %d", desplazamiento);
 	enviar_paquete(socket_fm9, &cargar);
-	
-	sem_wait(&sem_fm9);
 	log_debug(logger, "Pedido de carga a memoria a FM9 enviado");
 	free(serial_path);
 	free(serial_file);
@@ -329,7 +332,9 @@ void enviar_error(Tipo tipo, int pid)
 	error.Payload = malloc(INTSIZE);
 	memcpy(error.Payload, &pid, INTSIZE);
 	error.header = cargar_header(INTSIZE, tipo, ELDIEGO);
+	sem_wait(&sem_safa);
 	enviar_paquete(socket_safa, &error);
+	sem_post(&sem_safa);
 	log_error(logger, "El proceso %d fallo por %d", pid, tipo);
 	//free(error.Payload);
 }
@@ -340,7 +345,9 @@ void enviar_success(Tipo tipo, int pid)
 	respuesta.header = cargar_header(INTSIZE, tipo, ELDIEGO);
 	respuesta.Payload = malloc(INTSIZE);
 	memcpy(respuesta.Payload, &pid, INTSIZE);
+	sem_wait(&sem_safa);
 	enviar_paquete(socket_safa, &respuesta);
+	sem_post(&sem_safa);
 	free(respuesta.Payload);
 }
 
@@ -489,7 +496,9 @@ void es_dtb_dummy(Paquete *paquete)
 	}
 
 	respuesta.header = cargar_header(respuesta.header.tamPayload, DUMMY_SUCCESS, ELDIEGO);
+	sem_wait(&sem_safa);
 	enviar_paquete(socket_safa, &respuesta);
+	sem_post(&sem_safa);
 	free(respuesta.Payload);
 }
 
@@ -531,7 +540,9 @@ void abrir(Paquete *paquete)
 	}
 
 	respuesta.header = cargar_header(respuesta.header.tamPayload, ARCHIVO_ABIERTO, ELDIEGO);
+	sem_wait(&sem_safa);
 	enviar_paquete(socket_safa, &respuesta);
+	sem_post(&sem_safa);
 	free(respuesta.Payload);
 	free(file_mdj.Payload);
 }
@@ -546,10 +557,10 @@ void flush(Paquete *paquete)
 
 	log_debug(logger, "Envio a FM9");
 	paquete->header = cargar_header(paquete->header.tamPayload, FLUSH, ELDIEGO);
-
-	enviar_paquete(socket_fm9, paquete);
-	
 	sem_wait(&sem_fm9);
+	enviar_paquete(socket_fm9, paquete);
+	log_debug(logger, "Pedido de flush enviado a FM9");
+	
 	Paquete respuesta_fm9;
 	recibir_paquete(socket_fm9, &respuesta_fm9);
 	sem_post(&sem_fm9);
