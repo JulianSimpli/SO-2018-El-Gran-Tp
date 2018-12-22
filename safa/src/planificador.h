@@ -36,7 +36,7 @@ typedef struct {
 
 typedef struct {
 	char *id;
-	u_int32_t semaforo;
+	int semaforo;
 	t_list *pid_bloqueados;
 }__attribute__((packed)) t_recurso;
 
@@ -44,6 +44,10 @@ typedef struct {
 	int instancias;
 	t_recurso *recurso;
 } __attribute__((packed)) t_recurso_asignado;
+
+typedef struct {
+	int pid;
+} Pid;
 
 t_list *lista_cpu;
 
@@ -76,6 +80,8 @@ sem_t sem_ejecutar;
 sem_t sem_multiprogramacion;
 sem_t sem_listos;
 sem_t sem_dummy;
+sem_t sem_dam;
+sem_t actualizar;
 
 //Funciones
 //Hilo planificador largo plazo
@@ -176,6 +182,8 @@ void info_liberar_completo(void *info_dtb);
 void advertencia();
 void liberar_memoria();
 void liberar_parte_de_memoria(int procesos_a_eliminar);
+void restar_sentencias_globales(void *_dtb);
+void restar_trespuesta(void *_dtb);
 
 // Logs
 void log_info_dtb(t_log *logger, DTB_info *dtb_info, const char* _contexto, ...);

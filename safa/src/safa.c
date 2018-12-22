@@ -44,6 +44,8 @@ void inicializar_variables() {
 	sem_init(&sem_listos, 0, 0);
 	sem_init(&sem_metricas, 0, 1);
 	sem_init(&sem_dummy, 0, 1);
+	sem_init(&sem_dam, 0, 1);
+	sem_init(&actualizar, 0, 1);
 
 	int a = 0;
 	sem_getvalue(&sem_multiprogramacion, &a);
@@ -339,6 +341,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		log_error(logger, "Fallo la carga en memoria del GDT %d", dtb->gdtPID);
 		bloquear_dummy(lista_bloqueados, dtb->gdtPID);
 		dtb_actualizar(dtb, lista_nuevos, lista_finalizados, dtb->PC, DTB_FINALIZADO, 0);
+		sem_post(&sem_listos);
 		break;
 	}
 	case DUMMY_FAIL_NO_EXISTE:
@@ -350,6 +353,7 @@ void manejar_paquetes_diego(Paquete *paquete, int socketFD)
 		log_error(logger, "No existe el escriptorio %s del GDT %d", escriptorio->path, dtb->gdtPID);
 		bloquear_dummy(lista_bloqueados, dtb->gdtPID);
 		dtb_actualizar(dtb, lista_nuevos, lista_finalizados, dtb->PC, DTB_FINALIZADO, 0);
+		sem_post(&sem_listos);
 		break;
 	}
 	case DTB_SUCCESS: //Incluye flush, crear, borrar.
@@ -441,6 +445,14 @@ void manejar_errores_diego(Paquete *paquete)
 	DTB *dtb = dtb_encuentra(lista_bloqueados, pid, GDT);
 	dtb_finalizar(dtb, lista_bloqueados, pid, dtb->PC);
 	sem_post(&sem_multiprogramacion);
+	DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
+	if(!info_dtb->tiempo_respuesta)
+	{	
+		info_dtb->tiempo_fin = medir_tiempo();
+		info_dtb->tiempo_respuesta = calcular_RT(info_dtb->tiempo_ini, info_dtb->tiempo_fin);
+		log_debug(logger, "Tiempo respuesta: %.2f", info_dtb->tiempo_respuesta);
+	}
+
 	switch(paquete->header.tipoMensaje)
 	{
 	case PATH_INEXISTENTE:
@@ -519,7 +531,6 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		sentencias_globales_del_diego++;
 		metricas_actualizar(dtb, pc);
 		
-		DTB_info* info_dtb = info_asociada_a_pid(dtb->gdtPID);			
 		dtb_actualizar(dtb, lista_ejecutando, lista_bloqueados, pc, DTB_BLOQUEADO, socketFD);
 		break;
 	}
@@ -560,7 +571,6 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		deserializar_pid_y_pc(paquete->Payload, &pid, &pc, &desplazamiento);
 	
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
-		ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
 		metricas_actualizar(dtb, pc);
 		dtb_finalizar(dtb, lista_ejecutando, pid, pc);
 		break;
@@ -568,8 +578,8 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 	case WAIT:
 	{
 		t_recurso *recurso = recurso_recibir(paquete->Payload, &pid, &pc, WAIT);
+		log_recurso(logger, recurso, "Llego wait de recurso:");
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
-		metricas_actualizar(dtb, pc);
 		recurso_wait(recurso, dtb->gdtPID, pc, socketFD);
 		verificar_si_murio(dtb, lista_ejecutando, pid, pc);
 		break;
@@ -591,7 +601,6 @@ void manejar_paquetes_CPU(Paquete *paquete, int socketFD)
 		ArchivoAbierto *cerrado = DTB_leer_struct_archivo(paquete->Payload, &desplazamiento);
 
 		DTB *dtb = dtb_encuentra(lista_ejecutando, pid, GDT);
-		DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
 		log_archivo(logger, cerrado, "GDT %d cerro:", dtb->gdtPID);
 
 		void actualizar_segmentos(void *_archivo)
@@ -732,17 +741,23 @@ void avisar_desalojo_a_cpu(int socket)
 	free(paquete);
 }
 
-void recurso_wait(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket)
+void recurso_wait(t_recurso *recurso, int pid, int pc, int socket)
 {
 	recurso->semaforo--;
 	if (recurso->semaforo < 0)
 	{
-		list_add(recurso->pid_bloqueados, &pid);
+		log_debug(logger, "Tengo %d recursos bloqueados", list_size(recurso->pid_bloqueados));
+		Pid *pid_bloquear = malloc(sizeof(Pid));
+		pid_bloquear->pid = pid;
+		list_add(recurso->pid_bloqueados, pid_bloquear);
+		log_debug(logger, "Tengo %d recursos bloqueados", list_size(recurso->pid_bloqueados));	
+		log_recurso(logger, recurso, "Hice el wait de recurso:");
 		avisar_desalojo_a_cpu(socket);
 		log_debug(logger, "El pid %d quedo bloqueado esperando el recurso %s", pid, recurso->id);
 		return;
 	}
 	
+	log_recurso(logger, recurso, "Hice el wait de recurso:");
 	recurso_asignar_a_pid(recurso, pid);
 	seguir_ejecutando(socket);
 }
@@ -750,6 +765,7 @@ void recurso_wait(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket)
 void recurso_signal(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket)
 {
 	recurso->semaforo++;
+	log_recurso(logger, recurso, "Le hice signal al recurso:");
 	if (recurso->semaforo <= 0)
 		dtb_signal(recurso);
 

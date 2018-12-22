@@ -63,7 +63,7 @@ bool es_nuevo(void * _info_dtb);
 //Recursos
 t_recurso *recurso_recibir(void *payload, int *pid, int *pc, Tipo senial);
 void recurso_signal(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket);
-void recurso_wait(t_recurso *recurso, u_int32_t pid, u_int32_t pc, int socket);
+void recurso_wait(t_recurso *recurso, int pid, int pc, int socket);
 void avisar_desalojo_a_cpu(int socket);
 void seguir_ejecutando(int socket);
 

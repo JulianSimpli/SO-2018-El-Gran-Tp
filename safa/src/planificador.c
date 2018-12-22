@@ -1,7 +1,8 @@
 #include "planificador.h"
 #include <commons/collections/list.h>
 
-u_int32_t numero_pid = 0;
+u_int32_t numero_pid = 0,
+procesos_actuales = 0;
 
 double procesos_finalizados = 0,
 sentencias_globales_del_diego = 0,
@@ -233,6 +234,7 @@ DTB *dtb_crear(u_int32_t pid, char *path, int flag_inicializacion)
 		info_dtb_crear(dtb_nuevo->gdtPID);
 		list_add(lista_nuevos, dtb_nuevo);
 		log_info(logger, "GDT %d creado correctamente", dtb_nuevo->gdtPID);
+		procesos_actuales++;
 		break;
 	}
 	default:
@@ -263,6 +265,7 @@ DTB_info *info_dtb_crear(u_int32_t pid)
 
 DTB *dtb_actualizar(DTB *dtb, t_list *source, t_list *dest, u_int32_t pc, Estado estado, int socket)
 {
+	sem_wait(&actualizar);
 	if (dtb_encuentra(source, dtb->gdtPID, dtb->flagInicializacion) != NULL)
 		dtb_remueve(source, dtb->gdtPID, dtb->flagInicializacion);
 
@@ -305,6 +308,7 @@ DTB *dtb_actualizar(DTB *dtb, t_list *source, t_list *dest, u_int32_t pc, Estado
 	else
 		log_info(logger, "Dummy %d->%s", dtb->gdtPID, Estados[estado]);
 
+	sem_post(&actualizar);
 	return dtb;
 }
 
@@ -409,7 +413,7 @@ DTB *dtb_buscar_en_todos_lados(u_int32_t pid, DTB_info **info_dtb, t_list **list
 	}
 
 	if (dtb_encontrado == NULL && pid <= numero_pid)
-		log_info(logger, "El GDT %d ya fue finalizado y removido de memoria.\nVer archivo DTB_finalizados.log, donde encontrara la informacion de todos los dtb finalizados",
+		log_info(logger, "El GDT %d ya fue finalizado y removido de memoria.\nVer archivo DTB_finalizados.log",
 			   pid);
 	else if (dtb_encontrado == NULL)
 		log_info(logger, "Nunca ingreso al sistema un GDT con PID %d", pid);
@@ -420,7 +424,7 @@ DTB *dtb_buscar_en_todos_lados(u_int32_t pid, DTB_info **info_dtb, t_list **list
 //Funciones de Consola
 void ejecutar(char *path)
 {
-	DTB *dtb_nuevo = dtb_crear(0, path, GDT);
+	dtb_crear(0, path, GDT);
 	sem_post(&sem_ejecutar);
 }
 
@@ -467,7 +471,6 @@ void contar_dummys_y_gdt(t_list *lista)
 void dtb_imprimir_basico(void *_dtb)
 {
 	DTB *dtb = (DTB *)_dtb;
-	DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
 	switch (dtb->flagInicializacion)
 	{
 	case DUMMY:
@@ -662,8 +665,8 @@ void manejar_finalizar_bloqueado(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_
 		log_debug(logger, "El GDT %d esta bloqueado esperando por el recurso %s", pid, recurso->id);
 		bool coincide_pid(void *_pid_recurso)
 		{
-			int *pid_recurso = (int *)_pid_recurso;
-			return *pid_recurso == pid;
+			Pid *pidb = (Pid *)_pid_recurso;
+			return pidb->pid == pid;
 		}
 		list_remove_by_condition(recurso->pid_bloqueados, coincide_pid);
 
@@ -681,8 +684,8 @@ t_recurso *recurso_bloqueando_pid(u_int32_t pid)
 	{
 		bool coincide_pid(void *_pid_recurso)
 		{
-			int *pid_recurso = (int *)_pid_recurso;
-			return *pid_recurso == pid;
+			Pid *pidb = (Pid *)_pid_recurso;
+			return pidb->pid == pid;
 		}
 		t_recurso *recurso = (t_recurso *)_recurso;
 		return list_any_satisfy(recurso->pid_bloqueados, coincide_pid);
@@ -751,17 +754,19 @@ void enviar_finalizar_dam(u_int32_t pid)
 	Paquete *paquete = malloc(sizeof(Paquete));
 	DTB_info *info_dtb;
 	t_list *actual;
-	int d = 0;
 	DTB *dtb = dtb_buscar_en_todos_lados(pid, &info_dtb, &actual);
 	ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
 	Posicion *posicion = generar_posicion(dtb, escriptorio, 0);
 	log_posicion(logger, posicion, "Posicion a finalizar");
+	
 	int tam_pos = 0;
 	void *posicion_serializada = serializar_posicion(posicion, &tam_pos);
 	paquete->header = cargar_header(tam_pos, FINALIZAR, SAFA);
 	paquete->Payload = malloc(paquete->header.tamPayload);
 	memcpy(paquete->Payload, posicion_serializada, tam_pos);
+	sem_wait(&sem_dam);
 	EnviarPaquete(socket_diego, paquete);
+	sem_post(&sem_dam);
 	log_header(logger, paquete, "Envie finalizar GDT %d a Diego", posicion->pid);
 	free(posicion_serializada);
 	free(posicion);
@@ -789,6 +794,8 @@ t_recurso *recurso_crear(char *id_recurso, int valor_inicial)
 	strcpy(recurso->id, id_recurso);
 	recurso->semaforo = valor_inicial;
 	recurso->pid_bloqueados = list_create();
+
+	log_recurso(logger, recurso, "Cree el recurso:");
 
 	list_add(lista_recursos_global, recurso);
 
@@ -830,19 +837,35 @@ void limpiar_recursos(DTB_info *info_dtb)
 
 void forzar_signal(t_recurso_asignado *recurso_asignado)
 {
-	while (recurso_asignado->instancias--)
+	while (recurso_asignado->instancias)
+	{
 		dtb_signal(recurso_asignado->recurso);
+		recurso_asignado->instancias--;
+	}
 }
 
 void dtb_signal(t_recurso *recurso)
 {
-	u_int32_t *pid = list_remove(recurso->pid_bloqueados, 0);
+	log_debug(logger, "Tengo %d recursos bloqueados", list_size(recurso->pid_bloqueados));
+	Pid *pid_desbloqueado = list_remove(recurso->pid_bloqueados, 0);
+	log_debug(logger, "POST-REMOVE Tengo %d recursos bloqueados", list_size(recurso->pid_bloqueados));
+	
+	t_list *actual;
+	DTB_info *info_dtb;
+	actual = lista_bloqueados;
 
-	if (pid != NULL)
+	if (pid_desbloqueado != NULL)
 	{
-		DTB *dtb = dtb_encuentra(lista_bloqueados, *pid, GDT);
-		DTB_info *info_dtb = info_asociada_a_pid(dtb->gdtPID);
-		dtb_actualizar(dtb, lista_bloqueados, lista_listos, dtb->PC, DTB_LISTO, info_dtb->socket_cpu);
+		int pid = pid_desbloqueado->pid;
+		DTB *dtb = dtb_encuentra(actual, pid, GDT);
+		if(dtb == NULL)
+		{
+			dtb = dtb_buscar_en_todos_lados(pid, &info_dtb, &actual);
+			log_debug(logger, "no lo encontro en la lista de bloqueados a GDT %d", dtb->gdtPID);
+		}
+		log_debug(logger, "Encontro al DTB %d bloqueado por recurso", dtb->gdtPID);
+		info_dtb = info_asociada_a_pid(dtb->gdtPID);
+		dtb_actualizar(dtb, actual, lista_listos, dtb->PC, DTB_LISTO, info_dtb->socket_cpu);
 		recurso_asignar_a_pid(recurso, dtb->gdtPID);
 	}
 	else
@@ -909,19 +932,22 @@ void gdt_metricas(u_int32_t pid)
 	DTB_info *info_dtb;
 	t_list *actual;
 	DTB *dtb = dtb_buscar_en_todos_lados(pid, &info_dtb, &actual);
-	log_info(logger, "Estadisticas del GDT %d", pid);
-	log_info(logger, "Sentencias totales esperadas en nuevo: %.2f", info_dtb->sentencias_en_nuevo);
-	log_info(logger, "Entradas/Salidas: %d", dtb->entrada_salidas);
-	log_info(logger, "Sentencias totales hasta finalizar: %.2f", info_dtb->sentencias_hasta_finalizar);
-	log_info(logger, "Tiempo de respuesta: %.2f", info_dtb->tiempo_respuesta);
+	if (dtb != NULL)
+	{
+		log_info(logger, "Estadisticas del GDT %d", pid);
+		log_info(logger, "Sentencias totales esperadas en nuevo: %.2f", info_dtb->sentencias_en_nuevo);
+		log_info(logger, "Entradas/Salidas: %d", dtb->entrada_salidas);
+		log_info(logger, "Sentencias totales hasta finalizar: %.2f", info_dtb->sentencias_hasta_finalizar);
+		log_info(logger, "Tiempo de respuesta: %.2f", info_dtb->tiempo_respuesta);
+	}
 }
 
 void metricas()
 {
 	log_info(logger, "Estadisticas de la fecha");
-	if (numero_pid)
+	if (procesos_actuales)
 	{
-		double sentencias_promedio_diego = sentencias_globales_del_diego / (double) numero_pid;
+		double sentencias_promedio_diego = sentencias_globales_del_diego / (double) procesos_actuales;
 		log_info(logger, "Sentencias ejecutadas promedio del sistema que usaron a \"El Diego\": %.2f", sentencias_promedio_diego);
 	}
 	else
@@ -943,8 +969,8 @@ void metricas()
 	else
 		log_info(logger, "Ninguna sentencia fue ejecutada hasta el momento");
 
-	if(numero_pid)
-		average_rt = trt / (double) numero_pid;
+	if(procesos_actuales)
+		average_rt = trt / (double) procesos_actuales;
 
 	log_info(logger, "Tiempo de respuesta promedio del sistema: %.2f milisegundos", average_rt);
 }
@@ -955,7 +981,6 @@ double calcular_sentencias_promedio_hasta_finalizar()
 	void _sumar_sentencias_hasta_finalizar(void *_info_dtb)
 	{
 		acum += ((DTB_info *)_info_dtb)->sentencias_hasta_finalizar;
-		log_debug(logger, "acum es %.2f", acum);
 	}
 
 	t_list *finalizados = list_filter(lista_info_dtb, ya_finalizo);
@@ -1060,9 +1085,13 @@ void liberar_memoria()
 	int procesos_liberados;
 	procesos_liberados = list_size(lista_finalizados);
 
+	list_iterate(lista_finalizados, restar_sentencias_globales);
+
 	list_clean_and_destroy_elements(lista_finalizados, dtb_liberar);
 	log_info(logger, "Por consola, se liberaron de memoria %i procesos de la lista de finalizados", procesos_liberados);
 	procesos_finalizados -= procesos_liberados;
+	procesos_actuales -= procesos_liberados;
+	trt = 0;
 }
 
 void liberar_parte_de_memoria(int procesos_eliminar)
@@ -1070,6 +1099,11 @@ void liberar_parte_de_memoria(int procesos_eliminar)
 	if (procesos_eliminar < list_size(lista_finalizados))
 	{
 		procesos_finalizados -= procesos_eliminar;
+		procesos_actuales -= procesos_eliminar;
+		t_list *liberar = list_take(lista_finalizados, procesos_eliminar);
+		list_iterate(liberar, restar_sentencias_globales);
+		list_iterate(liberar, restar_trespuesta);
+		list_destroy(liberar);
 		for (int i = 0; i < procesos_eliminar; i++)
 		{
 			list_remove_and_destroy_element(lista_finalizados, 0, dtb_liberar);
@@ -1082,6 +1116,25 @@ void liberar_parte_de_memoria(int procesos_eliminar)
 			log_debug(logger, "Solo hay %d procesos en la lista de finalizados\n", procesos_finalizados);
 		liberar_memoria();
 	}
+}
+
+void restar_sentencias_globales(void *_dtb)
+{
+	DTB *dtb = (DTB *)_dtb;
+
+	sentencias_globales_del_diego -= dtb->entrada_salidas;
+	ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
+	sentencias_totales -= (dtb->PC - 1);
+	log_debug(logger, "Sentencias totales %.2f", sentencias_totales);
+	log_debug(logger, "Sentencias globales al diego: %.2f", sentencias_globales_del_diego);
+}
+
+void restar_trespuesta(void *_dtb)
+{
+	DTB *dtb = (DTB *)_dtb;
+	DTB_info *info = info_asociada_a_pid(dtb->gdtPID);
+	trt -= info->tiempo_respuesta;
+	log_debug(logger, "trt: %.2f", trt);
 }
 
 void log_info_dtb(t_log *logger, DTB_info *info_dtb, const char* _contexto, ...)
@@ -1128,11 +1181,11 @@ void log_recurso(t_log *logger, t_recurso *recurso, const char *_contexto, ...)
     log_debug(logger, "recurso->semaforo: %d", recurso->semaforo);
     
     int i;
-    log_debug(logger, "recurso->pid_bloqueados:");
+    log_debug(logger, "recurso->pid_bloqueados: %d", list_size(recurso->pid_bloqueados));
     for(i = 0; i < list_size(recurso->pid_bloqueados); i++)
     {
-        u_int32_t *pid = list_get(recurso->pid_bloqueados, i);
-        log_debug(logger, "Bloqueado %d: GDT %d", i, *pid);
+        Pid *pidb = list_get(recurso->pid_bloqueados, i);
+        log_debug(logger, "Bloqueado nro %d: GDT %d", i, pidb->pid);
     }
 }
 
