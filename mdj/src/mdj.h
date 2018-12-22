@@ -274,6 +274,8 @@ void com_md5(char **parametros)
 
     for (int i = 0; i < MD5_DIGEST_LENGTH; i++)
         printf("%02hhx", digest[i]);
+    
+    printf("\n");
 
     config_destroy(metadata_md5);
     free(buffer);

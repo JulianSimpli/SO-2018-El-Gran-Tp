@@ -210,7 +210,8 @@ int interpretar_safa(Paquete *paquete)
 	switch (paquete->header.tipoMensaje)
 	{
 	case ESDTBDUMMY:
-		cargar_header(paquete->header.tamPayload, paquete->header.tipoMensaje, CPU);
+		paquete->header = cargar_header(paquete->header.tamPayload, paquete->header.tipoMensaje, CPU);
+		usleep(retardo * 1000);
 		sem_wait(&sem_dummy);
 		EnviarPaquete(socket_dam, paquete); //envia el dtb al diego para que este haga el pedido correspondiente a MDJ
 		bloquea_dummy(paquete);

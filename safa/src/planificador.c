@@ -82,7 +82,6 @@ void planificador_corto_plazo()
 		sem_wait(&sem_listos);
 		ordenar_cpu_por_menor_ejecutados();
 		usleep(RETARDO_PLANIF*1000);
-		log_debug(logger, "PCP: Dormi %d milisegundos", RETARDO_PLANIF);
 
 		if (!strcmp(ALGORITMO_PLANIFICACION, "FIFO"))
 			planificar_fifo();
@@ -102,17 +101,14 @@ void planificador_corto_plazo()
 
 void planificar_fifo()
 {
-	log_debug(logger, "PCP: FIFO");
 	ejecutar_primer_dtb_listo();
 }
 void planificar_rr()
 {
-	log_debug(logger, "PCP: RR");
 	ejecutar_primer_dtb_listo();
 }
 void planificar_vrr()
 {
-	log_debug(logger, "PCP: VRR");
 	ejecutar_primer_dtb_prioridad();
 	ejecutar_primer_dtb_listo();
 }
@@ -128,7 +124,6 @@ void ordenar_cpu_por_menor_ejecutados()
 
 void planificar_iobound()
 {
-	log_debug(logger, "PCP: IOBF");
 	bool io_bound_first(void *_dtb_mayor, void *_dtb_menor)
 	{
 		return ((DTB *)_dtb_mayor)->entrada_salidas > ((DTB *)_dtb_menor)->entrada_salidas;
@@ -266,6 +261,7 @@ DTB_info *info_dtb_crear(u_int32_t pid)
 DTB *dtb_actualizar(DTB *dtb, t_list *source, t_list *dest, u_int32_t pc, Estado estado, int socket)
 {
 	sem_wait(&actualizar);
+	sem_post(&sem_listos);
 	if (dtb_encuentra(source, dtb->gdtPID, dtb->flagInicializacion) != NULL)
 		dtb_remueve(source, dtb->gdtPID, dtb->flagInicializacion);
 
@@ -290,7 +286,6 @@ DTB *dtb_actualizar(DTB *dtb, t_list *source, t_list *dest, u_int32_t pc, Estado
 		}
 		case DTB_LISTO:
 		{
-			sem_post(&sem_listos);
 			if(info_dtb->quantum_faltante)
 				log_info(logger, "GDT %d %s->Listo Prioridad", dtb->gdtPID, Estados[info_dtb->estado]);
 			else

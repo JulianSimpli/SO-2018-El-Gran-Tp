@@ -45,8 +45,7 @@ void *atender_dam()
 
 	while (recibir_paquete(socket_dam, &paquete) > 0)
 	{
-		pthread_t p_thread;
-		pthread_create(&p_thread, NULL, atender_peticion, &paquete);
+		interpretar_paquete(&paquete);
 	}
 }
 
@@ -62,7 +61,7 @@ void *atender_peticion(void *args)
 void leer_config(char *path)
 {
 	config = config_create("/home/utnso/tp-2018-2c-Nene-Malloc/mdj/src/MDJ.config");
-	retardo = config_get_int_value(config, "RETARDO") / 1000;
+	retardo = config_get_int_value(config, "RETARDO");
 	char *mnt_config = config_get_string_value(config, "PUNTO_MONTAJE");
 	mnt_path = malloc(strlen(mnt_config) + 1);
 	strcpy(mnt_path, mnt_config);
@@ -97,6 +96,7 @@ void inicializar(char **argv)
 	log_info(logger, "Log cargado");
 	leer_config(argv[1]);
 	log_info(logger, "Config cargada");
+	log_info(logger, "Retardo: %d ms", retardo);
 	cargar_bitarray();
 	log_info(logger, "Bitarray cargado");
 	inicializar_semaforos();
@@ -115,6 +115,8 @@ int interpretar(char *linea)
 	//parsear_linea(linea, &comando, &parametro);
 	//comando = cd
 	//parametro = /home/utnso
+	if(parametros[0] == NULL)
+		return 1;
 
 	for (i; i < command_size; i++)
 	{
@@ -155,6 +157,7 @@ void interpretar_paquete(Paquete *paquete)
 	switch (accion)
 	{
 	case VALIDAR_ARCHIVO:
+	{
 		log_info(logger, "Validar archivo");
 
 		int desplazamiento = 0;
@@ -193,6 +196,7 @@ void interpretar_paquete(Paquete *paquete)
 		free(search_file);
 		free(respuesta.Payload);
 		break;
+	}
 	case CREAR_ARCHIVO:
 		log_info(logger, "Crear archivo");
 		crear_archivo(paquete);
