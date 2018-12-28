@@ -666,7 +666,7 @@ void manejar_finalizar_bloqueado(DTB *dtb, u_int32_t pid, DTB_info *info_dtb, t_
 		list_remove_by_condition(recurso->pid_bloqueados, coincide_pid);
 
 		dtb_finalizar(dtb, lista_actual, pid, dtb->PC);
-		log_debug(logger, "GDT %d finalizado. Recurso %s liberando al recurso, junto a todos los que tiene retenidos");
+		log_debug(logger, "GDT %d finalizado. Recurso %s liberado", dtb->gdtPID, recurso->id);
 
 	}
 	else
@@ -740,7 +740,7 @@ void loggear_finalizacion(DTB *dtb, DTB_info *info_dtb)
 	{
 		t_recurso_asignado *recurso;
 		recurso = list_get(info_dtb->recursos_asignados, i);
-		log_info(logger_fin, "Recurso retenido n° %i: %s", i, recurso->recurso->id);
+		log_info(logger_fin, "Recurso retenido nro %i: %s", i + 1, recurso->recurso->id);
 	}
 }
 
@@ -841,9 +841,9 @@ void forzar_signal(t_recurso_asignado *recurso_asignado)
 
 void dtb_signal(t_recurso *recurso)
 {
-	log_debug(logger, "Tengo %d recursos bloqueados", list_size(recurso->pid_bloqueados));
+	log_debug(logger, "Tengo %d procesos bloqueados", list_size(recurso->pid_bloqueados));
 	Pid *pid_desbloqueado = list_remove(recurso->pid_bloqueados, 0);
-	log_debug(logger, "POST-REMOVE Tengo %d recursos bloqueados", list_size(recurso->pid_bloqueados));
+	log_debug(logger, "POST-REMOVE Tengo %d procesos bloqueados", list_size(recurso->pid_bloqueados));
 	
 	t_list *actual;
 	DTB_info *info_dtb;
@@ -860,11 +860,20 @@ void dtb_signal(t_recurso *recurso)
 		}
 		log_debug(logger, "Encontro al DTB %d bloqueado por recurso", dtb->gdtPID);
 		info_dtb = info_asociada_a_pid(dtb->gdtPID);
-		dtb_actualizar(dtb, actual, lista_listos, dtb->PC, DTB_LISTO, info_dtb->socket_cpu);
 		recurso_asignar_a_pid(recurso, dtb->gdtPID);
+		ArchivoAbierto *escriptorio = DTB_obtener_escriptorio(dtb);
+		if(dtb->PC == escriptorio->cantLineas)
+		{
+			log_debug(logger, "El GDT %d desbloqueado va a finalizarse", dtb->gdtPID);
+			dtb_finalizar(dtb, lista_bloqueados, dtb->gdtPID, dtb->PC);
+			return;
+		}
+		dtb_actualizar(dtb, actual, lista_listos, dtb->PC, DTB_LISTO, info_dtb->socket_cpu);
 	}
 	else
 		recurso->semaforo++;
+
+	log_recurso(logger, recurso, "Recurso post signal:");
 }
 
 void recurso_asignar_a_pid(t_recurso *recurso, u_int32_t pid)
@@ -1180,7 +1189,7 @@ void log_recurso(t_log *logger, t_recurso *recurso, const char *_contexto, ...)
     for(i = 0; i < list_size(recurso->pid_bloqueados); i++)
     {
         Pid *pidb = list_get(recurso->pid_bloqueados, i);
-        log_debug(logger, "Bloqueado nro %d: GDT %d", i, pidb->pid);
+        log_debug(logger, "Bloqueado nro %d: GDT %d", i + 1, pidb->pid);
     }
 }
 
